@@ -1,0 +1,676 @@
+using System.Diagnostics;
+using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
+using Walkthrough.Driving;
+using Walkthrough.Scripting;
+
+namespace Walkthrough.Running;
+
+/// <summary>How a run ended, as the process's exit code. CI relies on these, as it did on the AutoHotkey runner's.</summary>
+public enum ExitCode { Passed = 0, Failed = 1, Missing = 2, ScriptError = 3, NotAdministrator = 4 }
+
+/// <summary>
+/// Runs a suite's cases: each step in turn at a pace a person can follow, holding when the run is paused or step by
+/// step, ending each case at its checkpoint. When something can't be found, a watched run asks the person what to do,
+/// and an unattended run stops with a screenshot and a UI Automation dump.
+/// </summary>
+public sealed class Runner
+{
+    private static readonly TimeSpan FindTimeout = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan GoneTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan DialogTimeout = TimeSpan.FromSeconds(60);
+
+    private readonly Suite _suite;
+    private readonly IDriver _driver;
+    private readonly IMachine _machine;
+    private readonly IRunHost _host;
+    private readonly Results _results;
+    private readonly Scope _globals;
+    private CaseResult? _current;
+
+    // The status text before the last click, so a wait for a new status doesn't take the old one.
+    private string? _marked;
+
+    public Runner(Suite suite, IDriver driver, IMachine machine, IRunHost host, RunControl control, Results results, IReadOnlyDictionary<string, string>? overrides = null)
+    {
+        (_suite, _driver, _machine, _host, Control, _results) = (suite, driver, machine, host, control, results);
+        _globals = Variables(suite, results.Folder, overrides ?? new Dictionary<string, string>());
+    }
+
+    public RunControl Control { get; }
+
+    public Scope Globals => _globals;
+
+    /// <summary>The exe to start, with its variables filled in and relative to the suite folder.</summary>
+    public string Exe => SuitePath(_globals.Expand(_suite.App.Exe));
+
+    /// <summary>
+    /// The suite's variables, with the built-in suiteDir, resultsDir and temp. A variable is a text, or
+    /// { "firstExisting": [paths] }: the first that exists, relative to the suite folder, else the last.
+    /// </summary>
+    public static Scope Variables(Suite suite, string resultsFolder, IReadOnlyDictionary<string, string> overrides)
+    {
+        var scope = new Scope(helpers: suite.Helpers);
+        scope.Set("suiteDir", suite.Folder);
+        scope.Set("resultsDir", resultsFolder);
+        scope.Set("temp", Path.Combine(Path.GetTempPath(), "Walkthrough"));
+        foreach (var (name, node) in suite.Variables)
+        {
+            if (overrides.TryGetValue(name, out var given))
+                scope.Set(name, given);
+            else if (node is JsonObject { } choice && choice["firstExisting"] is JsonArray paths)
+            {
+                var candidates = paths.Select(path => Path.GetFullPath(Path.Combine(suite.Folder, scope.Expand(path!.GetValue<string>())))).ToList();
+                scope.Set(name, candidates.FirstOrDefault(path => File.Exists(path) || Directory.Exists(path)) ?? candidates.LastOrDefault() ?? "");
+            }
+            else
+                scope.Set(name, scope.Expand(node?.ToString() ?? ""));
+        }
+        foreach (var (name, value) in overrides)
+            if (!scope.TryGet(name, out _))
+                scope.Set(name, value);
+        return scope;
+    }
+
+    /// <summary>What suite.json's requires lists and isn't there, such as the exe or a package.</summary>
+    public IReadOnlyList<string> Missing() =>
+        _suite.Requires.Select(path => SuitePath(_globals.Expand(path))).Where(path => !File.Exists(path) && !Directory.Exists(path)).ToList();
+
+    /// <summary>What earlier runs left on the machine, from the suite's leftovers script: one line for each.</summary>
+    public IReadOnlyList<string> Leftovers()
+    {
+        if (_suite.Reset.Leftovers is not { } script)
+            return [];
+        var output = _machine.PowerShell(File.ReadAllText(SuitePath(script)), []);
+        return output.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+
+    /// <summary>Closes the app and runs the suite's reset script.</summary>
+    public void ResetMachine()
+    {
+        if (_suite.Reset.PowerShell is not { } script)
+            return;
+        _driver.CloseAll(Exe);
+        var output = _machine.Run("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", SuitePath(script)], timeout: TimeSpan.FromMinutes(5));
+        foreach (var line in output.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            _results.Log("RESET", line);
+    }
+
+    /// <summary>
+    /// Cleans up what an earlier run left first, when it would change what the run sees: always unattended, and
+    /// when a watched run starts from the first case.
+    /// </summary>
+    public void Prepare(IReadOnlyList<Case> cases)
+    {
+        if (_suite.Reset.Leftovers is null || cases.Count == 0)
+            return;
+        if (!Control.Unattended && cases[0] != _suite.Cases[0])
+            return;
+        if (Leftovers() is [_, ..] leftovers)
+        {
+            _results.Log("RESET", "Cleaning up first: " + string.Join(", ", leftovers));
+            _host.ShowStep("Clean up what an earlier run left behind: " + string.Join(", ", leftovers));
+            ResetMachine();
+        }
+    }
+
+    /// <summary>Runs the cases in order and writes the results. Returns how many cases didn't pass.</summary>
+    public int Run(IReadOnlyList<Case> cases)
+    {
+        for (var index = 0; index < cases.Count; index++)
+        {
+            var item = cases[index];
+            _current = new CaseResult(item.Number, item.Name);
+            _results.Cases.Add(_current);
+            _host.CaseStarted(index + 1, cases.Count, item);
+            _results.Log("CASE", $"{item.Number}. {item.Name}");
+            var clock = Stopwatch.StartNew();
+            var stop = false;
+            try
+            {
+                Steps(item.Steps, _globals.Child(), Path.GetFileName(item.File));
+                if (_current.Failures.Count > 0)
+                    _current.Status = CaseStatus.Failed;
+            }
+            catch (SkipCaseException)
+            {
+                _current.Status = CaseStatus.Skipped;
+            }
+            catch (StopRunException ex)
+            {
+                _current.Status = Control.StopRequested ? CaseStatus.Stopped : CaseStatus.Failed;
+                _results.Log("STOP", ex.Message);
+                stop = true;
+            }
+            catch (Exception ex) when (ex is ScriptException or InvalidOperationException or ArgumentException or IOException or FormatException or KeyNotFoundException)
+            {
+                Capture("error");
+                Fail($"Script error: {ex.Message}");
+                _current.Status = CaseStatus.Failed;
+                stop = Control.Unattended || !_host.AskScriptError($"Something went wrong in the test script itself:\n\n{ex.Message}\n\nIt's saved with the results.");
+            }
+            _current.Duration = clock.Elapsed;
+            _results.Log("RESULT", $"{item.Name}: {_current.Status.ToString().ToLowerInvariant()}");
+            if (stop)
+                break;
+        }
+        var summary = _results.Finish(_suite.Name);
+        _results.Log("DONE", summary.Replace("\r\n", " | "));
+        var failed = _results.Cases.Count(result => result.Status != CaseStatus.Passed);
+        _host.Finished(summary, _results.Folder, failed == 0);
+        return failed;
+    }
+
+    // ===== Steps =====
+
+    private void Steps(JsonArray steps, Scope scope, string where)
+    {
+        for (var index = 0; index < steps.Count; index++)
+        {
+            var step = (JsonObject)steps[index]!;
+            if (step["disabled"]?.GetValue<bool>() == true)
+                continue;
+            while (true)
+            {
+                try
+                {
+                    Step(step, scope);
+                    break;
+                }
+                catch (StuckException ex)
+                {
+                    Stuck(ex);
+                }
+                catch (ScriptException ex)
+                {
+                    throw new ScriptException($"{where}, step {index + 1}: {ex.Message}");
+                }
+            }
+        }
+    }
+
+    private void Step(JsonObject step, Scope scope)
+    {
+        var kind = step.Select(pair => pair.Key).FirstOrDefault(Vocabulary.Steps.ContainsKey) ?? "say";
+        string? Text(string key) => step[key] is { } node ? scope.Expand(node.ToString()) : null;
+        var say = Text("say");
+        var what = Text("what");
+        TimeSpan Within(TimeSpan normal) => step["within"] is { } seconds ? TimeSpan.FromSeconds(double.Parse(scope.Expand(seconds.ToString()))) : normal;
+        Target TargetOf(string key) => Targets.Resolve(step[key], scope, _suite.Elements, what);
+        IControl Find(Target target) => _driver.Find(target, Control.Scale(Within(FindTimeout)));
+
+        switch (kind)
+        {
+            case "say":
+                Say(say ?? "");
+                break;
+
+            case "startApp":
+                ShowStep(say ?? $"Start {_suite.App.Window}");
+                _driver.Start(_suite.App, Exe);
+                break;
+
+            case "closeApp":
+                ShowStep(say ?? $"Close {_suite.App.Window}");
+                _driver.Close();
+                break;
+
+            case "click":
+            case "tab":
+            {
+                var target = kind == "tab" ? Target.Of(new Selector(Type: "TabItem", Name: Text("tab"))) : TargetOf("click");
+                var control = Find(target);
+                var text = say ?? (kind == "tab" ? $"Open the {Text("tab")} tab" : $"Click {control.Name}");
+                ShowStep(text);
+                Mark();
+                _driver.Point(control, text);
+                if (!control.IsEnabled)
+                    throw new StuckException(Lower(text), "It's greyed out, so it can't be used yet.");
+                _driver.Click(control, Text("how") == "mouse");
+                Control.Wait(Control.Pace / 2);
+                Keep(step, scope, control);
+                break;
+            }
+
+            case "type":
+            {
+                var control = Find(TargetOf("type"));
+                var value = Text("text") ?? "";
+                var secret = step["secret"]?.GetValue<bool>() ?? false;
+                var text = say ?? (secret ? "Type the secret" : $"Type {value}");
+                ShowStep(text);
+                _driver.Point(control, text);
+                _driver.Type(control, value, secret);
+                Control.Wait(Control.Pace / 2);
+                Keep(step, scope, control);
+                break;
+            }
+
+            case "choose":
+            {
+                var control = Find(TargetOf("choose"));
+                var option = Text("option") ?? throw new ScriptException("choose needs the option to pick.");
+                var text = say ?? $"Pick {option}";
+                ShowStep(text);
+                _driver.Point(control, text);
+                _driver.Choose(control, option);
+                Control.Wait(Control.Pace / 2);
+                Keep(step, scope, control);
+                break;
+            }
+
+            case "tick":
+            {
+                var control = Find(TargetOf("tick"));
+                var isChecked = step["checked"]?.GetValue<bool>() ?? true;
+                var text = say ?? $"{(isChecked ? "Tick" : "Clear")} {control.Name}";
+                ShowStep(text);
+                _driver.Point(control, text);
+                _driver.SetChecked(control, isChecked);
+                Control.Wait(Control.Pace / 2);
+                Keep(step, scope, control);
+                break;
+            }
+
+            case "hover":
+            {
+                var control = Find(TargetOf("hover"));
+                var text = say ?? $"Point at {control.Name}";
+                ShowStep(text);
+                _driver.Point(control, text);
+                Control.Wait(300);
+                Keep(step, scope, control);
+                break;
+            }
+
+            case "find":
+            {
+                var control = Find(TargetOf("find"));
+                Keep(step, scope, control);
+                if (say is not null)
+                    Say(say);
+                break;
+            }
+
+            case "waitGone":
+                _driver.WaitGone(TargetOf("waitGone"), Control.Scale(Within(GoneTimeout)));
+                if (say is not null)
+                    Say(say);
+                break;
+
+            case "waitText":
+                WaitText(step, scope, TargetOf("waitText"), Within(FindTimeout));
+                if (say is not null)
+                    Say(say);
+                break;
+
+            case "replaceText":
+            {
+                var control = Find(TargetOf("replaceText"));
+                var pattern = Text("regex") ?? throw new ScriptException("replaceText needs a regex.");
+                var text = say ?? $"Change {pattern}";
+                ShowStep(text);
+                _driver.Point(control, text);
+                if (!_driver.ReplaceText(control, pattern, Text("replacement") ?? ""))
+                    Fail($"The text has nothing matching {pattern}, so I couldn't {Lower(text)}");
+                Control.Wait(Control.Pace);
+                break;
+            }
+
+            case "key":
+                ShowStep(say ?? $"Press {Text("key")}");
+                _driver.Key(Text("key")!);
+                Control.Wait(Control.Pace / 2);
+                break;
+
+            case "answerDialog":
+            {
+                var title = Text("answerDialog")!;
+                var button = Enum.Parse<DialogButton>(Text("button") ?? "OK", ignoreCase: true);
+                var message = _driver.WaitDialog(title, Control.Scale(Within(DialogTimeout)));
+                ShowStep($"{say ?? $"Click {button}"}  ({title}: \"{message}\")");
+                if (Text("expect") is { } expect && !message.Contains(expect, StringComparison.Ordinal))
+                    Fail($"The \"{title}\" message was \"{message}\", expected \"{expect}\"");
+                Mark();
+                _driver.PressDialogButton(title, button);
+                Control.Wait(Control.Pace / 2);
+                if (step["as"] is { } name)
+                    scope.Set(name.GetValue<string>(), message);
+                break;
+            }
+
+            case "pickFile":
+            case "pickFolder":
+            {
+                var path = Text("path") ?? throw new ScriptException($"{kind} needs the path to pick.");
+                ShowStep(say ?? $"Pick {Path.GetFileName(path)}");
+                Mark();
+                _driver.PickFile(Text(kind)!, path, kind == "pickFolder");
+                Control.Wait(Control.Pace / 2);
+                break;
+            }
+
+            case "call":
+                Call(step, scope);
+                break;
+
+            case "repeat":
+            {
+                var items = step["repeat"] is JsonArray list
+                    ? list.Select(item => scope.Expand(item!.ToString())).ToList()
+                    : scope.Expand(step["repeat"]!.ToString()).Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList();
+                var name = Text("item") ?? "item";
+                // The steps share the case's variables, so what they set is still there after the repeat.
+                foreach (var item in items)
+                {
+                    scope.Set(name, item);
+                    Steps(step["steps"] as JsonArray ?? [], scope, "repeat");
+                }
+                break;
+            }
+
+            case "set":
+                foreach (var (name, value) in step["set"]!.AsObject())
+                    scope.SetOuter(name, Value.Of(scope.Expand(value?.ToString() ?? "")));
+                break;
+
+            case "run":
+            {
+                var program = SuitePath(Text("run")!);
+                var arguments = (step["args"] as JsonArray ?? []).Select(arg => scope.Expand(arg!.ToString())).ToList();
+                var environment = (step["env"] as JsonObject ?? []).ToDictionary(pair => pair.Key, pair => scope.Expand(pair.Value?.ToString() ?? ""));
+                ShowStep(say ?? $"Run {Path.GetFileName(program)} {string.Join(" ", arguments)}");
+                var output = _machine.Run(program, arguments, environment);
+                _results.Log("RUN", $"{Path.GetFileName(program)} exited with {output.ExitCode}");
+                KeepOutput(step, scope, output);
+                break;
+            }
+
+            case "powershell":
+            {
+                // The script isn't expanded: PowerShell has ${...} of its own. It gets the step's args as $args.
+                var script = step["powershell"] is JsonArray lines ? string.Join("\r\n", lines.Select(line => line!.ToString())) : step["powershell"]!.ToString();
+                var arguments = (step["args"] as JsonArray ?? []).Select(arg => scope.Expand(arg!.ToString())).ToList();
+                if (say is not null)
+                    ShowStep(say);
+                var output = _machine.PowerShell(script, arguments);
+                if (output.ExitCode != 0)
+                    Fail($"A PowerShell step failed with exit code {output.ExitCode}: {output.Output}");
+                KeepOutput(step, scope, output);
+                break;
+            }
+
+            case "checkpoint":
+                Checkpoint(step, scope);
+                break;
+        }
+    }
+
+    private void Call(JsonObject step, Scope scope)
+    {
+        var name = scope.Expand(step["call"]!.GetValue<string>());
+        if (!_suite.Macros.TryGetValue(name, out var macro))
+            throw new ScriptException($"There is no macro called {name}.");
+        var inner = scope.Child();
+        var given = step["with"] as JsonObject ?? [];
+        foreach (var (parameter, fallback) in macro.Parameters)
+        {
+            if (given[parameter] is { } value)
+                inner.Set(parameter, scope.Expand(value.ToString()));
+            else if (fallback is not null)
+                inner.Set(parameter, inner.Expand(fallback));
+            else
+                throw new ScriptException($"{name} needs {parameter}.");
+        }
+        Steps(macro.Steps, inner, Path.GetFileName(macro.File));
+        if (step["as"] is { } keep && macro.Returns is { } returns)
+            scope.Set(keep.GetValue<string>(), inner.Resolve(returns));
+    }
+
+    private void WaitText(JsonObject step, Scope scope, Target target, TimeSpan within)
+    {
+        string? Text(string key) => step[key] is { } node ? scope.Expand(node.ToString()) : null;
+        var startsWith = Text("startsWith");
+        var contains = Text("contains");
+        var equals = Text("equals");
+        var changes = step["changes"]?.GetValue<bool>() ?? false;
+        var isNew = step["new"]?.GetValue<bool>() ?? false;
+        var expected = startsWith ?? contains ?? equals ?? "new text";
+        var first = _driver.TryFind(target)?.Name;
+        var end = Environment.TickCount64 + (long)Control.Scale(within).TotalMilliseconds;
+        string? found;
+        while (true)
+        {
+            Control.Gate();
+            var control = _driver.TryFind(target);
+            found = control?.Name;
+            if (found is not null
+                && (startsWith is null || found.StartsWith(startsWith, StringComparison.Ordinal))
+                && (contains is null || found.Contains(contains, StringComparison.Ordinal))
+                && (equals is null || found == equals)
+                && (!changes || found != first)
+                && (!isNew || found != _marked))
+            {
+                _results.Log("TEXT", found);
+                Keep(step, scope, control!);
+                return;
+            }
+            if (_driver.OtherWindow() is { } other)
+                throw new StuckException($"see \"{expected}\" in {target.What}", $"The app is showing another window instead: {other}");
+            if (Environment.TickCount64 > end)
+                throw new StuckException($"see \"{expected}\" in {target.What}", found is null ? null : $"It says: {found}");
+            Control.Wait(300);
+        }
+    }
+
+    private void Checkpoint(JsonObject step, Scope scope)
+    {
+        var title = scope.Expand(step["checkpoint"]!.ToString());
+        _results.Log("STEP", "Check: " + title);
+        _host.ShowStep("Check: " + title);
+        Control.Gate();
+
+        var results = new List<CheckResult>();
+        foreach (var node in step["checks"] as JsonArray ?? [])
+        {
+            var check = Checks.Build(node!.AsObject(), scope, _machine, Leftovers);
+            var detail = Evaluate(check);
+            results.Add(new CheckResult(check.Label, detail is null, detail));
+            if (detail is null)
+                _results.Log("PASS", check.Label);
+            else
+                Fail($"{check.Label}: {detail}");
+        }
+        var look = (step["look"] as JsonArray ?? []).Select(item => scope.Expand(item!.ToString())).ToList();
+        var tools = (step["tools"] as JsonArray ?? []).Select(item => Tool(item!.AsObject(), scope)).ToList();
+        _host.ShowCheckpoint(title, results, look, tools);
+        if (Control.Unattended)
+            return;
+        if (Control.StopAtCheckpoints || Control.StepByStep)
+        {
+            Control.Hold(Waiting.Checkpoint);
+            Control.Gate();
+            return;
+        }
+        _host.ShowCarryingOn();
+        Control.Wait(Math.Max(Control.Pace * 5, 4000));
+    }
+
+    // Waits for a check to pass, for things that take a moment, such as a service's next heartbeat.
+    private string? Evaluate(Check check)
+    {
+        var end = Environment.TickCount64 + (long)Control.Scale(check.Within).TotalMilliseconds;
+        while (true)
+        {
+            string? detail;
+            try
+            {
+                detail = check.Test();
+            }
+            catch (Exception ex) when (ex is not StopRunException)
+            {
+                detail = "Error: " + ex.Message;
+            }
+            if (detail is null || Environment.TickCount64 >= end)
+                return detail;
+            Control.Wait(500);
+        }
+    }
+
+    private ToolButton Tool(JsonObject node, Scope scope)
+    {
+        var kind = node.Select(pair => pair.Key).First(Vocabulary.Tools.ContainsKey);
+        var subject = scope.Expand(node[kind]!.ToString());
+        var arguments = (node["args"] as JsonArray ?? []).Select(arg => scope.Expand(arg!.ToString())).ToList();
+        var label = node["label"] is { } given ? scope.Expand(given.ToString()) : $"Open {Path.GetFileName(subject.TrimEnd('\\', '/'))}";
+        return kind switch
+        {
+            "openFolder" => new ToolButton(label, () => _machine.Open("folder", subject)),
+            "openFile" => new ToolButton(label, () => _machine.Open("file", subject)),
+            "app" => new ToolButton(label, () => _machine.Open("app", subject, arguments)),
+            _ => new ToolButton(label, () => OpenConsole(label, subject, arguments)),
+        };
+    }
+
+    // A PowerShell window that runs a script and stays open, such as a list of the services.
+    private void OpenConsole(string title, string script, IReadOnlyList<string> arguments)
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "Walkthrough");
+        Directory.CreateDirectory(folder);
+        var file = Path.Combine(folder, Regex.Replace(title, @"\W+", "-") + ".ps1");
+        File.WriteAllText(file, $"$Host.UI.RawUI.WindowTitle = '{title.Replace("'", "''")}'\r\n{script}", new System.Text.UTF8Encoding(true));
+        _machine.Open("app", "powershell.exe", ["-NoExit", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", file, .. arguments]);
+    }
+
+    // ===== Showing the person what is happening =====
+
+    /// <summary>Shows what is about to happen. Step by step, it then waits for Enter; paused, until the run carries on.</summary>
+    private void ShowStep(string text)
+    {
+        _results.Log("STEP", text);
+        _host.ShowStep(text);
+        if (Control.StepByStep && !Control.Unattended)
+            Control.Hold(Waiting.Step);
+        Control.Gate();
+    }
+
+    /// <summary>Explains what is on screen, and gives time to read it.</summary>
+    private void Say(string text)
+    {
+        ShowStep(text);
+        if (!Control.Unattended && !Control.StepByStep)
+            Control.Wait(Math.Max(Control.Pace * 2, text.Length * 40));
+    }
+
+    private void Mark()
+    {
+        if (_suite.App.Status is not { } status)
+            return;
+        try
+        {
+            _marked = _driver.TryFind(Targets.Resolve(status, _globals, _suite.Elements))?.Name;
+        }
+        catch (StuckException)
+        {
+            _marked = null;
+        }
+    }
+
+    private static void Keep(JsonObject step, Scope scope, IControl control)
+    {
+        if (step["as"] is not { } name)
+            return;
+        var parts = new Dictionary<string, string>
+        {
+            ["name"] = control.Name,
+            ["value"] = control.Value ?? "",
+            ["helpText"] = control.HelpText ?? "",
+            ["id"] = control.AutomationId ?? "",
+            ["selection"] = control.Selection ?? "",
+        };
+        scope.Set(name.GetValue<string>(), Value.Of(control.Name, parts));
+    }
+
+    private static void KeepOutput(JsonObject step, Scope scope, ProcessOutput output)
+    {
+        if (step["as"] is not { } name)
+            return;
+        scope.Set(name.GetValue<string>(), Value.Of(output.Output, new Dictionary<string, string>
+        {
+            ["output"] = output.Output,
+            ["code"] = output.ExitCode.ToString(),
+            ["first"] = output.FirstLine,
+        }));
+    }
+
+    // ===== Failures =====
+
+    /// <summary>Records a failure against the running case without stopping it.</summary>
+    private void Fail(string text)
+    {
+        _results.Log("FAIL", text);
+        _current?.Failures.Add(text);
+    }
+
+    /// <summary>
+    /// Something the run needs isn't there. Watched, the person can put it right and try again, skip the case or stop;
+    /// unattended, the run ends.
+    /// </summary>
+    private void Stuck(StuckException stuck)
+    {
+        var shot = Capture("stuck");
+        var message = stuck.Message;
+        _results.Log("STUCK", $"{message} ({shot})");
+        if (Control.Unattended)
+        {
+            Fail(message);
+            throw new StopRunException(message);
+        }
+        Control.Hold(Waiting.Stuck);
+        var answer = _host.AskStuck(message, shot);
+        Control.CarryOn();
+        if (answer == StuckAnswer.TryAgain)
+            return;
+        Fail(message + (answer == StuckAnswer.SkipCase ? " (skipped the rest of the case)" : " (stopped the test)"));
+        if (answer == StuckAnswer.SkipCase)
+            throw new SkipCaseException(stuck.What);
+        throw new StopRunException(stuck.What);
+    }
+
+    /// <summary>Saves a screenshot and the app's UI Automation tree, for working out what went wrong.</summary>
+    public string Capture(string name)
+    {
+        var path = _results.NextCapture(name);
+        try
+        {
+            _driver.Screenshot(path + ".png");
+        }
+        catch (Exception ex) when (ex is not StopRunException)
+        {
+            _results.Log("NOTE", $"The screenshot failed: {ex.Message}");
+        }
+        try
+        {
+            File.WriteAllText(path + "-uia.txt", _driver.DumpTree());
+        }
+        catch (Exception ex) when (ex is not StopRunException)
+        {
+            _results.Log("NOTE", $"The UI Automation dump failed: {ex.Message}");
+        }
+        return path + ".png";
+    }
+
+    /// <summary>Saves a note against the running case, with a screenshot.</summary>
+    public void Note(string text)
+    {
+        var shot = Capture("note");
+        _current?.Notes.Add($"{text} ({shot})");
+        _results.Log("NOTE", $"{text} ({shot})");
+    }
+
+    private string SuitePath(string path) =>
+        Path.IsPathRooted(path) || !(path.Contains('/') || path.Contains('\\')) ? path : Path.GetFullPath(Path.Combine(_suite.Folder, path));
+
+    // "Click Add" as "click Add", to go on the end of a sentence.
+    private static string Lower(string text) => text.Length == 0 ? text : char.ToLowerInvariant(text[0]) + text[1..];
+}

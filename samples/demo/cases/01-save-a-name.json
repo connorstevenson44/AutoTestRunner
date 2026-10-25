@@ -1,0 +1,24 @@
+{
+  "$schema": "../../../schema/walkthrough.case.schema.json",
+  "name": "Save a name",
+  "needsNote": "A clean computer",
+  "covers": "Typing a name, saving it, and the status bar saying where the log is",
+  "steps": [
+    { "startApp": {}, "say": "Start the demo" },
+    { "say": "The demo starts empty." },
+    { "type": "nameBox", "text": "main", "say": "Type main as the name" },
+    { "click": { "button": "Save" }, "say": "Click Save" },
+    { "call": "waitStatus", "with": { "startsWith": "Saved." }, "as": "status" },
+    { "hover": { "element": "row", "with": { "path": "${dataDir}/main" } }, "as": "row", "say": "The new row is there" },
+    { "repeat": ["a", "b"], "steps": [ { "set": { "last": "${item}" } } ] },
+    { "checkpoint": "The name was saved",
+      "checks": [
+        { "matches": "${status}", "regex": "^Saved\\. Log: ", "label": "The status says it saved" },
+        { "equals": "${logFile(status)}", "to": "C:\\logs\\save.log" },
+        { "equals": "${row.helpText}", "to": "${dataDir}/main" },
+        { "equals": "${last}", "to": "b" }
+      ],
+      "look": [ "The row for main is at the top." ],
+      "tools": [ { "openFile": "${logFile(status)}", "label": "Open the log" } ] }
+  ]
+}
