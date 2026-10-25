@@ -1,7 +1,8 @@
 # Walkthrough
 
 A manual test runner for WPF apps. It runs a test on your computer while you watch: it moves the mouse to each button
-or box, outlines it in orange, and says what it is doing in a panel beside the app. Each case ends at a checkpoint:
+or box, outlines it in orange, and shows what it is doing in a panel beside the app, with every command it runs and
+what that command prints as it prints it. Each case ends at a checkpoint:
 what it checked by itself (files, settings, services, scheduled tasks, what a program prints), then what to look at
 yourself, with buttons that open it. When it can't find something you can put the app right by hand and try again,
 skip the case, or stop.
@@ -17,11 +18,13 @@ and the cases are JSON files checked against a schema, so an editor completes an
 ```powershell
 dotnet publish src/Walkthrough.Cli -c Release -o artifacts/walk
 
+walk open <suite folder>                        # the launcher: tick cases, pick how it runs, Start
 walk run <suite folder>                         # watch it from the first case
 walk run <suite folder> --cases 1-5,8 --mode steps --speed Slow
 walk run <suite folder> --unattended            # as CI runs it
 walk check <suite folder>                       # read every script and report what's wrong
 walk list <suite folder>
+walk preview                                    # a made-up run, to see the panel without an app
 ```
 
 | Key | What it does |
@@ -29,6 +32,10 @@ walk list <suite folder>
 | **Space** | Pause, or carry on by itself |
 | **Enter** | Do the next step, then wait |
 | **Esc** | Stop the test (it asks first) |
+
+The panel shows the case and a bar of every case, coloured as each ends; the controls as icons, with their keys under
+them; what it is doing now, the command a step is about to run and what it is waiting for; and below, everything it
+has done: steps, checkpoints, and each command with its output, streaming while it runs, then its exit code.
 
 `--mode itself` (the default) shows each checkpoint for a few seconds and carries on; `checks` waits at each
 checkpoint; `steps` waits for Enter before every step. The keys belong to the test unless you clicked into a text box

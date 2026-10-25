@@ -23,6 +23,8 @@ public sealed class Runner
     private readonly Suite _suite;
     private readonly IDriver _driver;
     private readonly IMachine _machine;
+    // The same machine without showing: for checks, which can ask many times while they wait.
+    private readonly IMachine _quiet;
     private readonly IRunHost _host;
     private readonly Results _results;
     private readonly Scope _globals;
@@ -33,7 +35,9 @@ public sealed class Runner
 
     public Runner(Suite suite, IDriver driver, IMachine machine, IRunHost host, RunControl control, Results results, IReadOnlyDictionary<string, string>? overrides = null)
     {
-        (_suite, _driver, _machine, _host, Control, _results) = (suite, driver, machine, host, control, results);
+        (_suite, _driver, _host, Control, _results) = (suite, driver, host, control, results);
+        _quiet = machine;
+        _machine = new ShownMachine(machine, host, results);
         _globals = Variables(suite, results.Folder, overrides ?? new Dictionary<string, string>());
     }
 
@@ -73,15 +77,20 @@ public sealed class Runner
     }
 
     /// <summary>What suite.json's requires lists and isn't there, such as the exe or a package.</summary>
-    public IReadOnlyList<string> Missing() =>
-        _suite.Requires.Select(path => SuitePath(_globals.Expand(path))).Where(path => !File.Exists(path) && !Directory.Exists(path)).ToList();
+    public IReadOnlyList<string> Missing() => Missing(_suite, _globals);
+
+    /// <summary>What a suite's requires lists and isn't there, with its variables, before there is a run.</summary>
+    public static IReadOnlyList<string> Missing(Suite suite, Scope globals) =>
+        suite.Requires.Select(path => SuitePath(suite, globals.Expand(path))).Where(path => !File.Exists(path) && !Directory.Exists(path)).ToList();
 
     /// <summary>What earlier runs left on the machine, from the suite's leftovers script: one line for each.</summary>
-    public IReadOnlyList<string> Leftovers()
+    public IReadOnlyList<string> Leftovers() => Leftovers(_suite, _machine);
+
+    public static IReadOnlyList<string> Leftovers(Suite suite, IMachine machine)
     {
-        if (_suite.Reset.Leftovers is not { } script)
+        if (suite.Reset.Leftovers is not { } script)
             return [];
-        var output = _machine.PowerShell(File.ReadAllText(SuitePath(script)), []);
+        var output = machine.PowerShell(File.ReadAllText(SuitePath(suite, script)), []);
         return output.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }
 
@@ -91,9 +100,9 @@ public sealed class Runner
         if (_suite.Reset.PowerShell is not { } script)
             return;
         _driver.CloseAll(Exe);
-        var output = _machine.Run("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", SuitePath(script)], timeout: TimeSpan.FromMinutes(5));
-        foreach (var line in output.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            _results.Log("RESET", line);
+        // What it prints goes in the log, as OUTPUT. -Command rather than -File, so progress bars stay out of it.
+        var path = SuitePath(script).Replace("'", "''");
+        _machine.Run("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $"$ProgressPreference = 'SilentlyContinue'; & '{path}'"], timeout: TimeSpan.FromMinutes(5));
     }
 
     /// <summary>
@@ -109,7 +118,7 @@ public sealed class Runner
         if (Leftovers() is [_, ..] leftovers)
         {
             _results.Log("RESET", "Cleaning up first: " + string.Join(", ", leftovers));
-            _host.ShowStep("Clean up what an earlier run left behind: " + string.Join(", ", leftovers));
+            _host.ShowStep("Clean up what an earlier run left behind: " + string.Join(", ", leftovers), Doing.Command);
             ResetMachine();
         }
     }
@@ -151,6 +160,7 @@ public sealed class Runner
             }
             _current.Duration = clock.Elapsed;
             _results.Log("RESULT", $"{item.Name}: {_current.Status.ToString().ToLowerInvariant()}");
+            _host.CaseFinished(_current);
             if (stop)
                 break;
         }
@@ -204,7 +214,11 @@ public sealed class Runner
         var what = Text("what");
         TimeSpan Within(TimeSpan normal) => step["within"] is { } seconds ? TimeSpan.FromSeconds(double.Parse(scope.Expand(seconds.ToString()))) : normal;
         Target TargetOf(string key) => Targets.Resolve(step[key], scope, _suite.Elements, what);
-        IControl Find(Target target) => _driver.Find(target, Control.Scale(Within(FindTimeout)));
+        IControl Find(Target target)
+        {
+            _host.ShowWait($"Look for {target.What}");
+            return _driver.Find(target, Control.Scale(Within(FindTimeout)));
+        }
 
         switch (kind)
         {
@@ -213,12 +227,12 @@ public sealed class Runner
                 break;
 
             case "startApp":
-                ShowStep(say ?? $"Start {_suite.App.Window}");
+                ShowStep(say ?? $"Start {_suite.App.Window}", Doing.App);
                 _driver.Start(_suite.App, Exe);
                 break;
 
             case "closeApp":
-                ShowStep(say ?? $"Close {_suite.App.Window}");
+                ShowStep(say ?? $"Close {_suite.App.Window}", Doing.App);
                 _driver.Close();
                 break;
 
@@ -232,7 +246,7 @@ public sealed class Runner
                 var target = kind == "tab" ? Target.Of(new Selector(Type: "TabItem", Name: Text("tab"))) : TargetOf("click");
                 var control = Find(target);
                 var text = say ?? (kind == "tab" ? $"Open the {Text("tab")} tab" : $"Click {control.Name}");
-                ShowStep(text);
+                ShowStep(text, Doing.Click);
                 Mark();
                 _driver.Point(control, text);
                 if (!control.IsEnabled)
@@ -249,7 +263,7 @@ public sealed class Runner
                 var value = Text("text") ?? "";
                 var secret = step["secret"]?.GetValue<bool>() ?? false;
                 var text = say ?? (secret ? "Type the secret" : $"Type {value}");
-                ShowStep(text);
+                ShowStep(text, Doing.Type);
                 _driver.Point(control, text);
                 _driver.Type(control, value, secret);
                 Control.Wait(Control.Pace / 2);
@@ -262,7 +276,7 @@ public sealed class Runner
                 var control = Find(TargetOf("choose"));
                 var option = Text("option") ?? throw new ScriptException("choose needs the option to pick.");
                 var text = say ?? $"Pick {option}";
-                ShowStep(text);
+                ShowStep(text, Doing.Choose);
                 _driver.Point(control, text);
                 _driver.Choose(control, option);
                 Control.Wait(Control.Pace / 2);
@@ -275,7 +289,7 @@ public sealed class Runner
                 var control = Find(TargetOf("tick"));
                 var isChecked = step["checked"]?.GetValue<bool>() ?? true;
                 var text = say ?? $"{(isChecked ? "Tick" : "Clear")} {control.Name}";
-                ShowStep(text);
+                ShowStep(text, Doing.Choose);
                 _driver.Point(control, text);
                 _driver.SetChecked(control, isChecked);
                 Control.Wait(Control.Pace / 2);
@@ -287,7 +301,7 @@ public sealed class Runner
             {
                 var control = Find(TargetOf("hover"));
                 var text = say ?? $"Point at {control.Name}";
-                ShowStep(text);
+                ShowStep(text, Doing.Point);
                 _driver.Point(control, text);
                 Control.Wait(300);
                 Keep(step, scope, control);
@@ -303,9 +317,13 @@ public sealed class Runner
             }
 
             case "waitGone":
-                _driver.WaitGone(TargetOf("waitGone"), Control.Scale(Within(GoneTimeout)));
+            {
+                var target = TargetOf("waitGone");
+                _host.ShowWait($"Wait for {target.What} to go");
+                _driver.WaitGone(target, Control.Scale(Within(GoneTimeout)));
                 SayAfter();
                 break;
+            }
 
             case "waitText":
                 WaitText(step, scope, TargetOf("waitText"), Within(FindTimeout));
@@ -317,7 +335,7 @@ public sealed class Runner
                 var control = Find(TargetOf("replaceText"));
                 var pattern = Text("regex") ?? throw new ScriptException("replaceText needs a regex.");
                 var text = say ?? $"Change {pattern}";
-                ShowStep(text);
+                ShowStep(text, Doing.Type);
                 _driver.Point(control, text);
                 if (!_driver.ReplaceText(control, pattern, Text("replacement") ?? ""))
                     Fail($"The text has nothing matching {pattern}, so I couldn't {Lower(text)}");
@@ -326,7 +344,7 @@ public sealed class Runner
             }
 
             case "key":
-                ShowStep(say ?? $"Press {Text("key")}");
+                ShowStep(say ?? $"Press {Text("key")}", Doing.Key);
                 _driver.Key(Text("key")!);
                 Control.Wait(Control.Pace / 2);
                 break;
@@ -335,8 +353,9 @@ public sealed class Runner
             {
                 var title = Text("answerDialog")!;
                 var button = Enum.Parse<DialogButton>(Text("button") ?? "OK", ignoreCase: true);
+                _host.ShowWait($"Wait for the \"{title}\" message");
                 var message = _driver.WaitDialog(title, Control.Scale(Within(DialogTimeout)));
-                ShowStep($"{say ?? $"Click {button}"}  ({title}: \"{message}\")");
+                ShowStep($"{say ?? $"Click {button}"}  ({title}: \"{message}\")", Doing.Dialog);
                 if (Text("expect") is { } expect && !message.Contains(expect, StringComparison.Ordinal))
                     Fail($"The \"{title}\" message was \"{message}\", expected \"{expect}\"");
                 Mark();
@@ -351,7 +370,7 @@ public sealed class Runner
             case "pickFolder":
             {
                 var path = Text("path") ?? throw new ScriptException($"{kind} needs the path to pick.");
-                ShowStep(say ?? $"Pick {Path.GetFileName(path)}");
+                ShowStep(say ?? $"Pick {Path.GetFileName(path)}", Doing.File);
                 Mark();
                 _driver.PickFile(Text(kind)!, path, kind == "pickFolder");
                 Control.Wait(Control.Pace / 2);
@@ -384,7 +403,7 @@ public sealed class Runner
 
             case "if":
             {
-                var check = Checks.Build(step["if"]!.AsObject(), scope, _machine, Leftovers, Shows(scope));
+                var check = Checks.Build(step["if"]!.AsObject(), scope, _quiet, () => Leftovers(_suite, _quiet), Shows(scope));
                 string? detail;
                 try
                 {
@@ -409,12 +428,10 @@ public sealed class Runner
                 var program = SuitePath(Text("run")!);
                 var arguments = (step["args"] as JsonArray ?? []).Select(arg => scope.Expand(arg!.ToString())).ToList();
                 var environment = (step["env"] as JsonObject ?? []).ToDictionary(pair => pair.Key, pair => scope.Expand(pair.Value?.ToString() ?? ""));
-                ShowStep(say ?? $"Run {Path.GetFileName(program)} {string.Join(" ", arguments)}");
+                var line = ShownMachine.CommandLine(program, arguments, environment);
+                ShowStep(say ?? $"Run {Path.GetFileName(program)}", Doing.Command, line);
+                // What it prints goes in the log as it prints it, as the case may need to show it.
                 var output = _machine.Run(program, arguments, environment);
-                // What it printed goes in the log, as the case may need to show it.
-                foreach (var line in output.Output.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
-                    _results.Log("OUTPUT", line);
-                _results.Log("RUN", $"{Path.GetFileName(program)} exited with {output.ExitCode}");
                 KeepOutput(step, scope, output);
                 break;
             }
@@ -424,8 +441,7 @@ public sealed class Runner
                 // The script isn't expanded: PowerShell has ${...} of its own. It gets the step's args as $args.
                 var script = step["powershell"] is JsonArray lines ? string.Join("\r\n", lines.Select(line => line!.ToString())) : step["powershell"]!.ToString();
                 var arguments = (step["args"] as JsonArray ?? []).Select(arg => scope.Expand(arg!.ToString())).ToList();
-                if (say is not null)
-                    ShowStep(say);
+                ShowStep(say ?? "Run a PowerShell script", Doing.Command, ShownMachine.CommandLine("powershell", arguments, null) + "\n" + script);
                 var output = _machine.PowerShell(script, arguments);
                 if (output.ExitCode != 0)
                     Fail($"A PowerShell step failed with exit code {output.ExitCode}: {output.Output}");
@@ -463,6 +479,7 @@ public sealed class Runner
     private void WaitText(JsonObject step, Scope scope, Target target, TimeSpan within)
     {
         var wanted = WantedText(step, scope, _driver.TryFind(target) is { } before ? TextOf(before) : null);
+        _host.ShowWait(WaitingFor(target, wanted));
         var end = Environment.TickCount64 + (long)Control.Scale(within).TotalMilliseconds;
         while (true)
         {
@@ -492,6 +509,7 @@ public sealed class Runner
         var until = Targets.Resolve(step["untilText"] ?? throw new ScriptException("whileShows needs untilText: the control that says when it is done."),
             scope, _suite.Elements);
         var wanted = WantedText(step, scope, first: null);
+        _host.ShowWait(WaitingFor(until, wanted));
         var end = Environment.TickCount64 + (long)Control.Scale(within).TotalMilliseconds;
         for (var rounds = 0; ; )
         {
@@ -510,6 +528,7 @@ public sealed class Runner
                 if (++rounds > MaxRounds)
                     throw new StuckException($"see \"{wanted.Expected}\" in {until.What}", $"{each.What} was still showing after {MaxRounds} rounds.");
                 Steps(step["steps"] as JsonArray ?? [], scope, "whileShows");
+                _host.ShowWait(WaitingFor(until, wanted));
                 end = Environment.TickCount64 + (long)Control.Scale(within).TotalMilliseconds;
                 continue;
             }
@@ -545,6 +564,9 @@ public sealed class Runner
 
     private sealed record Wanted(string Expected, Func<string, bool> Test);
 
+    private static string WaitingFor(Target target, Wanted wanted) =>
+        wanted.Expected == "new text" ? $"Wait for {target.What} to change" : $"Wait for {target.What} to say \"{wanted.Expected}\"";
+
     // Clicks a control again and again while it is there and can be used, such as Up until the top folder. Not being
     // there at all is fine: there is nothing to do.
     private void ClickWhileEnabled(Target target, string? say, bool useMouse)
@@ -554,7 +576,7 @@ public sealed class Runner
             if (clicks == 50)
                 throw new StuckException($"get past {target.What}", "It was still there after 50 clicks.");
             var text = say ?? $"Click {control.Name}";
-            ShowStep(text);
+            ShowStep(text, Doing.Click);
             Mark();
             _driver.Point(control, text);
             _driver.Click(control, useMouse);
@@ -576,13 +598,13 @@ public sealed class Runner
     {
         var title = scope.Expand(step["checkpoint"]!.ToString());
         _results.Log("STEP", "Check: " + title);
-        _host.ShowStep("Check: " + title);
+        _host.ShowStep("Check: " + title, Doing.Check);
         Control.Gate();
 
         var results = new List<CheckResult>();
         foreach (var node in step["checks"] as JsonArray ?? [])
         {
-            var check = Checks.Build(node!.AsObject(), scope, _machine, Leftovers, Shows(scope));
+            var check = Checks.Build(node!.AsObject(), scope, _quiet, () => Leftovers(_suite, _quiet), Shows(scope));
             var detail = Evaluate(check);
             results.Add(new CheckResult(check.Label, detail is null, detail));
             if (detail is null)
@@ -601,8 +623,9 @@ public sealed class Runner
             Control.Gate();
             return;
         }
-        _host.ShowCarryingOn();
-        Control.Wait(Math.Max(Control.Pace * 5, 4000));
+        var pause = Math.Max(Control.Pace * 5, 4000);
+        _host.ShowCarryingOn(TimeSpan.FromMilliseconds(pause));
+        Control.Wait(pause);
     }
 
     // Waits for a check to pass, for things that take a moment, such as a service's next heartbeat.
@@ -634,10 +657,10 @@ public sealed class Runner
         var label = node["label"] is { } given ? scope.Expand(given.ToString()) : $"Open {Path.GetFileName(subject.TrimEnd('\\', '/'))}";
         return kind switch
         {
-            "openFolder" => new ToolButton(label, () => _machine.Open("folder", subject)),
-            "openFile" => new ToolButton(label, () => _machine.Open("file", subject)),
-            "app" => new ToolButton(label, () => _machine.Open("app", subject, arguments)),
-            _ => new ToolButton(label, () => OpenConsole(label, subject, arguments)),
+            "openFolder" => new ToolButton(label, () => _machine.Open("folder", subject), kind),
+            "openFile" => new ToolButton(label, () => _machine.Open("file", subject), kind),
+            "app" => new ToolButton(label, () => _machine.Open("app", subject, arguments), kind),
+            _ => new ToolButton(label, () => OpenConsole(label, subject, arguments), kind),
         };
     }
 
@@ -654,10 +677,10 @@ public sealed class Runner
     // ===== Showing the person what is happening =====
 
     /// <summary>Shows what is about to happen. Step by step, it then waits for Enter; paused, until the run carries on.</summary>
-    private void ShowStep(string text)
+    private void ShowStep(string text, Doing kind = Doing.Say, string? command = null)
     {
         _results.Log("STEP", text);
-        _host.ShowStep(text);
+        _host.ShowStep(text, kind, command);
         if (Control.StepByStep && !Control.Unattended)
             Control.Hold(Waiting.Step);
         Control.Gate();
@@ -777,8 +800,10 @@ public sealed class Runner
         _results.Log("NOTE", $"{text} ({shot})");
     }
 
-    private string SuitePath(string path) =>
-        Path.IsPathRooted(path) || !(path.Contains('/') || path.Contains('\\')) ? path : Path.GetFullPath(Path.Combine(_suite.Folder, path));
+    private string SuitePath(string path) => SuitePath(_suite, path);
+
+    private static string SuitePath(Suite suite, string path) =>
+        Path.IsPathRooted(path) || !(path.Contains('/') || path.Contains('\\')) ? path : Path.GetFullPath(Path.Combine(suite.Folder, path));
 
     // "Click Add" as "click Add", to go on the end of a sentence.
     private static string Lower(string text) => text.Length == 0 ? text : char.ToLowerInvariant(text[0]) + text[1..];
