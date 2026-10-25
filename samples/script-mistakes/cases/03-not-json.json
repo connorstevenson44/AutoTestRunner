@@ -1,0 +1,9 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "A file that isn't JSON",
+  "covers": "A missing comma: validate says where the file stops making sense",
+  "steps": [
+    { "say": "The comma after this step is missing" }
+    { "say": "so the file can't be read at all" }
+  ]
+}

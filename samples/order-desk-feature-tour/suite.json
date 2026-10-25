@@ -1,0 +1,21 @@
+{
+  "$schema": "../../schema/suite.schema.json",
+  "name": "Order Desk feature tour",
+  "app": { "exe": "${exe}", "window": "Order Desk", "status": "statusText" },
+  "variables": {
+    "exe": { "firstExisting": [
+      "../order-desk-app/OrderDesk.exe",
+      "../order-desk-app/bin/Release/net10.0-windows/OrderDesk.exe",
+      "../order-desk-app/bin/Debug/net10.0-windows/OrderDesk.exe"
+    ] },
+    "dataDir": "${env:LOCALAPPDATA}\\OrderDesk",
+    "ordersFile": "${dataDir}\\orders.json",
+    "activityLog": "${dataDir}\\activity.log"
+  },
+  "helpers": {
+    "amount": { "regex": "£(\\d+\\.\\d\\d)" },
+    "exportedFile": { "regex": "File: (.+)$" }
+  },
+  "requires": ["${exe}"],
+  "reset": { "powershell": "tools/Reset-OrderDesk.ps1", "leftovers": "tools/Find-Leftovers.ps1" }
+}

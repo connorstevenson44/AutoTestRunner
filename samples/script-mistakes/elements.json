@@ -1,0 +1,5 @@
+{
+  "$schema": "../../schema/elements.schema.json",
+  "statusText": { "id": "StatusText" },
+  "customer": { "id": "CustomerBox" }
+}

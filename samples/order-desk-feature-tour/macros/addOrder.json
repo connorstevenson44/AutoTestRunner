@@ -1,0 +1,20 @@
+{
+  "$schema": "../../../schema/macro.schema.json",
+  "description": "Fills in the order form and clicks Add order, then waits for the bar at the bottom to say it was added. Hands back what the bar says, such as Added order 1002 for Grace Hopper: £24.00.",
+  "params": {
+    "customer": { "description": "The customer's name." },
+    "product": { "description": "Coffee beans, Green tea, Mug or Teapot." },
+    "quantity": { "description": "How many.", "default": "1" },
+    "giftWrap": { "description": "yes to tick Gift wrap.", "default": "no" }
+  },
+  "steps": [
+    { "type": "customer", "text": "${customer}", "say": "Type ${customer} as the customer" },
+    { "choose": "product", "option": "${product}", "say": "Pick ${product}" },
+    { "type": "quantity", "text": "${quantity}", "say": "Make it ${quantity}" },
+    { "if": { "equals": "${giftWrap}", "to": "yes" },
+      "steps": [ { "tick": "giftWrap", "say": "Tick Gift wrap" } ] },
+    { "click": "addOrder", "say": "Click Add order" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Added order" }, "as": "status" }
+  ],
+  "returns": "status"
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "A case with mistakes around its steps",
+  "needs": ["open-the-app"],
+  "covers": "Mistakes around the steps: needs names open-the-app, and there is no case with that id (a case's id is its file's name without the number); and the checkpoint has a check and a tool that don't exist",
+  "steps": [
+    { "checkpoint": "The order was saved",
+      "checks": [
+        { "fileExist": "${dataDir}\\orders.json", "label": "Mistake: the check is fileExists" }
+      ],
+      "tools": [
+        { "openFiles": "${dataDir}\\orders.json", "label": "Mistake: the tool is openFile" }
+      ] }
+  ]
+}

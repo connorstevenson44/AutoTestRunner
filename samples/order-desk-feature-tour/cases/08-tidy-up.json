@@ -1,0 +1,17 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "Close the app and leave nothing behind",
+  "needsNote": "Any time",
+  "covers": "Closing the app, a PowerShell step that cleans up, and the nothingLeft check, which runs the suite's leftovers script",
+  "steps": [
+    { "closeApp": {}, "say": "Close Order Desk" },
+    { "powershell": "Remove-Item -LiteralPath $args[0] -Recurse -Force -ErrorAction SilentlyContinue", "args": ["${dataDir}"],
+      "say": "Delete its data folder, so the next run starts afresh" },
+    { "checkpoint": "Nothing is left behind",
+      "checks": [
+        { "fileMissing": "${dataDir}" },
+        { "nothingLeft": {} }
+      ],
+      "look": [ "tools/Find-Leftovers.ps1 is what nothingLeft runs. The runner also runs it before a run, and cleans up when it finds anything." ] }
+  ]
+}

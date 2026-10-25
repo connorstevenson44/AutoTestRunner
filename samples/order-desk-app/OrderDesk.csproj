@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Order Desk: a small WPF app for the demo suites to drive. It has the things real apps have that tests must cope
+       with: a form, a drop-down, tick boxes, rows whose buttons only show on hover, Windows message boxes and file
+       pickers, a window per item, slow work with progress, and a long list that only builds the rows on screen. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <AssemblyName>OrderDesk</AssemblyName>
+    <RootNamespace>OrderDesk</RootNamespace>
+  </PropertyGroup>
+
+</Project>

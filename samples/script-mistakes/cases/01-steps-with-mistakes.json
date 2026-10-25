@@ -1,0 +1,15 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "Steps with mistakes in them",
+  "covers": "Each step below has one mistake, named in its note. autotest validate reports them all at once, with the file and step number.",
+  "steps": [
+    { "startApp": {} },
+    { "clik": { "button": "Add order" }, "note": "Mistake: clik is misspelt, so this isn't a step the runner knows." },
+    { "click": { "button": "Add order" }, "type": "customer", "note": "Mistake: one step doing two things, a click and a type." },
+    { "click": "saveButon", "note": "Mistake: there is no element called saveButon in elements.json." },
+    { "type": "customer", "value": "Ada Lovelace", "note": "Mistake: type takes text, not value." },
+    { "click": { "button": "Add order", "label": "Add" }, "note": "Mistake: a selector has no label." },
+    { "call": "waitForStatus", "with": { "startsWith": "Added order" }, "note": "Mistake: the macro is called waitForStatusBar." },
+    { "call": "waitForStatusBar", "with": { "startWith": "Added order" }, "note": "Mistake: the macro's parameter is startsWith." }
+  ]
+}

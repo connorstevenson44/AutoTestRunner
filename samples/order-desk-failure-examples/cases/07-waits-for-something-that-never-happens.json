@@ -1,0 +1,13 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "Stuck: waiting for something that never happens",
+  "needsNote": "Nothing",
+  "covers": "A wait running out: the warehouse never answers, and the message says what the bar at the bottom said instead",
+  "steps": [
+    { "call": "startWithNoOrders" },
+    { "click": "connectToWarehouse", "say": "Click Connect to warehouse. The warehouse never answers in this demo" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Connected to the warehouse", "within": "10" } },
+    { "checkpoint": "Order Desk is connected to the warehouse",
+      "look": [ "The message said what the bar at the bottom said when the wait ran out: still connecting." ] }
+  ]
+}

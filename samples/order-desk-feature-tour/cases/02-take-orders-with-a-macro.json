@@ -1,0 +1,27 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "Take three more orders with a macro",
+  "needs": ["take-an-order"],
+  "covers": "A macro: the steps to take an order written once in macros/addOrder.json and used three times, an if inside it, and repeat going over a list",
+  "steps": [
+    { "say": "The steps for an order are in a macro, so each order below is one line of the case. Gift wrap is ticked only when the case asks for it, with an if." },
+    { "call": "addOrder", "with": { "customer": "Grace Hopper", "product": "Green tea", "quantity": "3" } },
+    { "call": "addOrder", "with": { "customer": "Alan Turing", "product": "Mug", "giftWrap": "yes" } },
+    { "call": "addOrder", "with": { "customer": "Katherine Johnson", "product": "Teapot" }, "as": "status" },
+    { "repeat": ["1002", "1003", "1004"], "item": "number",
+      "steps": [
+        { "hover": { "element": "orderRow", "with": { "number": "${number}" } }, "say": "Order ${number} is in the list" }
+      ] },
+    { "checkpoint": "There are four orders",
+      "checks": [
+        { "jsonValue": "${ordersFile}", "path": "orders:1002:quantity", "equals": "3" },
+        { "jsonValue": "${ordersFile}", "path": "orders:1003:giftWrap", "equals": "true", "label": "Alan Turing's mug is gift wrapped" },
+        { "jsonValue": "${ordersFile}", "path": "orders:1003:total", "equals": "8.00" },
+        { "jsonValue": "${ordersFile}", "path": "orders:1004:product", "equals": "Teapot" },
+        { "contains": "${status}", "text": "Katherine Johnson: £24.00", "label": "The last order said £24.00 for Katherine Johnson" },
+        { "fileContains": "${activityLog}", "text": "Added order 1004: Katherine Johnson" }
+      ],
+      "look": [ "The list shows 1001 to 1004, oldest first." ],
+      "tools": [ { "openFile": "${ordersFile}", "label": "Open orders.json" } ] }
+  ]
+}

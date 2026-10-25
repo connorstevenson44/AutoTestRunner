@@ -1,0 +1,32 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "Ship and delete orders with the buttons on their rows",
+  "needs": ["take-orders-with-a-macro"],
+  "covers": "Buttons that only show while the mouse is over their row, a Windows message box answered No and then Yes, and waiting for a row to go",
+  "steps": [
+    { "hover": { "element": "orderRow", "with": { "number": "1003" } },
+      "say": "Point at Alan Turing's order. Its Ship and Delete buttons only show while the mouse is over the row, so the test points at the row first" },
+    { "click": { "element": "orderRowButton", "with": { "number": "1003", "tip": "Mark as shipped" } }, "what": "the Ship button on order 1003",
+      "say": "Click Ship" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Order 1003 shipped." } },
+    { "click": { "element": "orderRowButton", "with": { "number": "1002", "tip": "Delete this order" } }, "what": "the Delete button on order 1002",
+      "say": "Click Delete on Grace Hopper's order" },
+    { "answerDialog": "Delete order", "button": "No", "expect": "Delete order 1002 for Grace Hopper?",
+      "say": "A Windows message box asks first. The test checks what it asks, then says No" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Kept order 1002." } },
+    { "click": { "element": "orderRowButton", "with": { "number": "1004", "tip": "Delete this order" } }, "what": "the Delete button on order 1004",
+      "say": "Click Delete on Katherine Johnson's order" },
+    { "answerDialog": "Delete order", "button": "Yes", "expect": "Delete order 1004 for Katherine Johnson?", "say": "This time say Yes" },
+    { "waitGone": { "element": "orderRow", "with": { "number": "1004" } }, "what": "order 1004 in the list",
+      "say": "Katherine Johnson's order has gone from the list" },
+    { "checkpoint": "Order 1003 is shipped, 1002 kept, and 1004 deleted",
+      "checks": [
+        { "jsonValue": "${ordersFile}", "path": "orders:1003:status", "equals": "Shipped" },
+        { "jsonValue": "${ordersFile}", "path": "orders:1002:status", "equals": "New" },
+        { "jsonValue": "${ordersFile}", "path": "orders:1004", "equals": "<absent>", "label": "orders.json no longer has order 1004" },
+        { "shows": { "element": "orderRow", "with": { "number": "1002" } }, "label": "Order 1002 is still in the list" },
+        { "logged": "${activityLog}", "text": "Deleted order 1004" }
+      ],
+      "look": [ "Order 1003 has a green Shipped label." ] }
+  ]
+}

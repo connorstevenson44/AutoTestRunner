@@ -1,0 +1,9 @@
+{
+  "$schema": "../../../schema/macro.schema.json",
+  "description": "Waits for the bar at the bottom to say something new that starts with startsWith.",
+  "params": { "startsWith": { "description": "What it should start with." } },
+  "steps": [
+    { "waitText": "statusText", "startsWith": "${startsWith}", "new": true, "as": "status" }
+  ],
+  "returns": "status"
+}
