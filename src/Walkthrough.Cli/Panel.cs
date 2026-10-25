@@ -39,7 +39,7 @@ internal sealed class Panel : Window, IRunHost
     private readonly TextBlock _nowIcon, _nowLabel, _nowText, _waitText;
     private readonly Border _nowCommand, _countdown;
     private readonly TextBlock _nowCommandText;
-    private readonly StackPanel _waitRow;
+    private readonly DockPanel _waitRow;
     private readonly ContentControl _question;
     private readonly Feed _feed;
     private readonly DispatcherTimer _waitTimer;
@@ -125,6 +125,8 @@ internal sealed class Panel : Window, IRunHost
         _next = Ui.IconButton(Icons.Next, "Do the next step, then wait (Enter)", () => _control.NextStep(), 20);
         var stop = Ui.IconButton(Icons.Stop, "Stop the test (Esc)", RequestStop, 20);
         stop.Foreground = Ui.Fail;
+        foreach (var button in new[] { _main, _next, stop })
+            button.Padding = new Thickness(7, 5, 7, 3);
         run.Children.Add(Captioned(_main, "Space"));
         run.Children.Add(Captioned(_next, "Enter"));
         run.Children.Add(Captioned(stop, "Esc"));
@@ -133,9 +135,9 @@ internal sealed class Panel : Window, IRunHost
         var settings = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
         _speeds =
         [
-            Ui.Toggle(Icons.SpeedSlow, "Slow"),
-            Ui.Toggle(Icons.SpeedModest, "Modest speed"),
-            Ui.Toggle(Icons.SpeedFast, "Fast"),
+            Ui.Toggle(Icons.SpeedSlow, "Slow", 16),
+            Ui.Toggle(Icons.SpeedModest, "Modest speed", 16),
+            Ui.Toggle(Icons.SpeedFast, "Fast", 16),
         ];
         for (var index = 0; index < _speeds.Length; index++)
         {
@@ -144,13 +146,15 @@ internal sealed class Panel : Window, IRunHost
             _speeds[index].Click += (_, _) => SetSpeed(speed);
             settings.Children.Add(_speeds[index]);
         }
-        settings.Children.Add(new Border { Width = 1, Background = Ui.Line, Margin = new Thickness(6, 6, 6, 6) });
-        _checks = Ui.Toggle(Icons.CheckList, "Wait for me at each checkpoint");
+        settings.Children.Add(new Border { Width = 1, Background = Ui.Line, Margin = new Thickness(4, 6, 4, 6) });
+        _checks = Ui.Toggle(Icons.CheckList, "Wait for me at each checkpoint", 16);
         _checks.IsChecked = control.StopAtCheckpoints;
         _checks.Click += (_, _) => _control.StopAtCheckpoints = _checks.IsChecked == true;
         settings.Children.Add(_checks);
-        settings.Children.Add(Ui.IconButton(Icons.Note, "Note a problem, with a screenshot", NoteProblem));
-        settings.Children.Add(Ui.IconButton(Icons.Folder, "Open the results folder", () => Open("folder", _resultsFolder)));
+        settings.Children.Add(Ui.IconButton(Icons.Note, "Note a problem, with a screenshot", NoteProblem, 16));
+        settings.Children.Add(Ui.IconButton(Icons.Folder, "Open the results folder", () => Open("folder", _resultsFolder), 16));
+        foreach (var setting in settings.Children.OfType<ButtonBase>())
+            setting.Padding = new Thickness(6, 5, 6, 5);
         Grid.SetColumn(settings, 2);
         controls.Children.Add(settings);
         Grid.SetRow(controls, 1);
@@ -171,8 +175,11 @@ internal sealed class Panel : Window, IRunHost
         _nowCommand = new Border { Background = Ui.Terminal, CornerRadius = new CornerRadius(5), Padding = new Thickness(8, 5, 8, 5), Margin = new Thickness(0, 6, 0, 0), Child = _nowCommandText, Visibility = Visibility.Collapsed };
         _waitText = Ui.Words("", 11.5, Ui.Muted);
         _waitText.Margin = new Thickness(6, 0, 0, 0);
-        _waitRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0), Visibility = Visibility.Collapsed };
-        _waitRow.Children.Add(Ui.Spinner(11, Ui.Muted));
+        _waitRow = new DockPanel { Margin = new Thickness(0, 6, 0, 0), Visibility = Visibility.Collapsed };
+        var turning = Ui.Spinner(11, Ui.Muted);
+        turning.VerticalAlignment = VerticalAlignment.Top;
+        turning.Margin = new Thickness(0, 2, 0, 0);
+        _waitRow.Children.Add(turning);
         _waitRow.Children.Add(_waitText);
         said.Children.Add(_nowLabel);
         said.Children.Add(_nowText);
@@ -246,6 +253,7 @@ internal sealed class Panel : Window, IRunHost
     public void RunEnded() => OnUi(() =>
     {
         _over = true;
+        _main.IsEnabled = _next.IsEnabled = false;
         EndWait();
         _hooks?.Dispose();
         _hooks = null;
@@ -295,7 +303,7 @@ internal sealed class Panel : Window, IRunHost
 
     public void CommandStarted(string line, string? script) => OnUi(() =>
     {
-        StartWait("Running " + line, isCommand: true);
+        StartWait("Running", isCommand: true);
         _feed.CommandStarted(line, script);
     });
 
@@ -354,6 +362,7 @@ internal sealed class Panel : Window, IRunHost
         HideCountdown();
         _control.CarryOn();
         _over = true;
+        _main.IsEnabled = _next.IsEnabled = false;
         SetState(allPassed ? Icons.Passed : Icons.Failed, "Finished", allPassed ? Ui.Pass : Ui.Fail, allPassed ? Ui.PassSoft : Ui.FailSoft);
         _nowIcon.Text = allPassed ? Icons.Passed : Icons.Failed;
         _nowText.Text = allPassed ? "Everything passed" : "Finished, with problems";
@@ -479,10 +488,14 @@ internal sealed class Panel : Window, IRunHost
         _state.ToolTip = tip;
     }
 
+    // Once the countdown is over or held, the state says what the run is doing again.
     private void HideCountdown()
     {
+        if (_countdown.Visibility != Visibility.Visible)
+            return;
         ((ScaleTransform)_countdown.RenderTransform).BeginAnimation(ScaleTransform.ScaleXProperty, null);
         _countdown.Visibility = Visibility.Hidden;
+        ShowState();
     }
 
     // ===== Waits =====
@@ -524,6 +537,7 @@ internal sealed class Panel : Window, IRunHost
         int? closeAnswer = null)
     {
         Answer(_closeAnswer);
+        EndWait();
         var answer = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
         (_answer, _closeAnswer) = (answer, closeAnswer ?? answers.Length - 1);
 

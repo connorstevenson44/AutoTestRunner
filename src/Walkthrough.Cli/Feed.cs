@@ -182,6 +182,7 @@ internal sealed class Feed : Grid
     private sealed class CommandRow : StackPanel
     {
         private readonly Border _status, _terminal;
+        private readonly Button _copy;
         private readonly TextBlock _echo, _output, _clock, _chevron;
         private readonly ScrollViewer _scroll;
         private readonly DispatcherTimer _timer;
@@ -227,7 +228,7 @@ internal sealed class Feed : Grid
             lines.Children.Add(_echo);
             lines.Children.Add(_output);
             _scroll = new ScrollViewer { Content = lines, MaxHeight = 230, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(10, 8, 10, 8) };
-            var copy = Ui.IconButton(Icons.Copy, "Copy the command and what it printed", () =>
+            _copy = Ui.IconButton(Icons.Copy, "Copy the command and what it printed", () =>
             {
                 try
                 {
@@ -238,14 +239,11 @@ internal sealed class Feed : Grid
                     // Another program has the clipboard open; a second click will do.
                 }
             }, 12);
-            copy.Foreground = Ui.TerminalScript;
-            copy.HorizontalAlignment = HorizontalAlignment.Right;
-            copy.VerticalAlignment = VerticalAlignment.Top;
-            copy.Margin = new Thickness(0, 2, 14, 0);
-            var inside = new Grid();
-            inside.Children.Add(_scroll);
-            inside.Children.Add(copy);
-            _terminal = new Border { Background = Ui.Terminal, CornerRadius = new CornerRadius(6), Margin = new Thickness(26, 4, 0, 0), Child = inside };
+            _copy.Foreground = Ui.Muted;
+            _copy.Padding = new Thickness(4, 2, 4, 2);
+            _copy.Margin = new Thickness(4, 0, 0, 0);
+            right.Children.Insert(1, _copy);
+            _terminal = new Border { Background = Ui.Terminal, CornerRadius = new CornerRadius(6), Margin = new Thickness(26, 4, 0, 0), Child = _scroll };
             Children.Add(_terminal);
             header.MouseLeftButtonUp += (_, _) => Open(_terminal.Visibility != Visibility.Visible);
 
