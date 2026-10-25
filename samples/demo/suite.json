@@ -1,0 +1,11 @@
+{
+  "$schema": "../../schema/walkthrough.suite.schema.json",
+  "name": "Demo",
+  "app": { "exe": "${exe}", "window": "Demo", "status": "statusText" },
+  "variables": {
+    "exe": { "firstExisting": ["Demo.exe", "bin/Demo.exe"] },
+    "dataDir": "${temp}/demo-data"
+  },
+  "helpers": { "logFile": { "regex": "Log: (.+)$" } },
+  "requires": []
+}

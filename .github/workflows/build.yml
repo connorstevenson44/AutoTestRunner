@@ -1,0 +1,44 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # The engine and its tests run anywhere; walk and the FlaUI driver build on Linux too, but only run on Windows.
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Build
+        run: dotnet build --configuration Release
+
+      - name: Test
+        run: dotnet test --configuration Release --no-build
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Publish walk
+        run: dotnet publish src/Walkthrough.Cli --configuration Release --output artifacts/walk
+
+      - name: Check the sample suite
+        run: artifacts/walk/walk.exe check samples/demo
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: walk
+          path: artifacts/walk/

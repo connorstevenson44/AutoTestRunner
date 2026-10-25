@@ -1,0 +1,6 @@
+{
+  "$schema": "../../schema/walkthrough.elements.schema.json",
+  "statusText": { "id": "StatusText" },
+  "nameBox": [ { "id": "NameBox" }, { "type": "Edit", "name": "Name" } ],
+  "row": { "type": "Button", "helpText": "${path}" }
+}

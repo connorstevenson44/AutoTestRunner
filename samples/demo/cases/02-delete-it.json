@@ -1,0 +1,9 @@
+{
+  "$schema": "../../../schema/walkthrough.case.schema.json",
+  "name": "Delete it",
+  "needs": ["save-a-name"],
+  "steps": [
+    { "click": { "button": "Delete" }, "say": "Click Delete" },
+    { "checkpoint": "It is gone" }
+  ]
+}
