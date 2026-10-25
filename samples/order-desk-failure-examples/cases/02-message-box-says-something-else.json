@@ -6,6 +6,7 @@
   "steps": [
     { "call": "startWithNoOrders" },
     { "call": "addOrder", "with": { "customer": "Grace Hopper", "product": "Green tea" } },
+    { "hover": { "element": "orderRow", "with": { "number": "1001" } }, "say": "Point at Grace Hopper's order, to show its buttons" },
     { "click": { "element": "orderRowButton", "with": { "number": "1001", "tip": "Delete this order" } }, "what": "the Delete button on order 1001",
       "say": "Click Delete on Grace Hopper's order" },
     { "answerDialog": "Delete order", "button": "No", "expect": "Delete 1 order?",

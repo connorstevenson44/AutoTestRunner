@@ -57,15 +57,18 @@ $expected = [ordered]@{
     7 = 'It says: Connecting to the warehouse'
     8 = 'is showing another window instead: "Import order"'
 }
-foreach ($case in $expected.Keys) {
+foreach ($entry in $expected.GetEnumerator()) {
+    # Indexing an ordered dictionary with a number picks by position, so take each key and its text together.
+    $case = $entry.Key
+    $text = $entry.Value
     $folder = Join-Path $Results "failure-example-$case"
     & $autotest run $failures --unattended --cases $case --results $folder
     $code = $LASTEXITCODE
     $summary = Summary $folder
     if ($code -ne 1) { $problems.Add("Failure example $case ended with exit code $code, not 1.") }
     elseif ($summary -notmatch "(?m)^FAILED\s+$case\.") { $problems.Add("Failure example $case didn't fail:`n$summary") }
-    elseif (-not $summary.Contains($expected[$case])) { $problems.Add("Failure example $case failed, but not with ``$($expected[$case])``:`n$summary") }
-    else { $report.Add("failure example ${case}: failed as it should, with ``$($expected[$case])``") }
+    elseif (-not $summary.Contains($text)) { $problems.Add("Failure example $case failed, but not with ``$text``:`n$summary") }
+    else { $report.Add("failure example ${case}: failed as it should, with ``$text``") }
 }
 & (Join-Path $failures 'tools\Reset-OrderDesk.ps1') | Out-Null
 
