@@ -1,0 +1,74 @@
+# The demos: Order Desk, a small WPF app, and the suites that drive it. Demos-ReadyToRun has everything to watch them
+# on any Windows computer, without .NET installed. Then the feature tour must pass, each failure example must fail with
+# the message it is there to show, and validate must find every mistake in script-mistakes.
+#
+# To rebuild the bundle by hand: Actions > Demos > Run workflow, pick the branch, and untick the check to only build it.
+name: Demos
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      check:
+        description: Run the demos and check each ends as it should (untick to only build the bundle)
+        type: boolean
+        default: true
+
+jobs:
+  demos:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Make the demo bundle
+        run: |
+          $bundle = "$env:RUNNER_TEMP\demos"
+          dotnet publish src/AutoTestRunner.Cli -c Release -r win-x64 --self-contained -o "$bundle\autotestrunner"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet publish samples/order-desk-app -c Release -r win-x64 --self-contained -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true -o "$bundle\order-desk-app"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($suite in 'order-desk-feature-tour', 'order-desk-failure-examples', 'script-mistakes') {
+            Copy-Item "samples\$suite" "$bundle\$suite" -Recurse
+          }
+          Copy-Item samples\README.md "$bundle\README.md"
+          Set-Content "$bundle\1 Watch the feature tour.cmd" '@"%~dp0autotestrunner\autotest.exe" launch "%~dp0order-desk-feature-tour" %*'
+          Set-Content "$bundle\2 Step through the feature tour.cmd" '@"%~dp0autotestrunner\autotest.exe" launch "%~dp0order-desk-feature-tour" --mode step-by-step %*'
+          Set-Content "$bundle\3 Watch tests fail.cmd" '@"%~dp0autotestrunner\autotest.exe" launch "%~dp0order-desk-failure-examples" --mode pause-at-checkpoints %*'
+          Set-Content "$bundle\4 Find the mistakes in a suite.cmd" "@`"%~dp0autotestrunner\autotest.exe`" validate `"%~dp0script-mistakes`"`r`n@pause"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Demos-ReadyToRun
+          path: ${{ runner.temp }}/demos/
+          retention-days: 90
+
+      - name: Use a 1600x900 screen
+        if: github.event_name != 'workflow_dispatch' || inputs.check
+        continue-on-error: true
+        run: |
+          Set-DisplayResolution -Width 1600 -Height 900 -Force
+          Add-Type -AssemblyName System.Windows.Forms
+          "The screen is now $([Windows.Forms.Screen]::PrimaryScreen.Bounds.Size)"
+
+      - name: Run the demos and check how each ends
+        if: github.event_name != 'workflow_dispatch' || inputs.check
+        timeout-minutes: 20
+        run: |
+          ./tools/Run-Demos.ps1 -Bundle "$env:RUNNER_TEMP\demos" -Results artifacts/demo-results
+          $report = Get-Content artifacts/demo-results/demos.txt -Raw -ErrorAction SilentlyContinue
+          $fence = '```'
+          if ($report) { "$fence`n$report`n$fence" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8 }
+
+      - uses: actions/upload-artifact@v4
+        if: always() && (github.event_name != 'workflow_dispatch' || inputs.check)
+        with:
+          name: Demos-Results
+          path: artifacts/demo-results/

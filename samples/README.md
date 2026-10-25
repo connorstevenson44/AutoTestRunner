@@ -5,7 +5,7 @@ does when a test passes, when it fails, when it gets stuck, and when the script 
 
 ## Watching them
 
-Take the **Demos-ReadyToRun** artifact from any run of the Build workflow (the run's Summary page, under Artifacts),
+Take the **Demos-ReadyToRun** artifact from any run of the Demos workflow (the run's Summary page, under Artifacts),
 unzip it and double-click one of the `.cmd` files. Nothing needs installing, and nothing needs administrator: Order
 Desk keeps its orders in `%LOCALAPPDATA%\OrderDesk`, and the suites delete that folder when they are done.
 
@@ -15,6 +15,10 @@ Desk keeps its orders in `%LOCALAPPDATA%\OrderDesk`, and the suites delete that 
 | `2 Step through the feature tour.cmd` | The same, a step at a time: press Enter for each step. |
 | `3 Watch tests fail.cmd` | The failure examples, holding at each checkpoint so you can read what failed. |
 | `4 Find the mistakes in a suite.cmd` | Runs `autotest validate` on a suite full of mistakes, and lists every one. |
+
+The Demos workflow runs on every push to main and every pull request, and keeps the bundle for 90 days. To make a
+fresh one, open **Actions > Demos > Run workflow** on GitHub and pick the branch. Untick the check to only build the
+bundle, which takes a few minutes; ticked, it also runs every demo and checks each ends as it should.
 
 While a test runs, **Space** pauses and carries on, **Enter** goes a step at a time, and **Esc** stops.
 
