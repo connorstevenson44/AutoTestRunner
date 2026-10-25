@@ -22,10 +22,12 @@ public interface IMachine
     /// <summary>Whether a scheduled task exists, by its full path, such as \Contoso\Orders Export-main.</summary>
     bool TaskExists(string path);
 
-    ProcessOutput Run(string program, IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string>? environment = null, TimeSpan? timeout = null);
+    /// <param name="output">Called with each line the program prints as it prints it, and whether it is an error.</param>
+    ProcessOutput Run(string program, IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string>? environment = null, TimeSpan? timeout = null,
+        Action<string, bool>? output = null);
 
     /// <summary>Runs a PowerShell script, passing arguments as $args, with errors stopping it.</summary>
-    ProcessOutput PowerShell(string script, IReadOnlyList<string> arguments, TimeSpan? timeout = null);
+    ProcessOutput PowerShell(string script, IReadOnlyList<string> arguments, TimeSpan? timeout = null, Action<string, bool>? output = null);
 
     /// <summary>Opens a folder in File Explorer, a file in Notepad, or starts a program, for a person to look at.</summary>
     void Open(string what, string path, IReadOnlyList<string>? arguments = null);
@@ -47,7 +49,8 @@ public sealed class WindowsMachine : IMachine
 
     public bool TaskExists(string path) => Run("schtasks.exe", ["/query", "/tn", path]).ExitCode == 0;
 
-    public ProcessOutput Run(string program, IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string>? environment = null, TimeSpan? timeout = null)
+    public ProcessOutput Run(string program, IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string>? environment = null, TimeSpan? timeout = null,
+        Action<string, bool>? output = null)
     {
         var start = new ProcessStartInfo(program)
         {
@@ -64,30 +67,43 @@ public sealed class WindowsMachine : IMachine
             start.Environment[key] = value;
 
         using var process = Process.Start(start) ?? throw new InvalidOperationException($"{program} didn't start.");
-        var output = new StringBuilder();
-        process.OutputDataReceived += (_, e) => { if (e.Data is not null) lock (output) output.AppendLine(e.Data); };
-        process.ErrorDataReceived += (_, e) => { if (e.Data is not null) lock (output) output.AppendLine(e.Data); };
+        var printed = new StringBuilder();
+        void Printed(string? line, bool error)
+        {
+            if (line is null)
+                return;
+            lock (printed)
+            {
+                printed.AppendLine(line);
+                output?.Invoke(line, error);
+            }
+        }
+        process.OutputDataReceived += (_, e) => Printed(e.Data, error: false);
+        process.ErrorDataReceived += (_, e) => Printed(e.Data, error: true);
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
         if (!process.WaitForExit(timeout ?? TimeSpan.FromMinutes(10)))
         {
             process.Kill(entireProcessTree: true);
-            lock (output)
-                return new ProcessOutput(-1, output + $"{Path.GetFileName(program)} was still running after {(timeout ?? TimeSpan.FromMinutes(10)).TotalMinutes:0} minutes, so it was stopped.");
+            var stopped = $"{Path.GetFileName(program)} was still running after {(timeout ?? TimeSpan.FromMinutes(10)).TotalMinutes:0} minutes, so it was stopped.";
+            Printed(stopped, error: true);
+            lock (printed)
+                return new ProcessOutput(-1, printed.ToString().TrimEnd());
         }
         process.WaitForExit();
-        lock (output)
-            return new ProcessOutput(process.ExitCode, output.ToString().TrimEnd());
+        lock (printed)
+            return new ProcessOutput(process.ExitCode, printed.ToString().TrimEnd());
     }
 
-    public ProcessOutput PowerShell(string script, IReadOnlyList<string> arguments, TimeSpan? timeout = null)
+    public ProcessOutput PowerShell(string script, IReadOnlyList<string> arguments, TimeSpan? timeout = null, Action<string, bool>? output = null)
     {
         Directory.CreateDirectory(Temp);
         var file = Path.Combine(Temp, $"script-{Guid.NewGuid():N}.ps1");
-        File.WriteAllText(file, "$ErrorActionPreference = 'Stop'\r\n" + script, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+        // Progress bars have nowhere to go, and would come back as XML among what the script prints.
+        File.WriteAllText(file, "$ErrorActionPreference = 'Stop'\r\n$ProgressPreference = 'SilentlyContinue'\r\n" + script, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
         try
         {
-            return Run("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", file, .. arguments], timeout: timeout);
+            return Run("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", file, .. arguments], timeout: timeout, output: output);
         }
         finally
         {

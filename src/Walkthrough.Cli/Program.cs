@@ -12,18 +12,22 @@ namespace Walkthrough.Cli;
 /// <summary>
 /// walk: runs a suite while you watch, or unattended for CI.
 ///
+///   walk open &lt;suite folder&gt;    the launcher: pick the cases, how they run and how fast, then watch them
 ///   walk run &lt;suite folder&gt; [--cases 1-5,8] [--unattended] [--speed Slow|Modest|Fast]
 ///            [--mode itself|checks|steps] [--results &lt;folder&gt;] [--var name=value]...
 ///   walk check &lt;suite folder&gt;   reads every script and reports what is wrong with them
 ///   walk list &lt;suite folder&gt;    lists the cases
+///   walk preview [--shots &lt;folder&gt;]   plays a made-up run in the panel, and saves pictures of it
 /// </summary>
 public static class Program
 {
     private const string Usage = """
+        walk open <suite folder> [the options of run, to start the launcher with]
         walk run <suite folder> [--cases 1-5,8] [--unattended] [--speed Slow|Modest|Fast]
                  [--mode itself|checks|steps] [--results <folder>] [--var name=value]...
         walk check <suite folder>
         walk list <suite folder>
+        walk preview [--shots <folder>]
 
         --mode itself   carries on by itself, showing each checkpoint for a few seconds (Space holds it there)
         --mode checks   carries on by itself, waiting for you at each checkpoint
@@ -33,7 +37,9 @@ public static class Program
     [STAThread]
     public static int Main(string[] args)
     {
-        if (args.Length < 2 || args[0] is not ("run" or "check" or "list"))
+        if (args is ["preview", ..])
+            return Preview.Run(args[1..]);
+        if (args.Length < 2 || args[0] is not ("open" or "run" or "check" or "list"))
         {
             Console.Error.WriteLine(Usage);
             return (int)ExitCode.ScriptError;
@@ -64,6 +70,8 @@ public static class Program
         }
 
         var options = Options.Read(args[2..]);
+        if (args[0] == "open" && options.Unattended)
+            options = options with { Problem = "The launcher is for a run you watch; walk run --unattended runs without it." };
         if (options.Problem is { } problem)
         {
             Console.Error.WriteLine(problem);
@@ -83,6 +91,19 @@ public static class Program
         }
 
         IReadOnlyList<Case> cases;
+        if (args[0] == "open")
+        {
+            try
+            {
+                suite.Select(options.Cases);
+            }
+            catch (SuiteException ex)
+            {
+                Console.Error.WriteLine(ex.Message);
+                return (int)ExitCode.ScriptError;
+            }
+            return Watched.Run(suite, null, options);
+        }
         try
         {
             cases = suite.Select(options.Cases);
@@ -93,10 +114,9 @@ public static class Program
             return (int)ExitCode.ScriptError;
         }
 
-        var resultsFolder = Results.NewFolder(options.Results ?? Path.Combine(suite.Folder, "results"));
         return options.Unattended
-            ? RunUnattended(suite, cases, options, resultsFolder)
-            : Watched.Run(suite, cases, options, resultsFolder);
+            ? RunUnattended(suite, cases, options, Results.NewFolder(options.Results ?? Path.Combine(suite.Folder, "results")))
+            : Watched.Run(suite, cases, options);
     }
 
     private static int RunUnattended(Suite suite, IReadOnlyList<Case> cases, Options options, string resultsFolder)

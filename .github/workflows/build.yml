@@ -38,6 +38,23 @@ jobs:
       - name: Check the sample suite
         run: artifacts/walk/walk.exe check samples/demo
 
+      # Plays a made-up run in the launcher and the panel, and saves a picture of each state: it shows the windows
+      # open and draw without an error, and what they look like, in the screenshots artifact.
+      - name: Take pictures of the windows
+        timeout-minutes: 5
+        run: |
+          artifacts/walk/walk.exe preview --shots artifacts/shots
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $shots = @(Get-ChildItem artifacts/shots -Filter *.png)
+          "$($shots.Count) pictures: $($shots.Name -join ', ')"
+          if ($shots.Count -lt 8) { throw "walk preview saved $($shots.Count) of 8 pictures." }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: artifacts/shots/
+
       - uses: actions/upload-artifact@v4
         with:
           name: walk
