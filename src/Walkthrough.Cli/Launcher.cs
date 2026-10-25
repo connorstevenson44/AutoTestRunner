@@ -276,7 +276,7 @@ internal sealed class Launcher : Window
             {
                 return (Runner.Leftovers(_suite, new WindowsMachine()), null);
             }
-            catch (Exception ex) when (ex is IOException or InvalidOperationException or System.ComponentModel.Win32Exception)
+            catch (Exception ex)
             {
                 return ([], ex.Message);
             }

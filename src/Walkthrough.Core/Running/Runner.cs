@@ -23,6 +23,8 @@ public sealed class Runner
     private readonly Suite _suite;
     private readonly IDriver _driver;
     private readonly IMachine _machine;
+    // The same machine without showing: for checks, which can ask many times while they wait.
+    private readonly IMachine _quiet;
     private readonly IRunHost _host;
     private readonly Results _results;
     private readonly Scope _globals;
@@ -34,6 +36,7 @@ public sealed class Runner
     public Runner(Suite suite, IDriver driver, IMachine machine, IRunHost host, RunControl control, Results results, IReadOnlyDictionary<string, string>? overrides = null)
     {
         (_suite, _driver, _host, Control, _results) = (suite, driver, host, control, results);
+        _quiet = machine;
         _machine = new ShownMachine(machine, host, results);
         _globals = Variables(suite, results.Folder, overrides ?? new Dictionary<string, string>());
     }
@@ -97,8 +100,9 @@ public sealed class Runner
         if (_suite.Reset.PowerShell is not { } script)
             return;
         _driver.CloseAll(Exe);
-        // What it prints goes in the log, as OUTPUT.
-        _machine.Run("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", SuitePath(script)], timeout: TimeSpan.FromMinutes(5));
+        // What it prints goes in the log, as OUTPUT. -Command rather than -File, so progress bars stay out of it.
+        var path = SuitePath(script).Replace("'", "''");
+        _machine.Run("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $"$ProgressPreference = 'SilentlyContinue'; & '{path}'"], timeout: TimeSpan.FromMinutes(5));
     }
 
     /// <summary>
@@ -399,7 +403,7 @@ public sealed class Runner
 
             case "if":
             {
-                var check = Checks.Build(step["if"]!.AsObject(), scope, _machine, Leftovers, Shows(scope));
+                var check = Checks.Build(step["if"]!.AsObject(), scope, _quiet, () => Leftovers(_suite, _quiet), Shows(scope));
                 string? detail;
                 try
                 {
@@ -600,7 +604,7 @@ public sealed class Runner
         var results = new List<CheckResult>();
         foreach (var node in step["checks"] as JsonArray ?? [])
         {
-            var check = Checks.Build(node!.AsObject(), scope, _machine, Leftovers, Shows(scope));
+            var check = Checks.Build(node!.AsObject(), scope, _quiet, () => Leftovers(_suite, _quiet), Shows(scope));
             var detail = Evaluate(check);
             results.Add(new CheckResult(check.Label, detail is null, detail));
             if (detail is null)

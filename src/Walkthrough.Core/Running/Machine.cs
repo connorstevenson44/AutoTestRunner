@@ -85,6 +85,8 @@ public sealed class WindowsMachine : IMachine
         if (!process.WaitForExit(timeout ?? TimeSpan.FromMinutes(10)))
         {
             process.Kill(entireProcessTree: true);
+            // So what it printed before it stopped is all in, ahead of the line saying so.
+            process.WaitForExit();
             var stopped = $"{Path.GetFileName(program)} was still running after {(timeout ?? TimeSpan.FromMinutes(10)).TotalMinutes:0} minutes, so it was stopped.";
             Printed(stopped, error: true);
             lock (printed)

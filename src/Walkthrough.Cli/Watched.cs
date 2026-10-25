@@ -21,14 +21,21 @@ internal static class Watched
         var code = ExitCode.Passed;
         void Next(Options picked, IReadOnlyList<Case> run, bool fromLauncher)
         {
-            var panel = Start(suite, run, picked, fromLauncher, result => code = result);
-            panel.Closed += (_, _) =>
+            var ended = new TaskCompletionSource();
+            var panel = Start(suite, run, picked, fromLauncher, result =>
+            {
+                code = result;
+                ended.TrySetResult();
+            });
+            // A panel closed after Stop goes before the run has written its results: wait for it to end, but not for
+            // ever if the app it drives won't let go.
+            panel.Closed += (_, _) => Task.WhenAny(ended.Task, Task.Delay(TimeSpan.FromSeconds(30))).ContinueWith(_ => app.Dispatcher.BeginInvoke(() =>
             {
                 if (panel.RunAgain)
                     ShowLauncher(picked);
                 else
                     app.Shutdown();
-            };
+            }));
         }
         void ShowLauncher(Options last)
         {
@@ -64,6 +71,7 @@ internal static class Watched
         var folder = Results.NewFolder(options.Results ?? Path.Combine(suite.Folder, "results"));
         var results = new Results(folder, Console.Out);
         var panel = new Panel(suite, cases, control, folder, canRunAgain);
+        panel.Closed += (_, _) => control.RequestStop();
 
         panel.Loaded += (_, _) =>
         {
