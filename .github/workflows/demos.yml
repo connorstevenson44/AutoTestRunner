@@ -61,11 +61,16 @@ jobs:
       - name: Run the demos and check how each ends
         if: github.event_name != 'workflow_dispatch' || inputs.check
         timeout-minutes: 20
+        run: ./tools/Run-Demos.ps1 -Bundle "$env:RUNNER_TEMP\demos" -Results artifacts/demo-results
+
+      # On the run's Summary page, which demos ended as they should, and what went wrong with any that didn't.
+      - name: Show how each demo ended
+        if: always() && (github.event_name != 'workflow_dispatch' || inputs.check)
         run: |
-          ./tools/Run-Demos.ps1 -Bundle "$env:RUNNER_TEMP\demos" -Results artifacts/demo-results
           $report = Get-Content artifacts/demo-results/demos.txt -Raw -ErrorAction SilentlyContinue
+          if (-not $report) { $report = "The demos didn't finish. The step before has the log." }
           $fence = '```'
-          if ($report) { "$fence`n$report`n$fence" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8 }
+          "$fence`n$report`n$fence" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
       - uses: actions/upload-artifact@v4
         if: always() && (github.event_name != 'workflow_dispatch' || inputs.check)

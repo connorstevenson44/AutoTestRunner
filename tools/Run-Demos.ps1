@@ -72,7 +72,10 @@ foreach ($entry in $expected.GetEnumerator()) {
 }
 & (Join-Path $failures 'tools\Reset-OrderDesk.ps1') | Out-Null
 
-$report | Set-Content -LiteralPath (Join-Path $Results 'demos.txt') -Encoding utf8
+# demos.txt has what ended as it should, then what didn't, for CI's summary.
+$lines = [System.Collections.Generic.List[string]]::new($report)
+if ($problems.Count -gt 0) { $lines.Add(''); $lines.Add("Didn't end as they should:"); $lines.AddRange($problems) }
+$lines | Set-Content -LiteralPath (Join-Path $Results 'demos.txt') -Encoding utf8
 ''
 $report
 if ($problems.Count -gt 0) {
