@@ -2,7 +2,7 @@
 # example fails or gets stuck with the message it is there to show, and validate finds the mistakes in the script
 # mistakes suite. CI runs it against the demo bundle; it runs the same from a folder laid out like the bundle.
 #
-#   tools/Run-Demos.ps1 -Bundle <folder with autotestrunner\, order-desk-app\ and the suites> -Results <folder>
+#   tools/Run-Demos.ps1 -Bundle <folder with autotestrunner\, OrderDesk\ and the suites> -Results <folder>
 param(
     [Parameter(Mandatory)] [string] $Bundle,
     [Parameter(Mandatory)] [string] $Results

@@ -22,7 +22,7 @@ bundle, which takes a few minutes; ticked, it also runs every demo and checks ea
 
 While a test runs, **Space** pauses and carries on, **Enter** goes a step at a time, and **Esc** stops.
 
-From a clone, build Order Desk with `dotnet build samples/order-desk-app`, and AutoTestRunner as the main README says,
+From a clone, build Order Desk with `dotnet build samples/OrderDesk`, and AutoTestRunner as the main README says,
 then run `autotest launch samples/order-desk-feature-tour`. `tools/Run-Demos.ps1` runs them all unattended and checks
 each ends as it should, as CI does.
 
@@ -30,7 +30,7 @@ each ends as it should, as CI does.
 
 | Folder | What it is |
 | --- | --- |
-| [`order-desk-app`](order-desk-app) | Order Desk: an order form with a drop-down and tick boxes, a list of orders whose Ship and Delete buttons only show on hover, Windows message boxes and file pickers, an import that asks about each order in a window of its own, a slow export with progress, and a catalogue of 500 products that only builds the rows in view. |
+| [`OrderDesk`](OrderDesk) | Order Desk: an order form with a drop-down and tick boxes, a list of orders whose Ship and Delete buttons only show on hover, Windows message boxes and file pickers, an import that asks about each order in a window of its own, a slow export with progress, and a catalogue of 500 products that only builds the rows in view. |
 | [`order-desk-feature-tour`](order-desk-feature-tour) | Eight cases that pass, each showing something tests can do: type, pick and tick; wait for the bar at the bottom; macros, `repeat` and `if`; buttons that show on hover; message boxes; slow work; commands with their output streaming into the panel; a window per item with `whileShows`; scrolling a long list; and checkpoints that check files, logs and what the app shows. |
 | [`order-desk-failure-examples`](order-desk-failure-examples) | Eight cases that fail on purpose, each in a different way (below). |
 | [`script-mistakes`](script-mistakes) | A suite with a mistake in nearly every step, for `autotest validate` to find before anything runs. |

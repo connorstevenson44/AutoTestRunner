@@ -32,8 +32,8 @@ jobs:
           $bundle = "$env:RUNNER_TEMP\demos"
           dotnet publish src/AutoTestRunner.Cli -c Release -r win-x64 --self-contained -o "$bundle\autotestrunner"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet publish samples/order-desk-app -c Release -r win-x64 --self-contained -p:PublishSingleFile=true `
-            -p:IncludeNativeLibrariesForSelfExtract=true -o "$bundle\order-desk-app"
+          dotnet publish samples/OrderDesk -c Release -r win-x64 --self-contained -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true -o "$bundle\OrderDesk"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           foreach ($suite in 'order-desk-feature-tour', 'order-desk-failure-examples', 'script-mistakes') {
             Copy-Item "samples\$suite" "$bundle\$suite" -Recurse

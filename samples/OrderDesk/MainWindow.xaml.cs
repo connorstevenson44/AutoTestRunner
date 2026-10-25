@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Globalization;
 using System.IO;
 using System.Windows;
@@ -210,37 +209,4 @@ public partial class MainWindow : Window
         _connecting.Tick += (_, _) => Status($"Connecting to the warehouse… (try {++tries}) It isn't answering.");
         _connecting.Start();
     }
-}
-
-/// <summary>An order's row in the list, which changes in place when the order is shipped.</summary>
-public sealed class OrderRow(Order order) : INotifyPropertyChanged
-{
-    public Order Order { get; } = order;
-    public int Number => Order.Number;
-    public string Customer => Order.Customer;
-    public string Summary => Order.Summary;
-    public string Title => Order.Title;
-    public string Tip => Order.Tip;
-    public bool IsShipped => Order.IsShipped;
-
-    // The row shows what the order costs as the order form showed it.
-    public string Money => Product.Named(Order.Product) is { } product
-        ? Pricing.Money(Pricing.Total(product, Order.Quantity, Order.GiftWrap, Order.Express))
-        : "£" + Order.Total;
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    public void Changed() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));
-}
-
-/// <summary>A product in the catalogue: 500 of them, so the list is longer than the window.</summary>
-public sealed record CatalogueItem(string Name, string Description, string Price)
-{
-    private static readonly string[] Kinds = ["Espresso blend", "Breakfast tea", "Travel mug", "Cast iron teapot", "Filter papers", "Oolong", "Cold brew kit"];
-
-    public static IReadOnlyList<CatalogueItem> All() =>
-        Enumerable.Range(1, 500)
-            .Select(number => new CatalogueItem($"Product {number:000}", Kinds[number % Kinds.Length],
-                Pricing.Money(3m + number % 40 + (number % 100) / 100m)))
-            .ToList();
 }

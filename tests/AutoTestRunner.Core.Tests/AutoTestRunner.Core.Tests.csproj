@@ -16,7 +16,7 @@
 
   <ItemGroup>
     <None Include="..\..\schema\*.json" LinkBase="schema" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\..\samples\**" Exclude="..\..\samples\order-desk-app\**" LinkBase="samples" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\samples\**" Exclude="..\..\samples\OrderDesk\**" LinkBase="samples" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,6 +1,6 @@
 {
   "$schema": "../../schema/suite.schema.json",
   "name": "Script mistakes, for autotest validate to find",
-  "app": { "exe": "../order-desk-app/OrderDesk.exe", "window": "Order Desk", "status": "statusBar" },
+  "app": { "exe": "../OrderDesk/OrderDesk.exe", "window": "Order Desk", "status": "statusBar" },
   "variables": { "dataDir": "${env:LOCALAPPDATA}\\OrderDesk" }
 }

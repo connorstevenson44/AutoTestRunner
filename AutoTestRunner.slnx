@@ -5,7 +5,7 @@
     <Project Path="src/AutoTestRunner.Cli/AutoTestRunner.Cli.csproj" />
   </Folder>
   <Folder Name="/samples/">
-    <Project Path="samples/order-desk-app/OrderDesk.csproj" />
+    <Project Path="samples/OrderDesk/OrderDesk.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AutoTestRunner.Core.Tests/AutoTestRunner.Core.Tests.csproj" />
