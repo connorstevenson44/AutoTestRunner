@@ -241,12 +241,32 @@ public sealed class Suite
                 case "repeat":
                     CheckSteps(step["steps"] as JsonArray ?? [], at, problems);
                     break;
+                case "whileShows":
+                    if (step["untilText"] is { } until)
+                        CheckTarget(until, at, problems);
+                    else
+                        problems.Add($"{at}: whileShows needs untilText, the control that says when it is done.");
+                    CheckSteps(step["steps"] as JsonArray ?? [], at, problems);
+                    break;
+                case "if":
+                    CheckChecks(new JsonArray(step["if"]?.DeepClone()), at, problems);
+                    CheckSteps(step["steps"] as JsonArray ?? [], at, problems);
+                    CheckSteps(step["else"] as JsonArray ?? [], at + ", else", problems);
+                    break;
                 case "checkpoint":
-                    CheckItems(step["checks"] as JsonArray, Vocabulary.Checks, Vocabulary.CommonCheckKeys, "check", at, problems);
+                    CheckChecks(step["checks"] as JsonArray, at, problems);
                     CheckItems(step["tools"] as JsonArray, Vocabulary.Tools, new HashSet<string>(["label"]), "tool", at, problems);
                     break;
             }
         }
+    }
+
+    private void CheckChecks(JsonArray? checks, string at, List<string> problems)
+    {
+        CheckItems(checks, Vocabulary.Checks, Vocabulary.CommonCheckKeys, "check", at, problems);
+        foreach (var check in checks ?? [])
+            if (check is JsonObject { } item && item["shows"] is { } target)
+                CheckTarget(target, at, problems);
     }
 
     private void CheckTarget(JsonNode? target, string at, List<string> problems)
@@ -286,15 +306,14 @@ public sealed class Suite
                 problems.Add($"{at}: a {noun} must be an object.");
                 continue;
             }
-            var kinds = item.Select(pair => pair.Key).Where(vocabulary.ContainsKey).ToList();
-            if (kinds.Count != 1)
+            if (Kinds.Of(item, vocabulary) is not { } kind)
             {
                 problems.Add($"{at}: a {noun} is one of: {string.Join(", ", vocabulary.Keys)}.");
                 continue;
             }
             foreach (var (key, _) in item)
-                if (key != kinds[0] && !common.Contains(key) && !vocabulary[kinds[0]].Contains(key))
-                    problems.Add($"{at}: the {kinds[0]} {noun} doesn't take \"{key}\".");
+                if (key != kind && !common.Contains(key) && !vocabulary[kind].Contains(key))
+                    problems.Add($"{at}: the {kind} {noun} doesn't take \"{key}\".");
         }
     }
 }

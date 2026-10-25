@@ -193,7 +193,14 @@ public sealed class Runner
     {
         var kind = step.Select(pair => pair.Key).FirstOrDefault(Vocabulary.Steps.ContainsKey) ?? "say";
         string? Text(string key) => step[key] is { } node ? scope.Expand(node.ToString()) : null;
-        var say = Text("say");
+        // A wait's say comes after it, so it can tell what the step found: it is filled in then.
+        var after = kind is "find" or "waitGone" or "waitText" or "whileShows";
+        var say = after ? null : Text("say");
+        void SayAfter()
+        {
+            if (Text("say") is { } text)
+                Say(text);
+        }
         var what = Text("what");
         TimeSpan Within(TimeSpan normal) => step["within"] is { } seconds ? TimeSpan.FromSeconds(double.Parse(scope.Expand(seconds.ToString()))) : normal;
         Target TargetOf(string key) => Targets.Resolve(step[key], scope, _suite.Elements, what);
@@ -213,6 +220,10 @@ public sealed class Runner
             case "closeApp":
                 ShowStep(say ?? $"Close {_suite.App.Window}");
                 _driver.Close();
+                break;
+
+            case "click" when step["whileEnabled"]?.GetValue<bool>() == true:
+                ClickWhileEnabled(TargetOf("click"), say, Text("how") == "mouse");
                 break;
 
             case "click":
@@ -287,21 +298,18 @@ public sealed class Runner
             {
                 var control = Find(TargetOf("find"));
                 Keep(step, scope, control);
-                if (say is not null)
-                    Say(say);
+                SayAfter();
                 break;
             }
 
             case "waitGone":
                 _driver.WaitGone(TargetOf("waitGone"), Control.Scale(Within(GoneTimeout)));
-                if (say is not null)
-                    Say(say);
+                SayAfter();
                 break;
 
             case "waitText":
                 WaitText(step, scope, TargetOf("waitText"), Within(FindTimeout));
-                if (say is not null)
-                    Say(say);
+                SayAfter();
                 break;
 
             case "replaceText":
@@ -369,6 +377,28 @@ public sealed class Runner
                 break;
             }
 
+            case "whileShows":
+                WhileShows(step, scope, TargetOf("whileShows"), Within(TimeSpan.FromMinutes(5)));
+                SayAfter();
+                break;
+
+            case "if":
+            {
+                var check = Checks.Build(step["if"]!.AsObject(), scope, _machine, Leftovers, Shows(scope));
+                string? detail;
+                try
+                {
+                    detail = check.Test();
+                }
+                catch (Exception ex) when (ex is not StopRunException)
+                {
+                    detail = "Error: " + ex.Message;
+                }
+                _results.Log("IF", $"{check.Label}: {(detail is null ? "yes" : "no, " + detail)}");
+                Steps((detail is null ? step["steps"] : step["else"]) as JsonArray ?? [], scope, detail is null ? "if" : "else");
+                break;
+            }
+
             case "set":
                 foreach (var (name, value) in step["set"]!.AsObject())
                     scope.SetOuter(name, Value.Of(scope.Expand(value?.ToString() ?? "")));
@@ -381,6 +411,9 @@ public sealed class Runner
                 var environment = (step["env"] as JsonObject ?? []).ToDictionary(pair => pair.Key, pair => scope.Expand(pair.Value?.ToString() ?? ""));
                 ShowStep(say ?? $"Run {Path.GetFileName(program)} {string.Join(" ", arguments)}");
                 var output = _machine.Run(program, arguments, environment);
+                // What it printed goes in the log, as the case may need to show it.
+                foreach (var line in output.Output.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+                    _results.Log("OUTPUT", line);
                 _results.Log("RUN", $"{Path.GetFileName(program)} exited with {output.ExitCode}");
                 KeepOutput(step, scope, output);
                 break;
@@ -429,39 +462,115 @@ public sealed class Runner
 
     private void WaitText(JsonObject step, Scope scope, Target target, TimeSpan within)
     {
-        string? Text(string key) => step[key] is { } node ? scope.Expand(node.ToString()) : null;
-        var startsWith = Text("startsWith");
-        var contains = Text("contains");
-        var equals = Text("equals");
-        var changes = step["changes"]?.GetValue<bool>() ?? false;
-        var isNew = step["new"]?.GetValue<bool>() ?? false;
-        var expected = startsWith ?? contains ?? equals ?? "new text";
-        var first = _driver.TryFind(target)?.Name;
+        var wanted = WantedText(step, scope, _driver.TryFind(target) is { } before ? TextOf(before) : null);
         var end = Environment.TickCount64 + (long)Control.Scale(within).TotalMilliseconds;
-        string? found;
         while (true)
         {
             Control.Gate();
             var control = _driver.TryFind(target);
-            found = control?.Name;
-            if (found is not null
-                && (startsWith is null || found.StartsWith(startsWith, StringComparison.Ordinal))
-                && (contains is null || found.Contains(contains, StringComparison.Ordinal))
-                && (equals is null || found == equals)
-                && (!changes || found != first)
-                && (!isNew || found != _marked))
+            var found = control is null ? null : TextOf(control);
+            if (found is not null && wanted.Test(found))
             {
                 _results.Log("TEXT", found);
                 Keep(step, scope, control!);
                 return;
             }
             if (_driver.OtherWindow() is { } other)
-                throw new StuckException($"see \"{expected}\" in {target.What}", $"The app is showing another window instead: {other}");
+                throw new StuckException($"see \"{wanted.Expected}\" in {target.What}", $"The app is showing another window instead: {other}");
             if (Environment.TickCount64 > end)
-                throw new StuckException($"see \"{expected}\" in {target.What}", found is null ? null : $"It says: {found}");
+                throw new StuckException($"see \"{wanted.Expected}\" in {target.What}", found is null ? null : $"It says: {found}");
             Control.Wait(300);
         }
     }
+
+    /// <summary>
+    /// Runs steps each time a control shows, such as a window that asks about each step of a removal, until another
+    /// control's text says it is done. Another window showing up instead, or nothing happening for within, is stuck.
+    /// </summary>
+    private void WhileShows(JsonObject step, Scope scope, Target each, TimeSpan within)
+    {
+        var until = Targets.Resolve(step["untilText"] ?? throw new ScriptException("whileShows needs untilText: the control that says when it is done."),
+            scope, _suite.Elements);
+        var wanted = WantedText(step, scope, first: null);
+        var end = Environment.TickCount64 + (long)Control.Scale(within).TotalMilliseconds;
+        for (var rounds = 0; ; )
+        {
+            Control.Gate();
+            var found = _driver.TryFind(until) is { } control ? TextOf(control) : null;
+            if (found is not null && wanted.Test(found))
+            {
+                _results.Log("TEXT", found);
+                if (step["as"] is { } name)
+                    scope.Set(name.GetValue<string>(), found);
+                return;
+            }
+            if (_driver.TryFind(each) is not null)
+            {
+                // Steps that never make it go away would go round for ever.
+                if (++rounds > MaxRounds)
+                    throw new StuckException($"see \"{wanted.Expected}\" in {until.What}", $"{each.What} was still showing after {MaxRounds} rounds.");
+                Steps(step["steps"] as JsonArray ?? [], scope, "whileShows");
+                end = Environment.TickCount64 + (long)Control.Scale(within).TotalMilliseconds;
+                continue;
+            }
+            if (_driver.OtherWindow() is { } other)
+                throw new StuckException($"see \"{wanted.Expected}\" in {until.What}", $"The app is showing another window instead: {other}");
+            if (Environment.TickCount64 > end)
+                throw new StuckException($"see \"{wanted.Expected}\" in {until.What}", found is null ? null : $"It says: {found}");
+            Control.Wait(300);
+        }
+    }
+
+    private const int MaxRounds = 100;
+
+    // What waitText and whileShows wait for a control's text to be. first is its text when the wait started.
+    private Wanted WantedText(JsonObject step, Scope scope, string? first)
+    {
+        string? Text(string key) => step[key] is { } node ? scope.Expand(node.ToString()) : null;
+        var startsWith = Text("startsWith");
+        var contains = Text("contains");
+        var equals = Text("equals");
+        var pattern = Text("matches") is { } given ? new Regex(given) : null;
+        var changes = step["changes"]?.GetValue<bool>() ?? false;
+        var isNew = step["new"]?.GetValue<bool>() ?? false;
+        var marked = _marked;
+        return new Wanted(startsWith ?? contains ?? equals ?? pattern?.ToString() ?? "new text", found =>
+            (startsWith is null || found.StartsWith(startsWith, StringComparison.Ordinal))
+            && (contains is null || found.Contains(contains, StringComparison.Ordinal))
+            && (equals is null || found == equals)
+            && (pattern is null || pattern.IsMatch(found))
+            && (!changes || found != first)
+            && (!isNew || found != marked));
+    }
+
+    private sealed record Wanted(string Expected, Func<string, bool> Test);
+
+    // Clicks a control again and again while it is there and can be used, such as Up until the top folder. Not being
+    // there at all is fine: there is nothing to do.
+    private void ClickWhileEnabled(Target target, string? say, bool useMouse)
+    {
+        for (var clicks = 0; _driver.TryFind(target) is { IsEnabled: true } control; clicks++)
+        {
+            if (clicks == 50)
+                throw new StuckException($"get past {target.What}", "It was still there after 50 clicks.");
+            var text = say ?? $"Click {control.Name}";
+            ShowStep(text);
+            Mark();
+            _driver.Point(control, text);
+            _driver.Click(control, useMouse);
+            Control.Wait(Math.Max(Control.Pace / 2, 300));
+        }
+    }
+
+    // A control's text: what is typed in a text box or editor, or the name of anything else, such as a label.
+    private static string TextOf(IControl control) => control.Value ?? control.Name;
+
+    // The shows check: whether a target is in the app now.
+    private Func<JsonNode, (string What, Func<bool> Shown)> Shows(Scope scope) => node =>
+    {
+        var target = Targets.Resolve(node, scope, _suite.Elements);
+        return (target.What, () => _driver.TryFind(target) is not null);
+    };
 
     private void Checkpoint(JsonObject step, Scope scope)
     {
@@ -473,7 +582,7 @@ public sealed class Runner
         var results = new List<CheckResult>();
         foreach (var node in step["checks"] as JsonArray ?? [])
         {
-            var check = Checks.Build(node!.AsObject(), scope, _machine, Leftovers);
+            var check = Checks.Build(node!.AsObject(), scope, _machine, Leftovers, Shows(scope));
             var detail = Evaluate(check);
             results.Add(new CheckResult(check.Label, detail is null, detail));
             if (detail is null)
@@ -519,7 +628,7 @@ public sealed class Runner
 
     private ToolButton Tool(JsonObject node, Scope scope)
     {
-        var kind = node.Select(pair => pair.Key).First(Vocabulary.Tools.ContainsKey);
+        var kind = Kinds.Of(node, Vocabulary.Tools) ?? throw new ScriptException($"{node.ToJsonString()} isn't a tool.");
         var subject = scope.Expand(node[kind]!.ToString());
         var arguments = (node["args"] as JsonArray ?? []).Select(arg => scope.Expand(arg!.ToString())).ToList();
         var label = node["label"] is { } given ? scope.Expand(given.ToString()) : $"Open {Path.GetFileName(subject.TrimEnd('\\', '/'))}";
@@ -568,7 +677,7 @@ public sealed class Runner
             return;
         try
         {
-            _marked = _driver.TryFind(Targets.Resolve(status, _globals, _suite.Elements))?.Name;
+            _marked = _driver.TryFind(Targets.Resolve(status, _globals, _suite.Elements)) is { } control ? TextOf(control) : null;
         }
         catch (StuckException)
         {

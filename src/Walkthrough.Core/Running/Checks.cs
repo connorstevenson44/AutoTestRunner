@@ -18,12 +18,15 @@ public static class Checks
 {
     public const string Absent = "<absent>";
 
-    public static Check Build(JsonObject node, Scope scope, IMachine machine, Func<IReadOnlyList<string>> leftovers)
+    /// <param name="shows">Finds a target in the app now, for the shows check: what to call it, and whether it is there.</param>
+    public static Check Build(JsonObject node, Scope scope, IMachine machine, Func<IReadOnlyList<string>> leftovers,
+        Func<JsonNode, (string What, Func<bool> Shown)>? shows = null)
     {
-        var kind = node.Select(pair => pair.Key).First(Vocabulary.Checks.ContainsKey);
+        var kind = Kinds.Of(node, Vocabulary.Checks) ?? throw new ScriptException($"{node.ToJsonString()} isn't a check.");
         string Text(string key) => scope.Expand(node[key]?.ToString() ?? "");
         string? Optional(string key) => node[key] is null ? null : Text(key);
-        var subject = Text(kind);
+        // A shows check's subject is a target, which shows resolves itself.
+        var subject = kind == "shows" ? "" : Text(kind);
         var name = Path.GetFileName(subject);
 
         (string Label, Func<string?> Test, int Seconds) check = kind switch
@@ -38,13 +41,16 @@ public static class Checks
                 () => XmlValue(subject, "connectionStrings", "name", Text("name"), "connectionString") != Absent ? null : "it isn't there", 0),
             "fileContains" => ($"{name} has {Text("text")} in it", () => FileHas(subject, Text("text")), 0),
             "logged" => ($"The log says \"{Text("text")}\"", () => FileHas(subject, Text("text")), 0),
-            "fileCount" => Count(subject, Optional("pattern") ?? "*", int.Parse(Text("equals")), node["folders"]?.GetValue<bool>() ?? false),
+            "fileCount" => Count(subject, Optional("pattern") ?? "*", int.Parse(Text("equals")), node["folders"]?.GetValue<bool>() ?? false,
+                node["recursive"]?.GetValue<bool>() ?? false),
             "fileVersion" => ($"{name} is version {Text("startsWith")}", () => Version(subject, Text("startsWith")), 0),
             "output" => Output(subject, (node["args"] as JsonArray ?? []).Select(arg => scope.Expand(arg!.ToString())).ToList(), Text("contains"), machine),
             "lastLine" => ($"The latest line of {name} says {Text("contains")}", () => LastLine(subject, Text("contains")), 30),
             "equals" => ($"It is {Text("to")}", () => subject == Text("to") ? null : $"it is {subject}", 0),
             "matches" => ($"It matches {Text("regex")}", () => Regex.IsMatch(subject, Text("regex")) ? null : $"it is {subject}", 0),
             "contains" => ($"It has {Text("text")} in it", () => subject.Contains(Text("text"), StringComparison.Ordinal) ? null : $"it is {subject}", 0),
+            "lacks" => ($"It doesn't have {Text("text")} in it", () => subject.Contains(Text("text"), StringComparison.Ordinal) ? "it does" : null, 0),
+            "shows" => Shows(node["shows"]!, shows ?? throw new ScriptException("The shows check needs the app.")),
             "nothingLeft" => ("Nothing from the tests is left on this computer",
                 () => leftovers() is [_, ..] found ? "still there: " + string.Join(", ", found) : null, 0),
             _ => throw new ScriptException($"There is no {kind} check."),
@@ -112,13 +118,21 @@ public static class Checks
     private static string? FileHas(string file, string text) =>
         !File.Exists(file) ? "the file isn't there" : ReadShared(file).Contains(text, StringComparison.Ordinal) ? null : "it doesn't";
 
-    private static (string, Func<string?>, int) Count(string folder, string pattern, int expected, bool folders) =>
+    // recursive counts the folders inside it too.
+    private static (string, Func<string?>, int) Count(string folder, string pattern, int expected, bool folders, bool recursive) =>
         ($"{folder} has {expected} {(folders ? "folder" : pattern + " file")}{(expected == 1 ? "" : "s")} in it",
          () =>
          {
-             var found = !Directory.Exists(folder) ? 0 : folders ? Directory.GetDirectories(folder, pattern).Length : Directory.GetFiles(folder, pattern).Length;
+             var depth = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+             var found = !Directory.Exists(folder) ? 0 : folders ? Directory.GetDirectories(folder, pattern, depth).Length : Directory.GetFiles(folder, pattern, depth).Length;
              return found == expected ? null : $"it has {found}";
          }, 0);
+
+    private static (string, Func<string?>, int) Shows(JsonNode target, Func<JsonNode, (string What, Func<bool> Shown)> shows)
+    {
+        var (what, shown) = shows(target);
+        return ($"It shows {what}", () => shown() ? null : "it isn't there", 0);
+    }
 
     private static string? Version(string exe, string expected)
     {

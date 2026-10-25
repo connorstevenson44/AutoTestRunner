@@ -176,7 +176,7 @@ public sealed class FlaUiDriver : IDriver
         try
         {
             if (selector.Type == "Window")
-                return AppWindows().Where(hwnd => hwnd != _main && selector.NameMatches(Native.Title(hwnd)))
+                return AppWindows().Where(hwnd => hwnd != _main && (selector.Name is null || selector.NameMatches(Native.Title(hwnd))))
                     .Select(hwnd => _automation.FromHandle(hwnd)).FirstOrDefault();
 
             AutomationElement root;
@@ -189,7 +189,7 @@ public sealed class FlaUiDriver : IDriver
             else
                 root = MainWindow();
 
-            var candidates = root.FindAllDescendants(Condition(selector)).Where(element => selector.Name is null || selector.NameMatches(Name(element)));
+            var candidates = root.FindAllDescendants(Condition(selector)).Where(element => Fits(selector, element));
             if (selector.SameRowAs is { } rowOf)
             {
                 if (TryFindElement(rowOf, scroll: false) is not { } anchor)
@@ -197,7 +197,7 @@ public sealed class FlaUiDriver : IDriver
                 var row = anchor.BoundingRectangle;
                 var middle = (row.Top + row.Bottom) / 2;
                 candidates = MainWindow().FindAllDescendants(Condition(selector))
-                    .Where(element => selector.Name is null || selector.NameMatches(Name(element)))
+                    .Where(element => Fits(selector, element))
                     .Where(element => IsShown(element) && Math.Abs((element.BoundingRectangle.Top + element.BoundingRectangle.Bottom) / 2 - middle) <= 14);
             }
             return candidates.FirstOrDefault(IsShown);
@@ -213,6 +213,11 @@ public sealed class FlaUiDriver : IDriver
         }
     }
 
+    // Names and help texts compared by startsWith or contains are read from each control, as UI Automation can only
+    // compare them exactly.
+    private static bool Fits(Selector selector, AutomationElement element) =>
+        selector.Match == NameMatch.Exact || selector.TextMatches(Name(element), HelpText(element));
+
     // Exact names are matched by UI Automation itself, which is much faster than reading every name.
     private ConditionBase Condition(Selector selector)
     {
@@ -221,7 +226,7 @@ public sealed class FlaUiDriver : IDriver
             parts.Add(Conditions.ByControlType(Enum.Parse<ControlType>(type, ignoreCase: true)));
         if (selector.Id is { } id)
             parts.Add(Conditions.ByAutomationId(id));
-        if (selector.HelpText is { } help)
+        if (selector.HelpText is { } help && selector.Match == NameMatch.Exact)
             parts.Add(Conditions.ByHelpText(help));
         if (selector.ClassName is { } className)
             parts.Add(Conditions.ByClassName(className));
@@ -240,6 +245,18 @@ public sealed class FlaUiDriver : IDriver
         try
         {
             return element.Properties.Name.ValueOrDefault ?? "";
+        }
+        catch (System.Runtime.InteropServices.COMException)
+        {
+            return "";
+        }
+    }
+
+    private static string HelpText(AutomationElement element)
+    {
+        try
+        {
+            return element.Properties.HelpText.ValueOrDefault ?? "";
         }
         catch (System.Runtime.InteropServices.COMException)
         {
@@ -498,10 +515,18 @@ public sealed class FlaUiDriver : IDriver
         var element = ((FlaUiControl)control).Element;
         element.Patterns.ExpandCollapse.Pattern.Expand();
         _control.Wait(_control.Pace);
-        var item = Find(new Target([new Selector(Type: "ListItem", Name: option, Within: new Target([Of(element)], "the list"))], $"the {option} option"),
-            _control.Scale(TimeSpan.FromSeconds(10)));
-        Point(item, option);
-        ((FlaUiControl)item).Element.Patterns.SelectionItem.Pattern.Select();
+        // A WPF drop-down's items are inside it, wherever its window is, even while its list shows in a popup.
+        var condition = Conditions.ByControlType(ControlType.ListItem).And(Conditions.ByName(option));
+        var end = Environment.TickCount64 + (long)_control.Scale(TimeSpan.FromSeconds(10)).TotalMilliseconds;
+        AutomationElement? item;
+        while ((item = element.FindFirstDescendant(condition)) is null)
+        {
+            if (Environment.TickCount64 > end)
+                throw new StuckException($"find the {option} option", $"The drop-down has: {string.Join(", ", element.FindAllDescendants(Conditions.ByControlType(ControlType.ListItem)).Select(Name))}");
+            _control.Wait(200);
+        }
+        Point(new FlaUiControl(item), option);
+        item.Patterns.SelectionItem.Pattern.Select();
         try
         {
             element.Patterns.ExpandCollapse.Pattern.Collapse();
@@ -511,12 +536,6 @@ public sealed class FlaUiDriver : IDriver
             // Picking an item closes most drop-downs by itself.
         }
     }
-
-    // A selector for a control already found, by what makes it unique enough to find again in its window.
-    private static Selector Of(AutomationElement element) =>
-        new(Id: element.Properties.AutomationId.ValueOrDefault is { Length: > 0 } id ? id : null,
-            Name: Name(element) is { Length: > 0 } name ? name : null,
-            Type: element.Properties.ControlType.ValueOrDefault.ToString());
 
     public void SetChecked(IControl control, bool isChecked)
     {

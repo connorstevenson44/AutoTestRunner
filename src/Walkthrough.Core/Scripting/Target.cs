@@ -2,7 +2,7 @@ using System.Text.Json.Nodes;
 
 namespace Walkthrough.Scripting;
 
-/// <summary>How a selector's name is compared with a control's.</summary>
+/// <summary>How a selector's name and help text are compared with a control's.</summary>
 public enum NameMatch { Exact, StartsWith, Contains }
 
 /// <summary>
@@ -25,15 +25,20 @@ public sealed record Selector(
     public bool Matches(string? id, string? name, string? type, string? helpText, string? className) =>
         (Id is null || Id == id)
         && (Type is null || string.Equals(Type, type, StringComparison.OrdinalIgnoreCase))
-        && (HelpText is null || HelpText == helpText)
         && (ClassName is null || ClassName == className)
-        && (Name is null || NameMatches(name ?? ""));
+        && TextMatches(name ?? "", helpText ?? "");
 
-    public bool NameMatches(string name) => Match switch
+    public bool NameMatches(string name) => Compare(name, Name!);
+
+    /// <summary>Whether a control's name and help text are what the selector asks for, compared as match says.</summary>
+    public bool TextMatches(string name, string helpText) =>
+        (Name is null || Compare(name, Name)) && (HelpText is null || Compare(helpText, HelpText));
+
+    private bool Compare(string found, string wanted) => Match switch
     {
-        NameMatch.StartsWith => name.StartsWith(Name!, StringComparison.Ordinal),
-        NameMatch.Contains => name.Contains(Name!, StringComparison.Ordinal),
-        _ => name == Name,
+        NameMatch.StartsWith => found.StartsWith(wanted, StringComparison.Ordinal),
+        NameMatch.Contains => found.Contains(wanted, StringComparison.Ordinal),
+        _ => found == wanted,
     };
 
     /// <summary>What a person would call it, as in "the Add button".</summary>
