@@ -1,15 +1,16 @@
 using System.Diagnostics;
 using System.Drawing;
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using AutoTestRunner.Driving;
+using AutoTestRunner.Scripting;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Conditions;
 using FlaUI.Core.Definitions;
 using FlaUI.Core.Input;
 using FlaUI.Core.WindowsAPI;
 using FlaUI.UIA3;
-using AutoTestRunner.Driving;
-using AutoTestRunner.Scripting;
 
 namespace AutoTestRunner.FlaUI;
 
@@ -31,6 +32,7 @@ public sealed class FlaUiDriver : IDriver
     private nint _main;
     private bool _wheelNoted;
 
+    /// <param name="control">The run's pause, step and stop controls, which every action waits on.</param>
     /// <param name="panel">Where the panel is, so the app is placed beside it; null when there is none.</param>
     /// <param name="keepClear">Moves the panel off a control that is about to be used.</param>
     /// <param name="log">Notes for the run's log, such as a workaround being used.</param>
@@ -620,7 +622,7 @@ public sealed class FlaUiDriver : IDriver
             throw new StuckException($"see the \"{title}\" message");
         var dialog = _automation.FromHandle(hwnd);
         // Message box buttons have their command ids as automation ids, whatever the language.
-        var found = Find(new Target([new Selector(Id: ((int)button).ToString(), Type: "Button", Within: new Target([new Selector(Type: "Window", Name: title)], title))],
+        var found = Find(new Target([new Selector(Id: ((int)button).ToString(CultureInfo.InvariantCulture), Type: "Button", Within: new Target([new Selector(Type: "Window", Name: title)], title))],
             $"the {button} button"), _control.Scale(TimeSpan.FromSeconds(5)));
         Point(found, button.ToString());
         Click(found, useMouse: false);
@@ -685,7 +687,7 @@ public sealed class FlaUiDriver : IDriver
         var walker = _automation.TreeWalkerFactory.GetControlViewWalker();
         foreach (var hwnd in AppWindows())
         {
-            text.Append($"===== {Native.Title(hwnd)} ({Native.ClassName(hwnd)})\r\n");
+            text.Append(CultureInfo.InvariantCulture, $"===== {Native.Title(hwnd)} ({Native.ClassName(hwnd)})\r\n");
             var count = 0;
             void Walk(AutomationElement element, int depth)
             {
@@ -716,7 +718,7 @@ public sealed class FlaUiDriver : IDriver
             }
             catch (System.Runtime.InteropServices.COMException ex)
             {
-                text.Append($"(the window couldn't be read: {ex.Message})\r\n");
+                text.Append(CultureInfo.InvariantCulture, $"(the window couldn't be read: {ex.Message})\r\n");
             }
         }
         return text.ToString();

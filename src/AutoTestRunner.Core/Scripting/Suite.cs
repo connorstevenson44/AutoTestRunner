@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -151,7 +152,7 @@ public sealed class Suite
             if (range.Length == 2 && int.TryParse(range[0], out var from) && int.TryParse(range[1], out var to))
             {
                 for (var number = from; number <= to; number++)
-                    picked.Add(Find(number.ToString()) ?? throw new SuiteException([$"There is no case {number}."]));
+                    picked.Add(Find(number.ToString(CultureInfo.InvariantCulture)) ?? throw new SuiteException([$"There is no case {number}."]));
             }
             else
                 picked.Add(Find(part) ?? throw new SuiteException([$"There is no case {part}."]));

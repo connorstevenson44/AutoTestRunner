@@ -5,7 +5,7 @@ using AutoTestRunner.Scripting;
 
 namespace AutoTestRunner.Core.Tests;
 
-public class RunnerTests : IDisposable
+public sealed class RunnerTests : IDisposable
 {
     private static readonly string Demo = Path.Combine(AppContext.BaseDirectory, "samples", "demo");
     private readonly string _results = Path.Combine(Path.GetTempPath(), "AutoTestRunnerTests", Path.GetRandomFileName());

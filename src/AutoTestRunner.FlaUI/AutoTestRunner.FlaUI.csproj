@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="FlaUI.UIA3" Version="5.0.0" />
+    <PackageReference Include="FlaUI.UIA3" />
   </ItemGroup>
 
   <ItemGroup>

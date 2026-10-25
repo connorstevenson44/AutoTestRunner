@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Text;
 using AutoTestRunner.Driving;
 
 namespace AutoTestRunner.FlaUI;
@@ -18,8 +17,8 @@ internal static class Native
         var found = new List<nint>();
         EnumWindows((hwnd, _) =>
         {
-            GetWindowThreadProcessId(hwnd, out var processId);
-            if (processIds.Contains((int)processId) && IsWindowVisible(hwnd))
+            // A thread id of 0 means the window has gone.
+            if (GetWindowThreadProcessId(hwnd, out var processId) != 0 && processIds.Contains((int)processId) && IsWindowVisible(hwnd))
                 found.Add(hwnd);
             return true;
         }, 0);
@@ -31,16 +30,16 @@ internal static class Native
         var length = GetWindowTextLength(hwnd);
         if (length == 0)
             return "";
-        var text = new StringBuilder(length + 1);
-        GetWindowText(hwnd, text, text.Capacity);
-        return text.ToString();
+        var text = new char[length + 1];
+        var copied = GetWindowText(hwnd, text, text.Length);
+        return new string(text, 0, copied);
     }
 
     public static string ClassName(nint hwnd)
     {
-        var text = new StringBuilder(256);
-        GetClassName(hwnd, text, text.Capacity);
-        return text.ToString();
+        var text = new char[256];
+        var copied = GetClassName(hwnd, text, text.Length);
+        return new string(text, 0, copied);
     }
 
     public static bool Exists(nint hwnd) => hwnd != 0 && IsWindow(hwnd);
@@ -95,10 +94,10 @@ internal static class Native
     private static extern int GetWindowTextLength(nint hwnd);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern int GetWindowText(nint hwnd, StringBuilder text, int length);
+    private static extern int GetWindowText(nint hwnd, [Out] char[] text, int length);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern int GetClassName(nint hwnd, StringBuilder text, int length);
+    private static extern int GetClassName(nint hwnd, [Out] char[] text, int length);
 
     [DllImport("user32.dll")]
     private static extern bool GetWindowRect(nint hwnd, out Rect rect);

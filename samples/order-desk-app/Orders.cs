@@ -81,7 +81,7 @@ public sealed class OrderStore
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    private OrderFile _file = new();
+    private readonly OrderFile _file = new();
 
     public OrderStore(string folder)
     {

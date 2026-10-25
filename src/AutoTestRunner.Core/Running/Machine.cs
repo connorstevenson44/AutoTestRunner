@@ -22,6 +22,11 @@ public interface IMachine
     /// <summary>Whether a scheduled task exists, by its full path, such as \Contoso\Orders Export-main.</summary>
     bool TaskExists(string path);
 
+    /// <summary>Runs a program and waits for it to exit.</summary>
+    /// <param name="program">The program to run, by path or by name on the PATH.</param>
+    /// <param name="arguments">Its arguments, each passed as one argument.</param>
+    /// <param name="environment">Environment variables to set for it, on top of this process's own.</param>
+    /// <param name="timeout">How long it may run before it is stopped; null for no limit.</param>
     /// <param name="output">Called with each line the program prints as it prints it, and whether it is an error.</param>
     ProcessOutput Run(string program, IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string>? environment = null, TimeSpan? timeout = null,
         Action<string, bool>? output = null);
