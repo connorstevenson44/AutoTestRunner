@@ -1,0 +1,2224 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "case.schema.json",
+  "title": "AutoTestRunner case",
+  "description": "A test case: the steps a person takes, ending at a checkpoint.",
+  "type": "object",
+  "required": [
+    "name",
+    "steps"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string",
+      "description": "What the case does, as the launcher lists it."
+    },
+    "needs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "The ids of the cases it carries on from (their file names without the number)."
+    },
+    "needsNote": {
+      "type": "string",
+      "description": "What it needs, in words, for the launcher's Run after column, such as Any time."
+    },
+    "covers": {
+      "type": "string",
+      "description": "What it tries, for the launcher."
+    },
+    "steps": {
+      "$ref": "#/definitions/steps"
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "target": {
+      "description": "A control: an element's name from elements.json, a selector, or a list of either to try in order.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/definitions/selector"
+        },
+        {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/definitions/selector"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "selector": {
+      "type": "object",
+      "properties": {
+        "element": {
+          "type": "string",
+          "description": "A control named in elements.json."
+        },
+        "with": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number"
+            ]
+          },
+          "description": "Values for the element's ${parameters}."
+        },
+        "id": {
+          "type": "string",
+          "description": "Its AutomationId, which WPF takes from x:Name when none is set. Inside a template it repeats on every row."
+        },
+        "name": {
+          "type": "string",
+          "description": "Its name: a button's text, a box's label."
+        },
+        "type": {
+          "enum": [
+            "Button",
+            "Edit",
+            "Text",
+            "ComboBox",
+            "ListItem",
+            "TabItem",
+            "CheckBox",
+            "RadioButton",
+            "List",
+            "Window",
+            "Document",
+            "Pane",
+            "Group",
+            "Hyperlink",
+            "MenuItem",
+            "TreeItem",
+            "DataItem",
+            "Custom"
+          ],
+          "description": "Its UI Automation control type."
+        },
+        "helpText": {
+          "type": "string",
+          "description": "Its tooltip."
+        },
+        "className": {
+          "type": "string",
+          "description": "Its class name."
+        },
+        "match": {
+          "enum": [
+            "exact",
+            "startsWith",
+            "contains"
+          ],
+          "description": "How name and helpText are compared. exact when left out."
+        },
+        "within": {
+          "$ref": "#/definitions/target",
+          "description": "Only looks inside this control, or with type Window, this window of the app's."
+        },
+        "sameRowAs": {
+          "$ref": "#/definitions/target",
+          "description": "Only controls on the same row as this one, such as the buttons beside a file's name."
+        },
+        "scrollToFind": {
+          "type": "boolean",
+          "description": "Scrolls the window's long lists until it is built, for lists that only build the rows in view."
+        },
+        "button": {
+          "type": "string",
+          "description": "Shorthand for type Button with this name."
+        },
+        "text": {
+          "type": "string",
+          "description": "Shorthand for type Text with this name."
+        },
+        "edit": {
+          "type": "string",
+          "description": "Shorthand for type Edit with this name."
+        },
+        "tabItem": {
+          "type": "string",
+          "description": "Shorthand for type TabItem with this name."
+        },
+        "comboBox": {
+          "type": "string",
+          "description": "Shorthand for type ComboBox with this name."
+        },
+        "checkBox": {
+          "type": "string",
+          "description": "Shorthand for type CheckBox with this name."
+        },
+        "radioButton": {
+          "type": "string",
+          "description": "Shorthand for type RadioButton with this name."
+        },
+        "listItem": {
+          "type": "string",
+          "description": "Shorthand for type ListItem with this name."
+        },
+        "list": {
+          "type": "string",
+          "description": "Shorthand for type List with this name."
+        },
+        "window": {
+          "type": "string",
+          "description": "Shorthand for type Window with this name."
+        }
+      },
+      "additionalProperties": false
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/step"
+      }
+    },
+    "step": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/sayStep"
+        },
+        {
+          "$ref": "#/definitions/startAppStep"
+        },
+        {
+          "$ref": "#/definitions/closeAppStep"
+        },
+        {
+          "$ref": "#/definitions/clickStep"
+        },
+        {
+          "$ref": "#/definitions/typeStep"
+        },
+        {
+          "$ref": "#/definitions/chooseStep"
+        },
+        {
+          "$ref": "#/definitions/tickStep"
+        },
+        {
+          "$ref": "#/definitions/hoverStep"
+        },
+        {
+          "$ref": "#/definitions/tabStep"
+        },
+        {
+          "$ref": "#/definitions/findStep"
+        },
+        {
+          "$ref": "#/definitions/waitGoneStep"
+        },
+        {
+          "$ref": "#/definitions/waitTextStep"
+        },
+        {
+          "$ref": "#/definitions/replaceTextStep"
+        },
+        {
+          "$ref": "#/definitions/keyStep"
+        },
+        {
+          "$ref": "#/definitions/answerDialogStep"
+        },
+        {
+          "$ref": "#/definitions/pickFileStep"
+        },
+        {
+          "$ref": "#/definitions/pickFolderStep"
+        },
+        {
+          "$ref": "#/definitions/callStep"
+        },
+        {
+          "$ref": "#/definitions/repeatStep"
+        },
+        {
+          "$ref": "#/definitions/whileShowsStep"
+        },
+        {
+          "$ref": "#/definitions/ifStep"
+        },
+        {
+          "$ref": "#/definitions/setStep"
+        },
+        {
+          "$ref": "#/definitions/runStep"
+        },
+        {
+          "$ref": "#/definitions/powershellStep"
+        },
+        {
+          "$ref": "#/definitions/checkpointStep"
+        }
+      ]
+    },
+    "check": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/fileExistsCheck"
+        },
+        {
+          "$ref": "#/definitions/fileMissingCheck"
+        },
+        {
+          "$ref": "#/definitions/serviceCheck"
+        },
+        {
+          "$ref": "#/definitions/scheduledTaskCheck"
+        },
+        {
+          "$ref": "#/definitions/jsonValueCheck"
+        },
+        {
+          "$ref": "#/definitions/appSettingCheck"
+        },
+        {
+          "$ref": "#/definitions/connectionStringCheck"
+        },
+        {
+          "$ref": "#/definitions/fileContainsCheck"
+        },
+        {
+          "$ref": "#/definitions/loggedCheck"
+        },
+        {
+          "$ref": "#/definitions/fileCountCheck"
+        },
+        {
+          "$ref": "#/definitions/fileVersionCheck"
+        },
+        {
+          "$ref": "#/definitions/outputCheck"
+        },
+        {
+          "$ref": "#/definitions/lastLineCheck"
+        },
+        {
+          "$ref": "#/definitions/equalsCheck"
+        },
+        {
+          "$ref": "#/definitions/matchesCheck"
+        },
+        {
+          "$ref": "#/definitions/containsCheck"
+        },
+        {
+          "$ref": "#/definitions/lacksCheck"
+        },
+        {
+          "$ref": "#/definitions/showsCheck"
+        },
+        {
+          "$ref": "#/definitions/nothingLeftCheck"
+        }
+      ]
+    },
+    "tool": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/openFolderTool"
+        },
+        {
+          "$ref": "#/definitions/openFileTool"
+        },
+        {
+          "$ref": "#/definitions/consoleTool"
+        },
+        {
+          "$ref": "#/definitions/appTool"
+        }
+      ]
+    },
+    "sayStep": {
+      "type": "object",
+      "required": [
+        "say"
+      ],
+      "properties": {
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "startAppStep": {
+      "type": "object",
+      "required": [
+        "startApp"
+      ],
+      "properties": {
+        "startApp": {
+          "type": [
+            "object",
+            "boolean"
+          ],
+          "description": "Closes any copy of the app, starts it, and places it beside the panel."
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "closeAppStep": {
+      "type": "object",
+      "required": [
+        "closeApp"
+      ],
+      "properties": {
+        "closeApp": {
+          "type": [
+            "object",
+            "boolean"
+          ],
+          "description": "Closes the app."
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "clickStep": {
+      "type": "object",
+      "required": [
+        "click"
+      ],
+      "properties": {
+        "click": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/target"
+            }
+          ],
+          "description": "Clicks a control: invokes, toggles or selects it, or with how: mouse, clicks it with the mouse."
+        },
+        "how": {
+          "enum": [
+            "mouse"
+          ],
+          "description": "mouse clicks with the mouse, for controls UI Automation can't invoke."
+        },
+        "whileEnabled": {
+          "type": "boolean",
+          "description": "Clicks it again and again while it is there and can be used, such as Up until the top folder. Not being there is fine."
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "typeStep": {
+      "type": "object",
+      "required": [
+        "type",
+        "text"
+      ],
+      "properties": {
+        "type": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/target"
+            }
+          ],
+          "description": "Types into a text box a key at a time, then Tab."
+        },
+        "text": {
+          "type": "string",
+          "description": "What to type. Empty clears the box."
+        },
+        "secret": {
+          "type": "boolean",
+          "description": "Kept out of the log, and not checked after typing."
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "chooseStep": {
+      "type": "object",
+      "required": [
+        "choose",
+        "option"
+      ],
+      "properties": {
+        "choose": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/target"
+            }
+          ],
+          "description": "Picks an option from a drop-down."
+        },
+        "option": {
+          "type": "string",
+          "description": "The option's text."
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "tickStep": {
+      "type": "object",
+      "required": [
+        "tick"
+      ],
+      "properties": {
+        "tick": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/target"
+            }
+          ],
+          "description": "Ticks or clears a tick box."
+        },
+        "checked": {
+          "type": "boolean",
+          "description": "false clears it. Ticks it when left out."
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "hoverStep": {
+      "type": "object",
+      "required": [
+        "hover"
+      ],
+      "properties": {
+        "hover": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/target"
+            }
+          ],
+          "description": "Points the mouse at a control, such as a row whose buttons only show on hover."
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "tabStep": {
+      "type": "object",
+      "required": [
+        "tab"
+      ],
+      "properties": {
+        "tab": {
+          "type": "string",
+          "description": "Opens a tab by its header."
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "findStep": {
+      "type": "object",
+      "required": [
+        "find"
+      ],
+      "properties": {
+        "find": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/target"
+            }
+          ],
+          "description": "Waits for a control to be on screen."
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "waitGoneStep": {
+      "type": "object",
+      "required": [
+        "waitGone"
+      ],
+      "properties": {
+        "waitGone": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/target"
+            }
+          ],
+          "description": "Waits for a control to go."
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "waitTextStep": {
+      "type": "object",
+      "required": [
+        "waitText"
+      ],
+      "properties": {
+        "waitText": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/target"
+            }
+          ],
+          "description": "Waits for a control's text to read a certain way."
+        },
+        "startsWith": {
+          "type": "string",
+          "description": "Waits until it starts with this."
+        },
+        "contains": {
+          "type": "string",
+          "description": "Waits until it has this in it."
+        },
+        "equals": {
+          "type": "string",
+          "description": "Waits until it is exactly this."
+        },
+        "matches": {
+          "type": "string",
+          "description": "Waits until it matches this .NET regex."
+        },
+        "changes": {
+          "type": "boolean",
+          "description": "Waits until it differs from when the step started."
+        },
+        "new": {
+          "type": "boolean",
+          "description": "Waits until it differs from the app's status before the last click (suite.json app.status)."
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "replaceTextStep": {
+      "type": "object",
+      "required": [
+        "replaceText",
+        "regex"
+      ],
+      "properties": {
+        "replaceText": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/target"
+            }
+          ],
+          "description": "Replaces the first match of a regex in a text box's value, in one go as a paste would."
+        },
+        "regex": {
+          "type": "string",
+          "description": "A .NET regex, multi-line."
+        },
+        "replacement": {
+          "type": "string",
+          "description": "What to put instead; $1 is the first group."
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "keyStep": {
+      "type": "object",
+      "required": [
+        "key"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "description": "Presses a key or a combination, such as Tab, Enter or Ctrl+A."
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "answerDialogStep": {
+      "type": "object",
+      "required": [
+        "answerDialog",
+        "button"
+      ],
+      "properties": {
+        "answerDialog": {
+          "type": "string",
+          "description": "Waits for a Windows message box with this title and presses a button."
+        },
+        "button": {
+          "enum": [
+            "Yes",
+            "No",
+            "OK",
+            "Cancel"
+          ]
+        },
+        "expect": {
+          "type": "string",
+          "description": "Part of the message; the case fails if it isn't there."
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "pickFileStep": {
+      "type": "object",
+      "required": [
+        "pickFile",
+        "path"
+      ],
+      "properties": {
+        "pickFile": {
+          "type": "string",
+          "description": "Picks a file in the Windows file picker with this title, by typing its path."
+        },
+        "path": {
+          "type": "string",
+          "description": "The file to pick."
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "pickFolderStep": {
+      "type": "object",
+      "required": [
+        "pickFolder",
+        "path"
+      ],
+      "properties": {
+        "pickFolder": {
+          "type": "string",
+          "description": "Picks a folder in the Windows folder picker with this title."
+        },
+        "path": {
+          "type": "string",
+          "description": "The folder to pick."
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "callStep": {
+      "type": "object",
+      "required": [
+        "call"
+      ],
+      "properties": {
+        "call": {
+          "type": "string",
+          "description": "Runs a macro from macros/."
+        },
+        "with": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          },
+          "description": "The macro's parameters."
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "repeatStep": {
+      "type": "object",
+      "required": [
+        "repeat",
+        "steps"
+      ],
+      "properties": {
+        "repeat": {
+          "type": [
+            "array",
+            "string"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Runs steps once for each item."
+        },
+        "steps": {
+          "$ref": "#/definitions/steps"
+        },
+        "item": {
+          "type": "string",
+          "description": "The variable each item goes in. item when left out."
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "whileShowsStep": {
+      "type": "object",
+      "required": [
+        "whileShows",
+        "steps",
+        "untilText"
+      ],
+      "properties": {
+        "whileShows": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/target"
+            }
+          ],
+          "description": "Runs steps each time a control shows, such as a window asking about each step of a removal, until another control's text says it is done."
+        },
+        "steps": {
+          "$ref": "#/definitions/steps"
+        },
+        "untilText": {
+          "$ref": "#/definitions/target",
+          "description": "The control whose text says it is done, such as a status bar."
+        },
+        "startsWith": {
+          "type": "string",
+          "description": "Done when untilText starts with this."
+        },
+        "contains": {
+          "type": "string",
+          "description": "Done when untilText has this in it."
+        },
+        "equals": {
+          "type": "string",
+          "description": "Done when untilText is exactly this."
+        },
+        "matches": {
+          "type": "string",
+          "description": "Done when untilText matches this .NET regex."
+        },
+        "new": {
+          "type": "boolean",
+          "description": "Only text that differs from the app's status before the last click counts."
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "ifStep": {
+      "type": "object",
+      "required": [
+        "if",
+        "steps"
+      ],
+      "properties": {
+        "if": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/check"
+            }
+          ],
+          "description": "Runs steps when a check passes, and else when it doesn't."
+        },
+        "steps": {
+          "$ref": "#/definitions/steps"
+        },
+        "else": {
+          "$ref": "#/definitions/steps"
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "setStep": {
+      "type": "object",
+      "required": [
+        "set"
+      ],
+      "properties": {
+        "set": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          },
+          "description": "Sets variables."
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "runStep": {
+      "type": "object",
+      "required": [
+        "run"
+      ],
+      "properties": {
+        "run": {
+          "type": "string",
+          "description": "Runs a program and keeps its exit code and output (with as: ${name.code}, ${name.output}, ${name.first})."
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "powershellStep": {
+      "type": "object",
+      "required": [
+        "powershell"
+      ],
+      "properties": {
+        "powershell": {
+          "type": [
+            "string",
+            "array"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Runs a PowerShell script, which gets args as $args. ${...} in the script is PowerShell's, not the runner's."
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "checkpointStep": {
+      "type": "object",
+      "required": [
+        "checkpoint"
+      ],
+      "properties": {
+        "checkpoint": {
+          "type": "string",
+          "description": "Ends a case: checks the runner makes, things to look at, and buttons that open them."
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/check"
+          }
+        },
+        "look": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/tool"
+          }
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "fileExistsCheck": {
+      "type": "object",
+      "required": [
+        "fileExists"
+      ],
+      "properties": {
+        "fileExists": {
+          "type": "string",
+          "description": "A file or folder that should be there."
+        },
+        "label": {
+          "type": "string",
+          "description": "What the check says instead of its own wording."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        }
+      },
+      "additionalProperties": false
+    },
+    "fileMissingCheck": {
+      "type": "object",
+      "required": [
+        "fileMissing"
+      ],
+      "properties": {
+        "fileMissing": {
+          "type": "string",
+          "description": "A file or folder that shouldn't be there."
+        },
+        "label": {
+          "type": "string",
+          "description": "What the check says instead of its own wording."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        }
+      },
+      "additionalProperties": false
+    },
+    "serviceCheck": {
+      "type": "object",
+      "required": [
+        "service"
+      ],
+      "properties": {
+        "service": {
+          "type": "string",
+          "description": "A Windows service's name."
+        },
+        "state": {
+          "type": "string",
+          "description": "Running, Stopped, or absent (the default) for no such service."
+        },
+        "label": {
+          "type": "string",
+          "description": "What the check says instead of its own wording."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        }
+      },
+      "additionalProperties": false
+    },
+    "scheduledTaskCheck": {
+      "type": "object",
+      "required": [
+        "scheduledTask"
+      ],
+      "properties": {
+        "scheduledTask": {
+          "type": "string",
+          "description": "A scheduled task's full path, such as \\\\Contoso\\\\Orders Export-main."
+        },
+        "exists": {
+          "type": "boolean"
+        },
+        "label": {
+          "type": "string",
+          "description": "What the check says instead of its own wording."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        }
+      },
+      "additionalProperties": false
+    },
+    "jsonValueCheck": {
+      "type": "object",
+      "required": [
+        "jsonValue",
+        "path",
+        "equals"
+      ],
+      "properties": {
+        "jsonValue": {
+          "type": "string",
+          "description": "A JSON file."
+        },
+        "path": {
+          "type": "string",
+          "description": "The setting's path, such as Orders:Region."
+        },
+        "equals": {
+          "type": "string",
+          "description": "The value, or <absent>."
+        },
+        "label": {
+          "type": "string",
+          "description": "What the check says instead of its own wording."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        }
+      },
+      "additionalProperties": false
+    },
+    "appSettingCheck": {
+      "type": "object",
+      "required": [
+        "appSetting",
+        "key",
+        "equals"
+      ],
+      "properties": {
+        "appSetting": {
+          "type": "string",
+          "description": "A .config file."
+        },
+        "key": {
+          "type": "string",
+          "description": "The appSettings key."
+        },
+        "equals": {
+          "type": "string",
+          "description": "The value, or <absent>."
+        },
+        "label": {
+          "type": "string",
+          "description": "What the check says instead of its own wording."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        }
+      },
+      "additionalProperties": false
+    },
+    "connectionStringCheck": {
+      "type": "object",
+      "required": [
+        "connectionString",
+        "name"
+      ],
+      "properties": {
+        "connectionString": {
+          "type": "string",
+          "description": "A .config file."
+        },
+        "name": {
+          "type": "string",
+          "description": "The connection string's name."
+        },
+        "label": {
+          "type": "string",
+          "description": "What the check says instead of its own wording."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        }
+      },
+      "additionalProperties": false
+    },
+    "fileContainsCheck": {
+      "type": "object",
+      "required": [
+        "fileContains",
+        "text"
+      ],
+      "properties": {
+        "fileContains": {
+          "type": "string",
+          "description": "A file."
+        },
+        "text": {
+          "type": "string",
+          "description": "Text it should have."
+        },
+        "label": {
+          "type": "string",
+          "description": "What the check says instead of its own wording."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        }
+      },
+      "additionalProperties": false
+    },
+    "loggedCheck": {
+      "type": "object",
+      "required": [
+        "logged",
+        "text"
+      ],
+      "properties": {
+        "logged": {
+          "type": "string",
+          "description": "A log file."
+        },
+        "text": {
+          "type": "string",
+          "description": "A line it should have."
+        },
+        "label": {
+          "type": "string",
+          "description": "What the check says instead of its own wording."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        }
+      },
+      "additionalProperties": false
+    },
+    "fileCountCheck": {
+      "type": "object",
+      "required": [
+        "fileCount",
+        "equals"
+      ],
+      "properties": {
+        "fileCount": {
+          "type": "string",
+          "description": "A folder."
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Such as *.pdf."
+        },
+        "equals": {
+          "type": [
+            "integer",
+            "string"
+          ]
+        },
+        "folders": {
+          "type": "boolean",
+          "description": "Counts folders instead of files."
+        },
+        "recursive": {
+          "type": "boolean",
+          "description": "Counts inside the folders in it too."
+        },
+        "label": {
+          "type": "string",
+          "description": "What the check says instead of its own wording."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        }
+      },
+      "additionalProperties": false
+    },
+    "fileVersionCheck": {
+      "type": "object",
+      "required": [
+        "fileVersion",
+        "startsWith"
+      ],
+      "properties": {
+        "fileVersion": {
+          "type": "string",
+          "description": "An exe or dll."
+        },
+        "startsWith": {
+          "type": "string",
+          "description": "Such as 1.1.0."
+        },
+        "label": {
+          "type": "string",
+          "description": "What the check says instead of its own wording."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        }
+      },
+      "additionalProperties": false
+    },
+    "outputCheck": {
+      "type": "object",
+      "required": [
+        "output",
+        "contains"
+      ],
+      "properties": {
+        "output": {
+          "type": "string",
+          "description": "A program to run."
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "contains": {
+          "type": "string",
+          "description": "Text it should print."
+        },
+        "label": {
+          "type": "string",
+          "description": "What the check says instead of its own wording."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        }
+      },
+      "additionalProperties": false
+    },
+    "lastLineCheck": {
+      "type": "object",
+      "required": [
+        "lastLine",
+        "contains"
+      ],
+      "properties": {
+        "lastLine": {
+          "type": "string",
+          "description": "A file being written, such as a heartbeat log."
+        },
+        "contains": {
+          "type": "string",
+          "description": "Text its last line should have."
+        },
+        "label": {
+          "type": "string",
+          "description": "What the check says instead of its own wording."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        }
+      },
+      "additionalProperties": false
+    },
+    "equalsCheck": {
+      "type": "object",
+      "required": [
+        "equals",
+        "to"
+      ],
+      "properties": {
+        "equals": {
+          "type": "string",
+          "description": "A value, usually ${captured}."
+        },
+        "to": {
+          "type": "string",
+          "description": "What it should be."
+        },
+        "label": {
+          "type": "string",
+          "description": "What the check says instead of its own wording."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        }
+      },
+      "additionalProperties": false
+    },
+    "matchesCheck": {
+      "type": "object",
+      "required": [
+        "matches",
+        "regex"
+      ],
+      "properties": {
+        "matches": {
+          "type": "string",
+          "description": "A value, usually ${captured}."
+        },
+        "regex": {
+          "type": "string",
+          "description": "A .NET regex it should match."
+        },
+        "label": {
+          "type": "string",
+          "description": "What the check says instead of its own wording."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        }
+      },
+      "additionalProperties": false
+    },
+    "containsCheck": {
+      "type": "object",
+      "required": [
+        "contains",
+        "text"
+      ],
+      "properties": {
+        "contains": {
+          "type": "string",
+          "description": "A value, usually ${captured}."
+        },
+        "text": {
+          "type": "string",
+          "description": "Text it should have."
+        },
+        "label": {
+          "type": "string",
+          "description": "What the check says instead of its own wording."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        }
+      },
+      "additionalProperties": false
+    },
+    "lacksCheck": {
+      "type": "object",
+      "required": [
+        "lacks",
+        "text"
+      ],
+      "properties": {
+        "lacks": {
+          "type": "string",
+          "description": "A value, usually ${captured}."
+        },
+        "text": {
+          "type": "string",
+          "description": "Text it shouldn't have."
+        },
+        "label": {
+          "type": "string",
+          "description": "What the check says instead of its own wording."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        }
+      },
+      "additionalProperties": false
+    },
+    "showsCheck": {
+      "type": "object",
+      "required": [
+        "shows"
+      ],
+      "properties": {
+        "shows": {
+          "$ref": "#/definitions/target",
+          "description": "A control that should be in the app now."
+        },
+        "label": {
+          "type": "string",
+          "description": "What the check says instead of its own wording."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        }
+      },
+      "additionalProperties": false
+    },
+    "nothingLeftCheck": {
+      "type": "object",
+      "required": [
+        "nothingLeft"
+      ],
+      "properties": {
+        "nothingLeft": {
+          "type": "boolean",
+          "description": "Nothing the suite's leftovers script finds is left."
+        },
+        "label": {
+          "type": "string",
+          "description": "What the check says."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        }
+      },
+      "additionalProperties": false
+    },
+    "openFolderTool": {
+      "type": "object",
+      "required": [
+        "openFolder"
+      ],
+      "properties": {
+        "openFolder": {
+          "type": "string",
+          "description": "Opens a folder in File Explorer."
+        },
+        "label": {
+          "type": "string",
+          "description": "The button's text."
+        }
+      },
+      "additionalProperties": false
+    },
+    "openFileTool": {
+      "type": "object",
+      "required": [
+        "openFile"
+      ],
+      "properties": {
+        "openFile": {
+          "type": "string",
+          "description": "Opens a file in Notepad."
+        },
+        "label": {
+          "type": "string",
+          "description": "The button's text."
+        }
+      },
+      "additionalProperties": false
+    },
+    "consoleTool": {
+      "type": "object",
+      "required": [
+        "console"
+      ],
+      "properties": {
+        "console": {
+          "type": "string",
+          "description": "A PowerShell script to run in a window that stays open."
+        },
+        "label": {
+          "type": "string",
+          "description": "The button's text."
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "appTool": {
+      "type": "object",
+      "required": [
+        "app"
+      ],
+      "properties": {
+        "app": {
+          "type": "string",
+          "description": "A program or document to open, such as taskschd.msc."
+        },
+        "label": {
+          "type": "string",
+          "description": "The button's text."
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

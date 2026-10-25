@@ -1,8 +1,8 @@
 # The script format
 
 Every file is JSON, checked against the schemas in `schema/`. Point `$schema` at them and VS Code completes and checks
-what you type. `walk check <suite>` reports every mistake in a suite at once: a misspelt step, an unknown element or
-macro, a property a step doesn't take.
+what you type. `autotest validate <suite>` reports every mistake in a suite at once: a misspelt step, an unknown
+element or macro, a property a step doesn't take.
 
 The vocabulary is small on purpose. When a case needs more than it offers, write a macro, or a `powershell` step;
 the scripts never turn into a programming language that a person can't read as a test plan.
@@ -27,11 +27,11 @@ the scripts never turn into a programming language that a person can't read as a
 | --- | --- |
 | `app.exe`, `app.arguments` | The program to start, relative to the suite folder |
 | `app.window` | Its main window's title |
-| `app.runAsAdmin` | walk restarts itself as administrator; unattended, it exits with 4 instead |
+| `app.runAsAdmin` | autotest restarts itself as administrator; unattended, it exits with 4 instead |
 | `app.status` | An element whose text says what the app is doing. Its text before every click is kept, so `waitText` with `new` doesn't take the old text. |
-| `variables` | Text, or `{ "firstExisting": [paths] }`: the first that exists, else the last. `walk run --var name=value` overrides one. Built in: `suiteDir`, `resultsDir`, `temp`. |
+| `variables` | Text, or `{ "firstExisting": [paths] }`: the first that exists, else the last. `autotest run --var name=value` overrides one. Built in: `suiteDir`, `resultsDir`, `temp`. |
 | `helpers` | `${name(value)}` gives the regex's first group in value, or the whole match when it has no group |
-| `requires` | Paths that must exist; if one doesn't, walk exits with 2 |
+| `requires` | Paths that must exist; if one doesn't, autotest exits with 2 |
 | `reset.leftovers` | A script that prints one line for each thing an earlier run left. Unattended, or when a watched run starts from the first case, anything it prints is cleaned up first. |
 | `reset.powershell` | The script that cleans up |
 
@@ -135,12 +135,12 @@ the text that said it was done.
 ```json
 { "whileShows": { "window": "Remove install" },
   "untilText": "statusText", "matches": "^(Removed |Removal stopped)", "new": true,
-  "steps": [ { "call": "removalStep", "with": { "choice": "run" } } ] }
+  "steps": [ { "call": "answerRemovalStep", "with": { "choice": "run" } } ] }
 ```
 
 ## Macros
 
-`macros/waitStatus.json`:
+`macros/waitForStatusBar.json`:
 
 ```json
 {
@@ -150,7 +150,7 @@ the text that said it was done.
 }
 ```
 
-Called as `{ "call": "waitStatus", "with": { "startsWith": "Deploy finished." }, "as": "status" }`. A macro sees the
+Called as `{ "call": "waitForStatusBar", "with": { "startsWith": "Deploy finished." }, "as": "status" }`. A macro sees the
 case's variables; its parameters and what it keeps stay its own, except what `returns` hands back.
 
 ## Checkpoints
@@ -190,4 +190,4 @@ Each check says what should be true and, when it isn't, what was found instead. 
 | `app` | a program, such as `taskschd.msc` |
 
 A watched run shows the checkpoint for a few seconds and carries on (Space holds it there), or waits for you with
-`--mode checks`. Unattended, it records the checks and carries on.
+`--mode pause-at-checkpoints`. Unattended, it records the checks and carries on.

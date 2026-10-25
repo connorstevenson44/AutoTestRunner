@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "elements.schema.json",
+  "title": "AutoTestRunner elements",
+  "description": "The app's controls by name: the page-object layer. A list is tried in order.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": {
+    "$ref": "case.schema.json#/definitions/target"
+  }
+}
