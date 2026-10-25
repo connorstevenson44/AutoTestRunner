@@ -408,6 +408,9 @@ public sealed class Runner
                 var environment = (step["env"] as JsonObject ?? []).ToDictionary(pair => pair.Key, pair => scope.Expand(pair.Value?.ToString() ?? ""));
                 ShowStep(say ?? $"Run {Path.GetFileName(program)} {string.Join(" ", arguments)}");
                 var output = _machine.Run(program, arguments, environment);
+                // What it printed goes in the log, as the case may need to show it.
+                foreach (var line in output.Output.Split('\n', StringSplitOptions.TrimEntries))
+                    _results.Log("OUTPUT", line);
                 _results.Log("RUN", $"{Path.GetFileName(program)} exited with {output.ExitCode}");
                 KeepOutput(step, scope, output);
                 break;
@@ -617,7 +620,7 @@ public sealed class Runner
 
     private ToolButton Tool(JsonObject node, Scope scope)
     {
-        var kind = node.Select(pair => pair.Key).First(Vocabulary.Tools.ContainsKey);
+        var kind = Kinds.Of(node, Vocabulary.Tools) ?? throw new ScriptException($"{node.ToJsonString()} isn't a tool.");
         var subject = scope.Expand(node[kind]!.ToString());
         var arguments = (node["args"] as JsonArray ?? []).Select(arg => scope.Expand(arg!.ToString())).ToList();
         var label = node["label"] is { } given ? scope.Expand(given.ToString()) : $"Open {Path.GetFileName(subject.TrimEnd('\\', '/'))}";

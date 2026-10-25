@@ -196,6 +196,21 @@ public class FlowTests : IDisposable
     }
 
     [Fact]
+    public void A_check_whose_properties_are_named_like_other_checks_is_still_one_check()
+    {
+        var problem = Record.Exception(() => OneCase("""
+            { "checkpoint": "Checked", "checks": [
+              { "jsonValue": "a.json", "path": "Orders:Region", "equals": "west" },
+              { "output": "a.exe", "args": ["--check"], "contains": "ok" },
+              { "equals": "a", "to": "a" } ] }
+            """));
+
+        Assert.Null(problem);
+        Assert.Equal("jsonValue", Kinds.Of(new System.Text.Json.Nodes.JsonObject { ["jsonValue"] = "a", ["equals"] = "b" }, Vocabulary.Checks));
+        Assert.Null(Kinds.Of(new System.Text.Json.Nodes.JsonObject { ["equals"] = "a", ["contains"] = "b" }, Vocabulary.Checks));
+    }
+
+    [Fact]
     public void The_loader_checks_inside_whileShows_and_if()
     {
         var problem = Assert.Throws<SuiteException>(() => OneCase("""

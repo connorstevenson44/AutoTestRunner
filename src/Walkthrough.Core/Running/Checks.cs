@@ -22,7 +22,7 @@ public static class Checks
     public static Check Build(JsonObject node, Scope scope, IMachine machine, Func<IReadOnlyList<string>> leftovers,
         Func<JsonNode, (string What, Func<bool> Shown)>? shows = null)
     {
-        var kind = node.Select(pair => pair.Key).First(Vocabulary.Checks.ContainsKey);
+        var kind = Kinds.Of(node, Vocabulary.Checks) ?? throw new ScriptException($"{node.ToJsonString()} isn't a check.");
         string Text(string key) => scope.Expand(node[key]?.ToString() ?? "");
         string? Optional(string key) => node[key] is null ? null : Text(key);
         // A shows check's subject is a target, which shows resolves itself.

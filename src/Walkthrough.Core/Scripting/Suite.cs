@@ -306,15 +306,14 @@ public sealed class Suite
                 problems.Add($"{at}: a {noun} must be an object.");
                 continue;
             }
-            var kinds = item.Select(pair => pair.Key).Where(vocabulary.ContainsKey).ToList();
-            if (kinds.Count != 1)
+            if (Kinds.Of(item, vocabulary) is not { } kind)
             {
                 problems.Add($"{at}: a {noun} is one of: {string.Join(", ", vocabulary.Keys)}.");
                 continue;
             }
             foreach (var (key, _) in item)
-                if (key != kinds[0] && !common.Contains(key) && !vocabulary[kinds[0]].Contains(key))
-                    problems.Add($"{at}: the {kinds[0]} {noun} doesn't take \"{key}\".");
+                if (key != kind && !common.Contains(key) && !vocabulary[kind].Contains(key))
+                    problems.Add($"{at}: the {kind} {noun} doesn't take \"{key}\".");
         }
     }
 }

@@ -515,10 +515,18 @@ public sealed class FlaUiDriver : IDriver
         var element = ((FlaUiControl)control).Element;
         element.Patterns.ExpandCollapse.Pattern.Expand();
         _control.Wait(_control.Pace);
-        var item = Find(new Target([new Selector(Type: "ListItem", Name: option, Within: new Target([Of(element)], "the list"))], $"the {option} option"),
-            _control.Scale(TimeSpan.FromSeconds(10)));
-        Point(item, option);
-        ((FlaUiControl)item).Element.Patterns.SelectionItem.Pattern.Select();
+        // A WPF drop-down's items are inside it, wherever its window is, even while its list shows in a popup.
+        var condition = Conditions.ByControlType(ControlType.ListItem).And(Conditions.ByName(option));
+        var end = Environment.TickCount64 + (long)_control.Scale(TimeSpan.FromSeconds(10)).TotalMilliseconds;
+        AutomationElement? item;
+        while ((item = element.FindFirstDescendant(condition)) is null)
+        {
+            if (Environment.TickCount64 > end)
+                throw new StuckException($"find the {option} option", $"The drop-down has: {string.Join(", ", element.FindAllDescendants(Conditions.ByControlType(ControlType.ListItem)).Select(Name))}");
+            _control.Wait(200);
+        }
+        Point(new FlaUiControl(item), option);
+        item.Patterns.SelectionItem.Pattern.Select();
         try
         {
             element.Patterns.ExpandCollapse.Pattern.Collapse();
@@ -528,12 +536,6 @@ public sealed class FlaUiDriver : IDriver
             // Picking an item closes most drop-downs by itself.
         }
     }
-
-    // A selector for a control already found, by what makes it unique enough to find again in its window.
-    private static Selector Of(AutomationElement element) =>
-        new(Id: element.Properties.AutomationId.ValueOrDefault is { Length: > 0 } id ? id : null,
-            Name: Name(element) is { Length: > 0 } name ? name : null,
-            Type: element.Properties.ControlType.ValueOrDefault.ToString());
 
     public void SetChecked(IControl control, bool isChecked)
     {
