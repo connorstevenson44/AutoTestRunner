@@ -193,7 +193,14 @@ public sealed class Runner
     {
         var kind = step.Select(pair => pair.Key).FirstOrDefault(Vocabulary.Steps.ContainsKey) ?? "say";
         string? Text(string key) => step[key] is { } node ? scope.Expand(node.ToString()) : null;
-        var say = Text("say");
+        // A wait's say comes after it, so it can tell what the step found: it is filled in then.
+        var after = kind is "find" or "waitGone" or "waitText" or "whileShows";
+        var say = after ? null : Text("say");
+        void SayAfter()
+        {
+            if (Text("say") is { } text)
+                Say(text);
+        }
         var what = Text("what");
         TimeSpan Within(TimeSpan normal) => step["within"] is { } seconds ? TimeSpan.FromSeconds(double.Parse(scope.Expand(seconds.ToString()))) : normal;
         Target TargetOf(string key) => Targets.Resolve(step[key], scope, _suite.Elements, what);
@@ -291,21 +298,18 @@ public sealed class Runner
             {
                 var control = Find(TargetOf("find"));
                 Keep(step, scope, control);
-                if (say is not null)
-                    Say(say);
+                SayAfter();
                 break;
             }
 
             case "waitGone":
                 _driver.WaitGone(TargetOf("waitGone"), Control.Scale(Within(GoneTimeout)));
-                if (say is not null)
-                    Say(say);
+                SayAfter();
                 break;
 
             case "waitText":
                 WaitText(step, scope, TargetOf("waitText"), Within(FindTimeout));
-                if (say is not null)
-                    Say(say);
+                SayAfter();
                 break;
 
             case "replaceText":
@@ -375,8 +379,7 @@ public sealed class Runner
 
             case "whileShows":
                 WhileShows(step, scope, TargetOf("whileShows"), Within(TimeSpan.FromMinutes(5)));
-                if (say is not null)
-                    Say(say);
+                SayAfter();
                 break;
 
             case "if":

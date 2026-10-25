@@ -134,6 +134,18 @@ public class FlowTests : IDisposable
     }
 
     [Fact]
+    public void A_find_can_say_what_it_found()
+    {
+        var app = new FakeDriver();
+        app.Add("Text", "Removing the install · step 1 of 3", id: "Counter");
+
+        var (result, host) = Run(OneCase("""{ "find": { "id": "Counter" }, "as": "counter", "say": "${counter}: Delete the service" }"""), app);
+
+        Assert.Equal(CaseStatus.Passed, result.Status);
+        Assert.Contains("Removing the install · step 1 of 3: Delete the service", host.Shown);
+    }
+
+    [Fact]
     public void WhileEnabled_clicks_until_the_control_is_greyed_out()
     {
         var app = new FakeDriver();
