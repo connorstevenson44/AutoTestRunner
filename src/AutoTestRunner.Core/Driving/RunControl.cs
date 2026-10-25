@@ -1,17 +1,5 @@
 namespace AutoTestRunner.Driving;
 
-/// <summary>Why the run is holding, if it is.</summary>
-public enum HoldReason { None, Pause, Step, Checkpoint, Stuck }
-
-/// <summary>The three speeds a watched run can go at.</summary>
-public enum Speed { Slow, Modest, Fast }
-
-/// <summary>Thrown to give up on the rest of a case, after the person chose to skip it.</summary>
-public sealed class SkipCaseException(string message) : Exception(message);
-
-/// <summary>Thrown to end the whole run: the person stopped it, or an unattended run got stuck.</summary>
-public sealed class StopRunException(string message) : Exception(message);
-
 /// <summary>
 /// The pace of a run and whether it is holding: paused, waiting for the next step, at a checkpoint or stuck. The run
 /// itself goes on a worker thread and calls <see cref="Gate"/> between steps and during waits; the panel's keys and

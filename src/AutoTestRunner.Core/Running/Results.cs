@@ -4,19 +4,6 @@ using System.Xml.Linq;
 
 namespace AutoTestRunner.Running;
 
-public enum CaseStatus { Passed, Failed, Skipped, Stopped }
-
-/// <summary>One case's result: what failed and what the person noted.</summary>
-public sealed class CaseResult(int number, string name)
-{
-    public int Number { get; } = number;
-    public string Name { get; } = name;
-    public CaseStatus Status { get; set; } = CaseStatus.Passed;
-    public List<string> Failures { get; } = [];
-    public List<string> Notes { get; } = [];
-    public TimeSpan Duration { get; set; }
-}
-
 /// <summary>
 /// A run's results folder: run.log as it goes, then summary.txt and junit.xml, with the screenshots and UI Automation
 /// dumps of each stuck point. The layout is the AutoHotkey runner's, so CI uploads the same folder.

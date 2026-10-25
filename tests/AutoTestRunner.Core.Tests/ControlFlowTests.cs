@@ -5,7 +5,7 @@ using AutoTestRunner.Scripting;
 namespace AutoTestRunner.Core.Tests;
 
 /// <summary>The steps that go round more than once or choose: whileShows, if and click's whileEnabled.</summary>
-public sealed class FlowTests : IDisposable
+public sealed class ControlFlowTests : IDisposable
 {
     private readonly string _folder = Path.Combine(Path.GetTempPath(), "AutoTestRunnerTests", Path.GetRandomFileName());
 

@@ -5,7 +5,7 @@ using AutoTestRunner.Scripting;
 namespace AutoTestRunner.Core.Tests;
 
 /// <summary>What a run shows the person: the kind of each step, what it waits for, and the commands it runs.</summary>
-public sealed class ShownTests : IDisposable
+public sealed class CommandReportingTests : IDisposable
 {
     private readonly string _folder = Path.Combine(Path.GetTempPath(), "AutoTestRunnerTests", Path.GetRandomFileName());
 

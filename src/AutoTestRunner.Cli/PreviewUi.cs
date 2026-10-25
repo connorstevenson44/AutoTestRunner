@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using AutoTestRunner.Cli.Views;
 using AutoTestRunner.Driving;
 using AutoTestRunner.Running;
 using AutoTestRunner.Scripting;

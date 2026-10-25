@@ -13,7 +13,7 @@ using AutoTestRunner.FlaUI;
 using AutoTestRunner.Running;
 using AutoTestRunner.Scripting;
 
-namespace AutoTestRunner.Cli;
+namespace AutoTestRunner.Cli.Views;
 
 /// <summary>
 /// The panel beside the app in a run you watch. From the top: the case and a bar of every case, coloured as each one

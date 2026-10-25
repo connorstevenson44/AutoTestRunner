@@ -1,7 +1,7 @@
 using System.Windows.Media;
 using AutoTestRunner.Running;
 
-namespace AutoTestRunner.Cli;
+namespace AutoTestRunner.Cli.Views;
 
 /// <summary>
 /// Glyphs from Windows' own icon font: Segoe Fluent Icons on Windows 11, Segoe MDL2 Assets, which has the same ones at

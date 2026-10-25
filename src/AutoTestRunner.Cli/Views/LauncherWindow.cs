@@ -10,10 +10,7 @@ using AutoTestRunner.FlaUI;
 using AutoTestRunner.Running;
 using AutoTestRunner.Scripting;
 
-namespace AutoTestRunner.Cli;
-
-/// <summary>The cases picked in the launcher, and how to run them.</summary>
-internal sealed record LauncherChoice(IReadOnlyList<Case> Cases, Options Options);
+namespace AutoTestRunner.Cli.Views;
 
 /// <summary>
 /// The window before a run you watch: whether the app and its files are there and the machine is clean, with a button

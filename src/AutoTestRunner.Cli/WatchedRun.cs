@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using AutoTestRunner.Cli.Views;
 using AutoTestRunner.Driving;
 using AutoTestRunner.FlaUI;
 using AutoTestRunner.Running;

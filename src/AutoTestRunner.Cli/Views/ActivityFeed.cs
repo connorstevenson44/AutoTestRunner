@@ -6,7 +6,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using AutoTestRunner.Running;
 
-namespace AutoTestRunner.Cli;
+namespace AutoTestRunner.Cli.Views;
 
 /// <summary>
 /// Everything the run has done, newest at the bottom: each case with its steps, the commands it ran with what they

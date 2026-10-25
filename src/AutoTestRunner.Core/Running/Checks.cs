@@ -8,9 +8,6 @@ using AutoTestRunner.Scripting;
 
 namespace AutoTestRunner.Running;
 
-/// <summary>A check ready to run: its label, how long it may take to pass, and a test that returns null when it passes.</summary>
-public sealed record Check(string Label, TimeSpan Within, Func<string?> Test);
-
 /// <summary>
 /// The built-in checks a checkpoint can make, written the way the AutoHotkey runner's were: each label says what
 /// should be true, and a failure says what was found instead.

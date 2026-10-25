@@ -7,9 +7,6 @@ using AutoTestRunner.Scripting;
 
 namespace AutoTestRunner.Running;
 
-/// <summary>How a run ended, as the process's exit code. CI relies on these, as it did on the AutoHotkey runner's.</summary>
-public enum ExitCode { Passed = 0, Failed = 1, Missing = 2, ScriptError = 3, NotAdministrator = 4 }
-
 /// <summary>
 /// Runs a suite's cases: each step in turn at a pace a person can follow, holding when the run is paused or step by
 /// step, ending each case at its checkpoint. When something can't be found, a watched run asks the person what to do,
