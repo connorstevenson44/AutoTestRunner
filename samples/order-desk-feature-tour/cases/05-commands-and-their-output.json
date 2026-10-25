@@ -1,0 +1,38 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "Run commands and check what they print",
+  "needs": ["export-with-progress"],
+  "covers": "A PowerShell script and a program run by the test, what they print streaming into the panel as they print it, their exit codes, and an output check",
+  "steps": [
+    { "powershell": [
+        "$file = $args[0]",
+        "Write-Output \"Reading $file\"",
+        "$orders = @(Import-Csv -LiteralPath $file)",
+        "foreach ($order in $orders) {",
+        "    Start-Sleep -Milliseconds 800",
+        "    Write-Output ('Order {0}: {1}, {2} x {3}, {4}' -f $order.number, $order.customer, $order.quantity, $order.product, $order.total)",
+        "}",
+        "$sum = ($orders | Measure-Object -Property total -Sum).Sum",
+        "Write-Output ('{0} orders, {1} in all' -f $orders.Count, $sum.ToString('0.00', [Globalization.CultureInfo]::InvariantCulture))"
+      ],
+      "args": ["${dataDir}\\orders.csv"], "as": "summary",
+      "say": "Run a PowerShell script that reads the export. Watch the panel: each line shows as the script prints it" },
+    { "run": "cmd.exe", "args": ["/c", "findstr", "/c:Shipped", "${dataDir}\\orders.csv"], "as": "shipped",
+      "say": "Run a program, findstr, to find the shipped orders in the export. The test keeps its exit code as well as what it prints" },
+    { "say": "findstr ended with exit code ${shipped.code}, and printed:\n${shipped.output}" },
+    { "checkpoint": "The commands found what the export should have",
+      "checks": [
+        { "equals": "${summary.code}", "to": "0", "label": "The script ended with exit code 0" },
+        { "contains": "${summary.output}", "text": "3 orders, 58.00 in all", "label": "The script counted 3 orders, 58.00 in all" },
+        { "equals": "${shipped.code}", "to": "0", "label": "findstr found a shipped order (exit code 0)" },
+        { "contains": "${shipped.output}", "text": "Alan Turing", "label": "Alan Turing's order is shipped" },
+        { "lacks": "${shipped.output}", "text": "Ada Lovelace", "label": "Ada Lovelace's order isn't" },
+        { "output": "cmd.exe", "args": ["/c", "type", "${dataDir}\\orders.csv"], "contains": "Grace Hopper",
+          "label": "Typing out the export shows Grace Hopper's order" }
+      ],
+      "look": [ "Each command is in the panel with its command line, then what it printed, line by line as it printed it, then its exit code." ],
+      "tools": [
+        { "console": "Import-Csv -LiteralPath $args[0] | Format-Table -AutoSize", "args": ["${dataDir}\\orders.csv"], "label": "Show the export as a table" }
+      ] }
+  ]
+}

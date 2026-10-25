@@ -1,0 +1,13 @@
+{
+  "$schema": "../../../schema/macro.schema.json",
+  "description": "Waits for the bar at the bottom of Order Desk to say something new that starts with startsWith, and hands back what it says.",
+  "params": {
+    "startsWith": { "description": "What it should start with, such as Added order." },
+    "within": { "description": "Seconds to wait before it counts as stuck.", "default": "20" }
+  },
+  "steps": [
+    { "waitText": "statusText", "startsWith": "${startsWith}", "new": true, "within": "${within}", "as": "status",
+      "what": "the bar at the bottom of Order Desk" }
+  ],
+  "returns": "status"
+}

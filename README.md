@@ -48,7 +48,8 @@ needs administrator and autotest isn't.
 ## Writing a suite
 
 A suite is a folder, one per app. See [docs/format.md](docs/format.md) for every step and check, and
-[samples/demo](samples/demo) for a small one.
+[samples/demo](samples/demo) for a small one. [samples/README.md](samples/README.md) has demos to watch: a feature
+tour, tests that fail on purpose, and a suite full of mistakes, all against a small app made for them.
 
 ```
 suite.json        how to start and reset the app, its variables

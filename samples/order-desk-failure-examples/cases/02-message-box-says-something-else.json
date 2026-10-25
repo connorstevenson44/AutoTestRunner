@@ -1,0 +1,21 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "A message box doesn't say what the test expects",
+  "needsNote": "Nothing",
+  "covers": "answerDialog's expect not matching the message: the failure is recorded with the message's actual words, the button is pressed anyway, and the case carries on",
+  "steps": [
+    { "call": "startWithNoOrders" },
+    { "call": "addOrder", "with": { "customer": "Grace Hopper", "product": "Green tea" } },
+    { "hover": { "element": "orderRow", "with": { "number": "1001" } }, "say": "Point at Grace Hopper's order, to show its buttons" },
+    { "click": { "element": "orderRowButton", "with": { "number": "1001", "tip": "Delete this order" } }, "what": "the Delete button on order 1001",
+      "say": "Click Delete on Grace Hopper's order" },
+    { "answerDialog": "Delete order", "button": "No", "expect": "Delete 1 order?",
+      "say": "The test expects the message to ask \"Delete 1 order?\", as an older version of Order Desk did. It asks something else now, so this fails, and the test still says No" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Kept order 1001." } },
+    { "checkpoint": "Grace Hopper's order is still there",
+      "checks": [
+        { "jsonValue": "${ordersFile}", "path": "orders:1001:status", "equals": "New" }
+      ],
+      "look": [ "The case failed at the message box, where the log has what the message really said. Everything after it still ran and passed." ] }
+  ]
+}

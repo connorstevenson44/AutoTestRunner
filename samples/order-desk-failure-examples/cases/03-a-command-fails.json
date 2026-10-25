@@ -1,0 +1,27 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "A command fails",
+  "needsNote": "Nothing",
+  "covers": "A PowerShell step ending with an exit code other than 0, which fails the case, and a program's exit code checked at the checkpoint",
+  "steps": [
+    { "call": "startWithNoOrders" },
+    { "powershell": [
+        "$file = $args[0]",
+        "Write-Output \"Looking for $file\"",
+        "if (-not (Test-Path -LiteralPath $file)) {",
+        "    Write-Output 'There is no export: nobody has clicked Export orders yet.'",
+        "    exit 2",
+        "}"
+      ],
+      "args": ["${dataDir}\\orders.csv"],
+      "say": "Run a script that looks for the export. Nothing has been exported, so it ends with exit code 2, and a PowerShell step that doesn't end with 0 fails the case" },
+    { "run": "cmd.exe", "args": ["/c", "findstr", "/c:Shipped", "${dataDir}\\orders.csv"], "as": "shipped",
+      "say": "Run findstr to look for shipped orders in the export. A run step keeps the exit code for the checkpoint to check" },
+    { "checkpoint": "The export has a shipped order",
+      "checks": [
+        { "equals": "${shipped.code}", "to": "0", "label": "findstr found a shipped order (exit code 0)" },
+        { "contains": "${shipped.output}", "text": "Shipped", "label": "findstr printed a shipped order" }
+      ],
+      "look": [ "The panel shows each command, what it printed and its exit code: 2 for the script, 1 for findstr." ] }
+  ]
+}

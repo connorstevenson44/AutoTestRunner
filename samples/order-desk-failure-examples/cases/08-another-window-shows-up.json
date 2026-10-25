@@ -1,0 +1,15 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "Stuck: another window shows up",
+  "needsNote": "Nothing",
+  "covers": "A window the test doesn't expect. The wait stops straight away, rather than at its limit, and says what the window shows.",
+  "steps": [
+    { "call": "startWithNoOrders" },
+    { "click": "importOrders", "say": "Click Import orders" },
+    { "pickFile": "Import orders", "path": "${suiteDir}\\data\\orders-to-import.csv", "say": "Pick the file to import" },
+    { "say": "Order Desk now asks about each order in a window of its own, but this test was written for an older version that imported them all at once, so it just waits for the import to finish." },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Import finished", "within": "60" } },
+    { "checkpoint": "The orders were imported",
+      "look": [ "It got stuck at once, not after 60 seconds, and the message quotes the window: Import order, Order 1 of 3, Mary Jackson." ] }
+  ]
+}

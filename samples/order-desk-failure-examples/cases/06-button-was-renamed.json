@@ -1,0 +1,16 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "Stuck: a button was renamed",
+  "needsNote": "Nothing",
+  "covers": "A control the test can't find, as when the app's wording changes. The UI Automation dump in the results shows what is there instead.",
+  "steps": [
+    { "call": "startWithNoOrders" },
+    { "type": "customer", "text": "Katherine Johnson", "say": "Type Katherine Johnson as the customer" },
+    { "choose": "product", "option": "Teapot", "say": "Pick Teapot" },
+    { "click": { "button": "Submit order" }, "within": 5,
+      "say": "Click Submit order: what the button was called in an older version. It's called Add order now, so the test can't find it" },
+    { "checkpoint": "The order was added",
+      "checks": [ { "jsonValue": "${ordersFile}", "path": "orders:1001:customer", "equals": "Katherine Johnson" } ],
+      "look": [ "The results folder has a screenshot and a UI Automation dump from when it got stuck. The dump lists a button called Add order." ] }
+  ]
+}

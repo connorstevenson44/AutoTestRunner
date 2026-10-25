@@ -1,0 +1,16 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "Find a product in a long list",
+  "needs": ["take-an-order"],
+  "covers": "A tab, and scrollToFind for a list of 500 that only builds the rows on screen",
+  "steps": [
+    { "tab": "Catalogue", "say": "Open the Catalogue tab: 500 products, in a list that only builds the rows in view" },
+    { "hover": { "element": "catalogueProduct", "with": { "name": "Product 437" } }, "as": "product", "what": "Product 437 in the catalogue",
+      "say": "Point at Product 437. It isn't built until it is in view, so the test scrolls down the list until it is" },
+    { "tab": "Orders", "say": "Back to the Orders tab" },
+    { "checkpoint": "Product 437 was found",
+      "checks": [
+        { "equals": "${product}", "to": "Product 437", "label": "It pointed at Product 437" }
+      ] }
+  ]
+}
