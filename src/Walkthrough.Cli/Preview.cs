@@ -197,8 +197,10 @@ internal static class Preview
             context.DrawRectangle(Brushes.White, null, new Rect(0, 0, width, height));
             context.DrawRectangle(new VisualBrush(content)
             {
-                // The content's own box, not everything drawn in it: a control row pulled left by a margin would move it.
-                Stretch = Stretch.None, ViewboxUnits = BrushMappingMode.Absolute, Viewbox = new Rect(0, 0, content.ActualWidth, content.ActualHeight),
+                // The content's own box, where the window puts it, not everything drawn in it: a control row pulled left by
+                // a margin would move it.
+                Stretch = Stretch.None, ViewboxUnits = BrushMappingMode.Absolute,
+                Viewbox = new Rect(content.Margin.Left, content.Margin.Top, content.ActualWidth, content.ActualHeight),
             },
                 null, new Rect(content.Margin.Left, content.Margin.Top, content.ActualWidth, content.ActualHeight));
         }
