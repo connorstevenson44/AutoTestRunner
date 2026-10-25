@@ -113,6 +113,24 @@ public class FlowTests : IDisposable
     }
 
     [Fact]
+    public void WhileShows_is_stuck_when_its_steps_never_make_the_window_go()
+    {
+        var app = new FakeDriver();
+        app.Add("Text", "Removing", id: "StatusText");
+        app.Add("Window", "Remove install");
+        app.Add("Button", "Nothing");
+
+        var (result, _) = Run(OneCase("""
+            { "whileShows": { "window": "Remove install" }, "untilText": "statusText", "startsWith": "Removed",
+              "steps": [ { "click": { "button": "Nothing" } } ] }
+            """), app);
+
+        Assert.Equal(CaseStatus.Failed, result.Status);
+        Assert.Contains("after 100 rounds", result.Failures.Single());
+        Assert.Equal(100, app.Done.Count(done => done == "click Nothing"));
+    }
+
+    [Fact]
     public void If_can_stop_at_the_first_step_through_a_macro()
     {
         var answers = new List<string>();

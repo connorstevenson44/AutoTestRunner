@@ -128,7 +128,8 @@ doesn't; its check is any of the checkpoint checks below, so there is no express
 
 `whileShows` is for an app that asks about one thing at a time in a window of its own, such as each step of a removal.
 Each time the window shows, its steps run; once `untilText`'s text says it is done, the run carries on. Another window
-showing up instead, or nothing happening for `within` seconds (5 minutes when left out), is stuck. With `as`, it keeps
+showing up instead, nothing happening for `within` seconds (5 minutes when left out), or the window still showing
+after 100 rounds, is stuck. With `as`, it keeps
 the text that said it was done.
 
 ```json

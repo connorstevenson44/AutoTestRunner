@@ -412,7 +412,7 @@ public sealed class Runner
                 ShowStep(say ?? $"Run {Path.GetFileName(program)} {string.Join(" ", arguments)}");
                 var output = _machine.Run(program, arguments, environment);
                 // What it printed goes in the log, as the case may need to show it.
-                foreach (var line in output.Output.Split('\n', StringSplitOptions.TrimEntries))
+                foreach (var line in output.Output.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
                     _results.Log("OUTPUT", line);
                 _results.Log("RUN", $"{Path.GetFileName(program)} exited with {output.ExitCode}");
                 KeepOutput(step, scope, output);
@@ -493,7 +493,7 @@ public sealed class Runner
             scope, _suite.Elements);
         var wanted = WantedText(step, scope, first: null);
         var end = Environment.TickCount64 + (long)Control.Scale(within).TotalMilliseconds;
-        while (true)
+        for (var rounds = 0; ; )
         {
             Control.Gate();
             var found = _driver.TryFind(until) is { } control ? TextOf(control) : null;
@@ -506,6 +506,9 @@ public sealed class Runner
             }
             if (_driver.TryFind(each) is not null)
             {
+                // Steps that never make it go away would go round for ever.
+                if (++rounds > MaxRounds)
+                    throw new StuckException($"see \"{wanted.Expected}\" in {until.What}", $"{each.What} was still showing after {MaxRounds} rounds.");
                 Steps(step["steps"] as JsonArray ?? [], scope, "whileShows");
                 end = Environment.TickCount64 + (long)Control.Scale(within).TotalMilliseconds;
                 continue;
@@ -517,6 +520,8 @@ public sealed class Runner
             Control.Wait(300);
         }
     }
+
+    private const int MaxRounds = 100;
 
     // What waitText and whileShows wait for a control's text to be. first is its text when the wait started.
     private Wanted WantedText(JsonObject step, Scope scope, string? first)
