@@ -103,26 +103,26 @@ defs = {
 for k,v in steps.items(): defs[k+"Step"]=v
 for k,v in checks.items(): defs[k+"Check"]=v
 for k,v in tools.items(): defs[k+"Tool"]=v
-case = {"$schema":S,"$id":"walkthrough.case.schema.json","title":"Walkthrough case","description":"A test case: the steps a person takes, ending at a checkpoint.",
+case = {"$schema":S,"$id":"case.schema.json","title":"AutoTestRunner case","description":"A test case: the steps a person takes, ending at a checkpoint.",
  "type":"object","required":["name","steps"],"properties":{"$schema":{"type":"string"},"name":text("What the case does, as the launcher lists it."),
  "needs":{"type":"array","items":{"type":"string"},"description":"The ids of the cases it carries on from (their file names without the number)."},
  "needsNote":text("What it needs, in words, for the launcher's Run after column, such as Any time."),
  "covers":text("What it tries, for the launcher."),"steps":{"$ref":"#/definitions/steps"}},"additionalProperties":False,"definitions":defs}
-macro = {"$schema":S,"$id":"walkthrough.macro.schema.json","title":"Walkthrough macro","description":"Reusable steps with parameters, run with { \"call\": name }.",
+macro = {"$schema":S,"$id":"macro.schema.json","title":"AutoTestRunner macro","description":"Reusable steps with parameters, run with { \"call\": name }.",
  "type":"object","required":["steps"],"properties":{"$schema":{"type":"string"},"name":text("Its name, if not the file's."),"description":text("What it does."),
  "params":{"type":"object","additionalProperties":{"type":"object","properties":{"description":{"type":"string"},"default":{"type":["string","number","boolean"]}},"additionalProperties":False}},
- "steps":{"$ref":"walkthrough.case.schema.json#/definitions/steps"},"returns":text("The variable the call's as keeps.")},"additionalProperties":False}
-elements = {"$schema":S,"$id":"walkthrough.elements.schema.json","title":"Walkthrough elements","description":"The app's controls by name: the page-object layer. A list is tried in order.",
- "type":"object","properties":{"$schema":{"type":"string"}},"additionalProperties":{"$ref":"walkthrough.case.schema.json#/definitions/target"}}
-suite = {"$schema":S,"$id":"walkthrough.suite.schema.json","title":"Walkthrough suite","description":"How to start and reset an app, and the suite's variables.",
+ "steps":{"$ref":"case.schema.json#/definitions/steps"},"returns":text("The variable the call's as keeps.")},"additionalProperties":False}
+elements = {"$schema":S,"$id":"elements.schema.json","title":"AutoTestRunner elements","description":"The app's controls by name: the page-object layer. A list is tried in order.",
+ "type":"object","properties":{"$schema":{"type":"string"}},"additionalProperties":{"$ref":"case.schema.json#/definitions/target"}}
+suite = {"$schema":S,"$id":"suite.schema.json","title":"AutoTestRunner suite","description":"How to start and reset an app, and the suite's variables.",
  "type":"object","required":["name","app"],"properties":{"$schema":{"type":"string"},"name":text("The suite's name."),
  "app":{"type":"object","required":["exe","window"],"properties":{"exe":text("The program to start; ${variables} allowed."),"arguments":text("What to start it with."),
-   "window":text("Its main window's title."),"runAsAdmin":{"type":"boolean","description":"Restarts walk as administrator, as the app needs it."},
+   "window":text("Its main window's title."),"runAsAdmin":{"type":"boolean","description":"Restarts autotest as administrator, as the app needs it."},
    "status":text("An element whose text says what the app is doing, such as a status bar. Its text before each click is kept for waitText's new.")},"additionalProperties":False},
  "variables":{"type":"object","additionalProperties":{"anyOf":[{"type":["string","number","boolean"]},{"type":"object","required":["firstExisting"],"properties":{"firstExisting":{"type":"array","items":{"type":"string"},"description":"The first path that exists, relative to the suite folder; the last when none does."}},"additionalProperties":False}]}},
  "helpers":{"type":"object","additionalProperties":{"type":"object","required":["regex"],"properties":{"regex":text("${name(value)} gives the regex's first group in value.")},"additionalProperties":False}},
- "requires":{"type":"array","items":{"type":"string"},"description":"Paths that must exist before a run starts. If one doesn't, walk exits with code 2."},
+ "requires":{"type":"array","items":{"type":"string"},"description":"Paths that must exist before a run starts. If one doesn't, autotest exits with code 2."},
  "reset":{"type":"object","properties":{"powershell":text("A script that removes what the suite leaves on the machine."),"leftovers":text("A script that prints one line for each thing an earlier run left; nothing on a clean machine.")},"additionalProperties":False},
  "screen":{"type":"object","properties":{"width":{"type":"integer"},"height":{"type":"integer"}},"description":"The smallest screen the suite is written for."}},"additionalProperties":False}
 for name, doc in [("case",case),("macro",macro),("elements",elements),("suite",suite)]:
-    open(f"{out}/walkthrough.{name}.schema.json","w").write(json.dumps(doc, indent=2, ensure_ascii=False)+"\n")
+    open(f"{out}/{name}.schema.json","w").write(json.dumps(doc, indent=2, ensure_ascii=False)+"\n")

@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AutoTestRunner.Core/AutoTestRunner.Core.csproj" />
+    <Project Path="src/AutoTestRunner.FlaUI/AutoTestRunner.FlaUI.csproj" />
+    <Project Path="src/AutoTestRunner.Cli/AutoTestRunner.Cli.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AutoTestRunner.Core.Tests/AutoTestRunner.Core.Tests.csproj" />
+  </Folder>
+</Solution>

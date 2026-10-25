@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../schema/walkthrough.case.schema.json",
+  "$schema": "../../../schema/case.schema.json",
   "name": "Save a name",
   "needsNote": "A clean computer",
   "covers": "Typing a name, saving it, and the status bar saying where the log is",
@@ -8,7 +8,7 @@
     { "say": "The demo starts empty." },
     { "type": "nameBox", "text": "main", "say": "Type main as the name" },
     { "click": { "button": "Save" }, "say": "Click Save" },
-    { "call": "waitStatus", "with": { "startsWith": "Saved." }, "as": "status" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Saved." }, "as": "status" },
     { "hover": { "element": "row", "with": { "path": "${dataDir}/main" } }, "as": "row", "say": "The new row is there" },
     { "repeat": ["a", "b"], "steps": [ { "set": { "last": "${item}" } } ] },
     { "checkpoint": "The name was saved",

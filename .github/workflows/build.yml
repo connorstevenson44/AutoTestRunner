@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  # The engine and its tests run anywhere; walk and the FlaUI driver build on Linux too, but only run on Windows.
+  # The engine and its tests run anywhere; autotest and the FlaUI driver build on Linux too, but only run on Windows.
   linux:
     runs-on: ubuntu-latest
     steps:
@@ -32,22 +32,22 @@ jobs:
         with:
           global-json-file: global.json
 
-      - name: Publish walk
-        run: dotnet publish src/Walkthrough.Cli --configuration Release --output artifacts/walk
+      - name: Publish autotest.exe
+        run: dotnet publish src/AutoTestRunner.Cli --configuration Release --output artifacts/autotest
 
-      - name: Check the sample suite
-        run: artifacts/walk/walk.exe check samples/demo
+      - name: Validate the sample suite
+        run: artifacts/autotest/autotest.exe validate samples/demo
 
       # Plays a made-up run in the launcher and the panel, and saves a picture of each state: it shows the windows
       # open and draw without an error, and what they look like, in the screenshots artifact.
       - name: Take pictures of the windows
         timeout-minutes: 5
         run: |
-          artifacts/walk/walk.exe preview --shots artifacts/shots
+          artifacts/autotest/autotest.exe preview-ui --shots artifacts/shots
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $shots = @(Get-ChildItem artifacts/shots -Filter *.png)
           "$($shots.Count) pictures: $($shots.Name -join ', ')"
-          if ($shots.Count -lt 8) { throw "walk preview saved $($shots.Count) of 8 pictures." }
+          if ($shots.Count -lt 8) { throw "autotest preview-ui saved $($shots.Count) of 8 pictures." }
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -57,5 +57,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: walk
-          path: artifacts/walk/
+          name: autotest
+          path: artifacts/autotest/

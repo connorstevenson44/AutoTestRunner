@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schema/walkthrough.suite.schema.json",
+  "$schema": "../../schema/suite.schema.json",
   "name": "Demo",
   "app": { "exe": "${exe}", "window": "Demo", "status": "statusText" },
   "variables": {

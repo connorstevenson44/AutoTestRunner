@@ -1,0 +1,12 @@
+{
+  "$schema": "../../../schema/macro.schema.json",
+  "description": "Waits for the status bar to say something new that starts with startsWith.",
+  "params": {
+    "startsWith": { "description": "What it should start with." },
+    "within": { "description": "Seconds to wait.", "default": "30" }
+  },
+  "steps": [
+    { "waitText": "statusText", "startsWith": "${startsWith}", "new": true, "within": "${within}", "as": "status" }
+  ],
+  "returns": "status"
+}
