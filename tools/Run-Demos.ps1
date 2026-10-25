@@ -80,3 +80,5 @@ if ($problems.Count -gt 0) {
     $problems
     throw "$($problems.Count) of the demos didn't end the way they should."
 }
+# The failure examples leave the last command's exit code at 1, which CI would read as this script failing.
+exit 0
