@@ -64,7 +64,7 @@ Each step does one thing, named by its key. Any step can also have:
 | --- | --- | --- |
 | `startApp` | | Closes any copy of the app, starts it and puts it beside the panel |
 | `closeApp` | | Closes it |
-| `click` | target, `how: "mouse"` | Invokes, toggles or selects a control; with `how`, clicks it with the mouse |
+| `click` | target, `how: "mouse"`, `whileEnabled` | Invokes, toggles or selects a control; with `how`, clicks it with the mouse. With `whileEnabled`, clicks it again and again while it is there and can be used, such as Up until the top folder. |
 | `type` | target, `text`, `secret` | Types a key at a time, then Tab. A secret stays out of the log. |
 | `choose` | target, `option` | Picks from a drop-down |
 | `tick` | target, `checked` | Ticks or clears a tick box |
@@ -73,12 +73,14 @@ Each step does one thing, named by its key. Any step can also have:
 | `key` | `"Tab"`, `"Ctrl+A"` | Presses keys |
 | `find` | target | Waits for a control |
 | `waitGone` | target | Waits for a control to go |
-| `waitText` | target, `startsWith`, `contains`, `equals`, `changes`, `new` | Waits for a control's text |
+| `waitText` | target, `startsWith`, `contains`, `equals`, `matches`, `changes`, `new` | Waits for a control's text: what is typed in a text box or editor, or the name of anything else |
 | `replaceText` | target, `regex`, `replacement` | Replaces the first match in a text box, in one go as a paste would. The case fails if nothing matches. |
 | `answerDialog` | a message box's title, `button`, `expect` | Presses Yes, No, OK or Cancel. The case fails if the message doesn't have `expect` in it. |
 | `pickFile`, `pickFolder` | the picker's title, `path` | Types a path into a Windows file or folder picker |
 | `call` | a macro, `with` | Runs a macro |
 | `repeat` | a list, `steps`, `item` | Runs steps for each item, in `${item}` |
+| `whileShows` | target, `steps`, `untilText` with `startsWith`, `contains`, `equals`, `matches`, `new` | Runs steps each time a control shows, until `untilText`'s text says it is done: see below |
+| `if` | a check, `steps`, `else` | Runs `steps` when the check passes, `else` when it doesn't |
 | `set` | `{ name: value }` | Sets variables |
 | `run` | a program, `args`, `env` | Runs a program |
 | `powershell` | a script, or a list of lines, `args` | Runs PowerShell with `args` as `$args`. `${...}` in the script is PowerShell's. |
@@ -95,7 +97,7 @@ A target is the name of an element in `elements.json`, a selector, or a list of 
 | `type` | The UI Automation control type: Button, Edit, Text, ComboBox, ListItem, TabItem, CheckBox, RadioButton, List, Window… |
 | `helpText` | The tooltip |
 | `className` | The class name |
-| `match` | How `name` is compared: `exact` (the default), `startsWith` or `contains` |
+| `match` | How `name` and `helpText` are compared: `exact` (the default), `startsWith` or `contains` |
 | `within` | Only inside another control; with `type: Window`, another window of the app's, such as a dialog |
 | `sameRowAs` | Only on the same row as another control, such as the buttons beside a file's name |
 | `scrollToFind` | Scrolls the window's long lists until it is built, for lists that only build the rows in view |
@@ -110,6 +112,30 @@ An element can have `${parameters}`, given where it is used:
 
 When a control under `within` or `sameRowAs` can't be found, the runner points at that row again and looks once more,
 for buttons that only show while the mouse is over their row.
+
+## Going round and choosing
+
+The scripts are straight lists of steps, apart from three things.
+
+`repeat` runs steps once for each item of a list. `if` runs steps when a check passes, and its `else` when it
+doesn't; its check is any of the checkpoint checks below, so there is no expression language to learn:
+
+```json
+{ "if": { "equals": "${stepNumber(counter)}", "to": "${stepCount(counter)}" },
+  "steps": [ { "click": { "button": "Run this step" } } ],
+  "else": [ { "click": { "button": "Skip this step" } } ] }
+```
+
+`whileShows` is for an app that asks about one thing at a time in a window of its own, such as each step of a removal.
+Each time the window shows, its steps run; once `untilText`'s text says it is done, the run carries on. Another window
+showing up instead, or nothing happening for `within` seconds (5 minutes when left out), is stuck. With `as`, it keeps
+the text that said it was done.
+
+```json
+{ "whileShows": { "window": "Remove install" },
+  "untilText": "statusText", "matches": "^(Removed |Removal stopped)", "new": true,
+  "steps": [ { "call": "removalStep", "with": { "choice": "run" } } ] }
+```
 
 ## Macros
 
@@ -147,11 +173,12 @@ Each check says what should be true and, when it isn't, what was found instead. 
 | `appSetting` | a .config file, `key`, `equals` |
 | `connectionString` | a .config file, `name` |
 | `fileContains`, `logged` | a file, `text` |
-| `fileCount` | a folder, `pattern`, `equals`, `folders` |
+| `fileCount` | a folder, `pattern`, `equals`, `folders`, `recursive` |
 | `fileVersion` | an exe, `startsWith` |
 | `output` | a program, `args`, `contains` |
 | `lastLine` | a file being written, `contains`; waits 30 seconds for it |
-| `equals`, `matches`, `contains` | a value, usually `${kept}`, and `to`, `regex` or `text` |
+| `equals`, `matches`, `contains`, `lacks` | a value, usually `${kept}`, and `to`, `regex` or `text` |
+| `shows` | a target that should be in the app now |
 | `nothingLeft` | the suite's leftovers script finds nothing |
 
 | Tool | Opens |

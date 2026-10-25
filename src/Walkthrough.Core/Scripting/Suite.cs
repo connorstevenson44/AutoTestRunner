@@ -241,12 +241,32 @@ public sealed class Suite
                 case "repeat":
                     CheckSteps(step["steps"] as JsonArray ?? [], at, problems);
                     break;
+                case "whileShows":
+                    if (step["untilText"] is { } until)
+                        CheckTarget(until, at, problems);
+                    else
+                        problems.Add($"{at}: whileShows needs untilText, the control that says when it is done.");
+                    CheckSteps(step["steps"] as JsonArray ?? [], at, problems);
+                    break;
+                case "if":
+                    CheckChecks(new JsonArray(step["if"]?.DeepClone()), at, problems);
+                    CheckSteps(step["steps"] as JsonArray ?? [], at, problems);
+                    CheckSteps(step["else"] as JsonArray ?? [], at + ", else", problems);
+                    break;
                 case "checkpoint":
-                    CheckItems(step["checks"] as JsonArray, Vocabulary.Checks, Vocabulary.CommonCheckKeys, "check", at, problems);
+                    CheckChecks(step["checks"] as JsonArray, at, problems);
                     CheckItems(step["tools"] as JsonArray, Vocabulary.Tools, new HashSet<string>(["label"]), "tool", at, problems);
                     break;
             }
         }
+    }
+
+    private void CheckChecks(JsonArray? checks, string at, List<string> problems)
+    {
+        CheckItems(checks, Vocabulary.Checks, Vocabulary.CommonCheckKeys, "check", at, problems);
+        foreach (var check in checks ?? [])
+            if (check is JsonObject { } item && item["shows"] is { } target)
+                CheckTarget(target, at, problems);
     }
 
     private void CheckTarget(JsonNode? target, string at, List<string> problems)

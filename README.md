@@ -79,7 +79,7 @@ keep working when the wording changes.
 | `Walkthrough.Core` | The script format, its loader and checks, and the runner: pace, pausing, checkpoints, stuck, results. Plain .NET, tested on any OS against a fake app. |
 | `Walkthrough.FlaUI` | The driver: finding controls, scrolling virtualised lists, buttons that only show on hover, Win32 message boxes and file pickers, screenshots and tree dumps. |
 | `Walkthrough.Cli` | `walk`: the command line, and the panel and keys of a watched run. |
-| `schema/` | JSON schemas for suite.json, elements.json, macros and cases. A test keeps them in step with the runner. |
+| `schema/` | JSON schemas for suite.json, elements.json, macros and cases, written by `python3 tools/schema.py`. A test keeps them in step with the runner. |
 
 The first suite is [NetDeploy's](https://github.com/connorstevenson44/NetDeploy/tree/main/tests/walkthrough), ported from
 an AutoHotkey runner whose behaviour this keeps.

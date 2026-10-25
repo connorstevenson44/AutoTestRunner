@@ -123,7 +123,7 @@
             "startsWith",
             "contains"
           ],
-          "description": "How name is compared. exact when left out."
+          "description": "How name and helpText are compared. exact when left out."
         },
         "within": {
           "$ref": "#/definitions/target",
@@ -246,6 +246,12 @@
           "$ref": "#/definitions/repeatStep"
         },
         {
+          "$ref": "#/definitions/whileShowsStep"
+        },
+        {
+          "$ref": "#/definitions/ifStep"
+        },
+        {
           "$ref": "#/definitions/setStep"
         },
         {
@@ -308,6 +314,12 @@
         },
         {
           "$ref": "#/definitions/containsCheck"
+        },
+        {
+          "$ref": "#/definitions/lacksCheck"
+        },
+        {
+          "$ref": "#/definitions/showsCheck"
         },
         {
           "$ref": "#/definitions/nothingLeftCheck"
@@ -471,6 +483,10 @@
             "mouse"
           ],
           "description": "mouse clicks with the mouse, for controls UI Automation can't invoke."
+        },
+        "whileEnabled": {
+          "type": "boolean",
+          "description": "Clicks it again and again while it is there and can be used, such as Up until the top folder. Not being there is fine."
         },
         "say": {
           "type": "string",
@@ -850,6 +866,10 @@
           "type": "string",
           "description": "Waits until it is exactly this."
         },
+        "matches": {
+          "type": "string",
+          "description": "Waits until it matches this .NET regex."
+        },
         "changes": {
           "type": "boolean",
           "description": "Waits until it differs from when the step started."
@@ -1198,6 +1218,130 @@
         "item": {
           "type": "string",
           "description": "The variable each item goes in. item when left out."
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "whileShowsStep": {
+      "type": "object",
+      "required": [
+        "whileShows",
+        "steps",
+        "untilText"
+      ],
+      "properties": {
+        "whileShows": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/target"
+            }
+          ],
+          "description": "Runs steps each time a control shows, such as a window asking about each step of a removal, until another control's text says it is done."
+        },
+        "steps": {
+          "$ref": "#/definitions/steps"
+        },
+        "untilText": {
+          "$ref": "#/definitions/target",
+          "description": "The control whose text says it is done, such as a status bar."
+        },
+        "startsWith": {
+          "type": "string",
+          "description": "Done when untilText starts with this."
+        },
+        "contains": {
+          "type": "string",
+          "description": "Done when untilText has this in it."
+        },
+        "equals": {
+          "type": "string",
+          "description": "Done when untilText is exactly this."
+        },
+        "matches": {
+          "type": "string",
+          "description": "Done when untilText matches this .NET regex."
+        },
+        "new": {
+          "type": "boolean",
+          "description": "Only text that differs from the app's status before the last click counts."
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "ifStep": {
+      "type": "object",
+      "required": [
+        "if",
+        "steps"
+      ],
+      "properties": {
+        "if": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/check"
+            }
+          ],
+          "description": "Runs steps when a check passes, and else when it doesn't."
+        },
+        "steps": {
+          "$ref": "#/definitions/steps"
+        },
+        "else": {
+          "$ref": "#/definitions/steps"
         },
         "say": {
           "type": "string",
@@ -1718,7 +1862,12 @@
           ]
         },
         "folders": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Counts folders instead of files."
+        },
+        "recursive": {
+          "type": "boolean",
+          "description": "Counts inside the folders in it too."
         },
         "label": {
           "type": "string",
@@ -1899,6 +2048,59 @@
         "text": {
           "type": "string",
           "description": "Text it should have."
+        },
+        "label": {
+          "type": "string",
+          "description": "What the check says instead of its own wording."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        }
+      },
+      "additionalProperties": false
+    },
+    "lacksCheck": {
+      "type": "object",
+      "required": [
+        "lacks",
+        "text"
+      ],
+      "properties": {
+        "lacks": {
+          "type": "string",
+          "description": "A value, usually ${captured}."
+        },
+        "text": {
+          "type": "string",
+          "description": "Text it shouldn't have."
+        },
+        "label": {
+          "type": "string",
+          "description": "What the check says instead of its own wording."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        }
+      },
+      "additionalProperties": false
+    },
+    "showsCheck": {
+      "type": "object",
+      "required": [
+        "shows"
+      ],
+      "properties": {
+        "shows": {
+          "$ref": "#/definitions/target",
+          "description": "A control that should be in the app now."
         },
         "label": {
           "type": "string",
