@@ -374,15 +374,23 @@ internal sealed class Panel : Window, IRunHost
     /// <summary>Says what stopped the run before it could start, or went wrong in the runner itself.</summary>
     public void Tell(string message) => OnUi(() =>
     {
-        _ = Ask(Ui.Fail, Icons.Warning, "Can't go on", message, [(Icons.Cross, "Close")]).ContinueWith(_ => Dispatcher.BeginInvoke(Close));
+        _ = Ask(Ui.Fail, Icons.Warning, "Can't go on", message, [(Icons.Cross, "Close")]).ContinueWith(_ => Dispatcher.BeginInvoke(() =>
+        {
+            // Closing the panel answers the question too, by which time it is closed already.
+            if (IsLoaded)
+                Close();
+        }));
     });
 
     // ===== Keys, buttons and state =====
 
     // Space, Enter and Esc belong to the run unless the person is typing: in a text box they clicked into themselves,
-    // or in one of the runner's own windows, such as a question. While the run is stuck they do nothing.
+    // or in one of the runner's own windows, such as a note. While the run is stuck, or a question other than whether
+    // to stop is showing, they do nothing: the question's buttons answer it.
     private bool OnKey(int key)
     {
+        if (_answer is not null && !_askingToStop)
+            return false;
         var foreground = GetForegroundWindow();
         if (foreground != _hwnd)
         {
@@ -567,7 +575,6 @@ internal sealed class Panel : Window, IRunHost
             Child = stack, BorderBrush = color, BorderThickness = new Thickness(3, 0, 0, 0), CornerRadius = new CornerRadius(4),
             Background = color == Ui.Fail ? Ui.FailSoft : Ui.Surface, Padding = new Thickness(12, 10, 12, 4), Margin = new Thickness(0, 6, 0, 0),
         };
-        _asking = true;
         System.Media.SystemSounds.Exclamation.Play();
         return answer.Task;
     }
@@ -578,7 +585,6 @@ internal sealed class Panel : Window, IRunHost
         if (_answer is not { } answer)
             return;
         _answer = null;
-        _asking = false;
         _question.Content = null;
         answer.TrySetResult(index);
     }
