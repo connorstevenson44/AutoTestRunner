@@ -32,11 +32,11 @@ jobs:
         with:
           global-json-file: global.json
 
-      - name: Publish autotest
+      - name: Publish autotest.exe
         run: dotnet publish src/AutoTestRunner.Cli --configuration Release --output artifacts/autotest
 
-      - name: Check the sample suite
-        run: artifacts/autotest/autotest.exe check samples/demo
+      - name: Validate the sample suite
+        run: artifacts/autotest/autotest.exe validate samples/demo
 
       # Plays a made-up run in the launcher and the panel, and saves a picture of each state: it shows the windows
       # open and draw without an error, and what they look like, in the screenshots artifact.
