@@ -86,7 +86,7 @@ internal sealed partial class BuilderPanel
         picks.Children.Add(PickButton(Icons.Pointer, "Click", PickTools.Click));
         picks.Children.Add(PickButton(Icons.Mouse, "Point at", PickTools.Hover));
         picks.Children.Add(PickButton(Icons.Wait, "Wait for it", PickTools.WaitFor, PickTools.WaitGone, PickTools.WaitText, PickTools.WaitEnabled));
-        picks.Children.Add(PickButton(Icons.Note, "Keep its text", PickTools.Keep));
+        picks.Children.Add(PickButton(Icons.Copy, "Keep its text", PickTools.Keep));
         picks.Children.Add(PickButton(Icons.CheckList, "Check it", [PickTools.CheckShows, PickTools.CheckText, null, .. PickTools.Checks]));
         picks.Children.Add(PickButton(Icons.Name, "Name it", PickTools.Name));
         picks.Children.Add(PickButton(Icons.More, "More", PickTools.SetValue, PickTools.Watch, PickTools.AfterClick));
