@@ -17,13 +17,15 @@ public static partial class CaseWriter
     private static readonly JsonReaderOptions ReadOptions = new() { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
 
     /// <summary>
-    /// Saves the draft, and returns the case file it went in; with the controls it named, the hooks it added, and the
-    /// review lines for the cases that carry on from it.
+    /// Saves the draft, and returns the case file it went in; with the controls it named, the hooks and macros it
+    /// added, and the review lines for the cases that carry on from it.
     /// </summary>
     public static string Save(Suite suite, CaseDraft draft)
     {
         AddElements(suite, draft.NewElements);
         AddHooks(suite, draft.NewWatch, draft.NewAfterClick);
+        foreach (var (name, macro) in draft.NewMacros)
+            MacroMaker.Save(suite, name, macro);
         foreach (var (file, why) in draft.Review)
             File.WriteAllText(file, Flag(File.ReadAllText(file), why));
         if (draft.Editing is { } existing)

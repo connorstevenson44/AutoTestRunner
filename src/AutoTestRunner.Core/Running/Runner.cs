@@ -40,6 +40,9 @@ public sealed class Runner
     // Macros made while building, which the suite as it was loaded doesn't have.
     private readonly Dictionary<string, Macro> _made = new(StringComparer.Ordinal);
 
+    // The case running, for what the panel says about a step it is stuck on.
+    private Case? _case;
+
     // When the running case started, for checks of logs written since.
     private DateTime _since = DateTime.Now;
 
@@ -140,7 +143,7 @@ public sealed class Runner
         {
             var item = cases[index];
             _current = new CaseResult(item.Number, item.Name);
-            _since = DateTime.Now;
+            (_case, _since) = (item, DateTime.Now);
             _results.Cases.Add(_current);
             _view.CaseStarted(index + 1, cases.Count, item);
             _results.Log("CASE", $"{item.Number}. {item.Name}");
@@ -198,6 +201,12 @@ public sealed class Runner
     /// <summary>The variables the steps played so far can use, with what each holds now: the suite's and those kept.</summary>
     public IReadOnlyList<(string Name, string Text)> Values() => (_played ?? _globals).All();
 
+    /// <summary>
+    /// The step the run is stuck on while it asks what to do, or null. The panel can change the step's control, or the
+    /// suite's element it uses, before it answers Try again.
+    /// </summary>
+    public StuckStep? StuckAt { get; private set; }
+
     /// <summary>A macro made while building, for the steps that call it to play before the suite is loaded again.</summary>
     public void Use(Macro macro) => _made[macro.Name] = macro;
 
@@ -221,7 +230,15 @@ public sealed class Runner
                 }
                 catch (StuckException ex)
                 {
-                    Stuck(ex);
+                    StuckAt = new StuckStep(step, ScriptVocabulary.KindOf(step), _case);
+                    try
+                    {
+                        Stuck(ex);
+                    }
+                    finally
+                    {
+                        StuckAt = null;
+                    }
                 }
                 catch (ScriptException ex)
                 {

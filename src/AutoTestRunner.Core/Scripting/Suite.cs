@@ -157,6 +157,17 @@ public sealed class Suite
         return suite;
     }
 
+    /// <summary>
+    /// Finds an element another way from now on, as when a run stuck on it has it picked again; elements.json is
+    /// written separately.
+    /// </summary>
+    public void Redefine(string element, JsonNode target)
+    {
+        if (Elements is not IDictionary<string, JsonNode> elements || !elements.ContainsKey(element))
+            throw new ArgumentException($"There is no element called {element} to change.", nameof(element));
+        elements[element] = target.DeepClone();
+    }
+
     /// <summary>The case with this id, such as "open-package", or this number.</summary>
     public Case? Find(string idOrNumber) =>
         int.TryParse(idOrNumber, out var number)

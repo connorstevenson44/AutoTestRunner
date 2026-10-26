@@ -241,4 +241,43 @@ public sealed class BuilderToolsTests : IDisposable
 
         Assert.Equal([("exe", "App.exe"), ("name", "inner")], inner.All());
     }
+
+    [Fact]
+    public void A_stuck_step_gets_the_control_picked_for_it_in_elements_json_or_in_its_case()
+    {
+        var suite = Make(("01-a.json", "{\n  \"name\": \"A\",\n  \"steps\": [\n    { \"click\": \"addButton\" },\n    { \"click\": { \"button\": \"OK\" }, \"say\": \"Click OK\" }\n  ]\n}\n"));
+        var item = suite.Cases[0];
+        var onElement = new StuckStep(item.Steps[0]!.AsObject(), "click", item);
+        var onStep = new StuckStep(item.Steps[1]!.AsObject(), "click", item);
+
+        var toElement = TargetFixer.Where(suite, onElement)!;
+        var toStep = TargetFixer.Where(suite, onStep)!;
+        TargetFixer.Save(suite, onElement, toElement, JsonNode.Parse("""{ "id": "AddButton" }""")!);
+        TargetFixer.Save(suite, onStep, toStep, JsonNode.Parse("""{ "id": "OkButton" }""")!);
+
+        Assert.Equal("elements.json, as addButton", toElement.Shown);
+        Assert.Equal("step 2 of 01-a.json", toStep.Shown);
+        Assert.Equal("AddButton", suite.Elements["addButton"]["id"]!.GetValue<string>());
+        Assert.Equal("OkButton", item.Steps[1]!["click"]!["id"]!.GetValue<string>());
+        var reloaded = Suite.Load(suite.Folder);
+        Assert.Equal("AddButton", reloaded.Elements["addButton"]["id"]!.GetValue<string>());
+        Assert.Contains("""    { "click": { "id": "OkButton" }, "say": "Click OK" }""", File.ReadAllText(item.File));
+        Assert.Null(TargetFixer.Where(suite, new StuckStep(new JsonObject { ["wait"] = 1 }, "wait", item)));
+    }
+
+    [Fact]
+    public void The_runner_says_which_step_it_is_stuck_on_while_it_asks()
+    {
+        var suite = Make(("01-a.json", """{ "name": "A", "steps": [ { "click": "addButton" } ] }"""));
+        StuckStep? seen = null;
+        Runner? runner = null;
+        var view = new FakeRunView { OnStuck = () => seen = runner!.StuckAt };
+        runner = new Runner(suite, new FakeDriver(), new FakeMachine(), view, new RunControl(unattended: false) { TimeoutScale = 0.01 }, new Results(Path.Combine(_folder, "results"), console: null));
+
+        runner.Run(suite.Cases);
+
+        Assert.Equal("click", seen?.Kind);
+        Assert.Equal("addButton", seen?.Target?.GetValue<string>());
+        Assert.Null(runner.StuckAt);
+    }
 }

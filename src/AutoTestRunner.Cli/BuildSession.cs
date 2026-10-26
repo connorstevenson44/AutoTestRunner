@@ -42,6 +42,8 @@ internal sealed class BuildSession
         _panel.RunTo += step => Post(new BuildInput(BuildInputKind.RunTo, Step: step));
         _panel.RollBack += step => Post(new BuildInput(BuildInputKind.RollBack, Step: step));
         _panel.EditFrom += (step, rewind) => Post(new BuildInput(BuildInputKind.EditFrom, Step: step, Rewind: rewind));
+        _panel.Try += (check, answer) => Post(new BuildInput(BuildInputKind.Try, Check: check, Answer: answer));
+        _panel.MadeMacro += macro => Post(new BuildInput(BuildInputKind.Use, Macro: macro));
         _panel.Loaded += (_, _) =>
         {
             // A low-level hook runs on the thread that set it, which must pump messages: this one does.

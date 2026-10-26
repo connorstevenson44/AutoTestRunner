@@ -38,9 +38,13 @@ internal sealed class FakeRunView(StuckAnswer answer = StuckAnswer.Stop) : IRunV
     public void ShowCheckpoint(string title, IReadOnlyList<CheckResult> checks, IReadOnlyList<string> look, IReadOnlyList<ToolButton> tools) => Checks.AddRange(checks);
     public void ShowCarryingOn(TimeSpan after) { }
 
+    /// <summary>Called as the run asks what to do when it is stuck.</summary>
+    public Action? OnStuck { get; init; }
+
     public StuckAnswer AskStuck(string message, string screenshot)
     {
         StuckCount++;
+        OnStuck?.Invoke();
         return answer;
     }
 

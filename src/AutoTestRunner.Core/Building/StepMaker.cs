@@ -20,6 +20,16 @@ public static class StepMaker
         return new DraftStep(json, KindOf(verb), target) { Source = source, State = DraftStepState.NotPlayed };
     }
 
+    /// <summary>A step made in the panel from its JSON, such as a macro's call or a repeat, with how it finds its control.</summary>
+    public static DraftStep FromJson(JsonObject json, DraftStepState state)
+    {
+        var verb = ScriptVocabulary.KindOf(json);
+        var target = ScriptVocabulary.Steps.TryGetValue(verb, out var kind) && kind.Takes == Takes.Target && json[verb] is { } node
+            ? TargetSuggester.Describe(node)
+            : null;
+        return new DraftStep(json, KindOf(verb), target) { State = state };
+    }
+
     /// <summary>Runs a .ps1 file in the suite, given relative to its folder.</summary>
     public static DraftStep Script(string path)
     {

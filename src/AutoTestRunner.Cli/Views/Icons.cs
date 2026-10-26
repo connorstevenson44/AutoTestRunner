@@ -21,6 +21,8 @@ internal static class Icons
     public const string Copy = "", Expand = "", Collapse = "", Down = "", Back = "", Spinner = "";
     public const string Record = "", Pick = "", Edit = "", Add = "", Delete = "", Save = "", Up = "";
     public const string Admin = "", Suites = "", Name = "", Tag = "";
+    public const string Values = "", Repeat = "", Branch = "", Macro = "", Repair = "", Blocked = "";
+    public const string NewFolder = "", Ids = "", Controls = "", More = "";
 
     public static string Of(ActivityKind kind) => kind switch
     {

@@ -110,6 +110,12 @@ internal sealed class BuildWorker
                 case BuildInputKind.EditFrom when input.Step is { } step:
                     GoTo(step, input.Rewind, record: true);
                     break;
+                case BuildInputKind.Try when input.Check is { } check:
+                    Try(check, input.Answer);
+                    break;
+                case BuildInputKind.Use when input.Macro is { } macro:
+                    _runner.Use(macro);
+                    break;
             }
         }
     }
@@ -280,6 +286,14 @@ internal sealed class BuildWorker
         _panel.Ready(add && problem is not null ? $"That didn't work, so it isn't a step: {problem}" : null);
     }
 
+    // Runs a check from a form against the app as it is, and says how it went.
+    private void Try(JsonObject check, Action<CheckResult>? answer)
+    {
+        CheckResult? result = null;
+        var problem = Played(() => result = _runner.TryCheck(InlineCheck(check)));
+        answer?.Invoke(result ?? new CheckResult("The check", false, problem));
+    }
+
     private void Locate(DraftStep? step)
     {
         if (step?.Target is not { } target)
@@ -444,6 +458,7 @@ internal sealed class BuildWorker
         finally
         {
             _under = null;
+            _panel.Values = _runner.Values();
         }
     }
 
@@ -483,11 +498,29 @@ internal sealed class BuildWorker
 
     // A step for the runner, which knows only the suite's elements: a control named while building is given by how
     // it is found instead.
-    private JsonObject Inline(DraftStep step)
+    private JsonObject Inline(DraftStep step) => Inline(step.Json);
+
+    // The same for a step in a repeat or an if, and an if's check.
+    private JsonObject Inline(JsonObject step)
     {
-        var copy = step.Json.DeepClone().AsObject();
-        if (copy[step.Verb] is { } target)
-            copy[step.Verb] = Inline(target);
+        var copy = step.DeepClone().AsObject();
+        var verb = ScriptVocabulary.KindOf(copy);
+        if (ScriptVocabulary.Steps.TryGetValue(verb, out var kind) && kind.Takes == Takes.Target && copy[verb] is { } target)
+            copy[verb] = Inline(target);
+        if (verb == "if" && copy["if"] is JsonObject condition)
+            copy["if"] = InlineCheck(condition);
+        foreach (var key in new[] { "steps", "else" })
+            if (copy[key] is JsonArray inner)
+                copy[key] = new JsonArray([.. inner.OfType<JsonObject>().Select(Inline)]);
+        return copy;
+    }
+
+    // A check of a control named while building, with the control given by how it is found.
+    private JsonObject InlineCheck(JsonObject check)
+    {
+        var copy = check.DeepClone().AsObject();
+        if (Kinds.Of(copy, ScriptVocabulary.Checks) is { } kind && ScriptVocabulary.ControlChecks.Contains(kind) && copy[kind] is { } target)
+            copy[kind] = Inline(target);
         return copy;
     }
 
