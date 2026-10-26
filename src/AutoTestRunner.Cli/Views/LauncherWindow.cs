@@ -372,6 +372,7 @@ internal sealed class LauncherWindow : Window
         public void CommandStarted(string line, string? script) => dispatcher.BeginInvoke(DispatcherPriority.Normal, () => feed.CommandStarted(line, script));
         public void CommandOutput(string line, bool error) => dispatcher.BeginInvoke(DispatcherPriority.Normal, () => feed.CommandOutput(line, error));
         public void CommandFinished(int exitCode, TimeSpan took) => dispatcher.BeginInvoke(DispatcherPriority.Normal, () => feed.CommandFinished(exitCode, took));
+        public void StepFailed(string message) { }
         public void ShowCheckpoint(string title, IReadOnlyList<CheckResult> checks, IReadOnlyList<string> look, IReadOnlyList<ToolButton> tools) { }
         public void ShowCarryingOn(TimeSpan after) { }
         public StuckAnswer AskStuck(string message, string screenshot) => StuckAnswer.Stop;

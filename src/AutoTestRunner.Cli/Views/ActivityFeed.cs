@@ -10,8 +10,9 @@ namespace AutoTestRunner.Cli.Views;
 
 /// <summary>
 /// Everything the run has done, newest at the bottom: each case with its steps, the commands it ran with what they
-/// printed as they printed it, and its checkpoints. A case that passed folds away when it ends; a click on a case or
-/// command opens and closes it. It keeps the newest in view unless you scroll up, and a button brings you back.
+/// printed as they printed it, and its checkpoints. A step that failed is red, and pointing at it says why. A case that
+/// passed folds away when it ends; a click on a case or command opens and closes it. It keeps the newest in view unless
+/// you scroll up, and a button brings you back.
 /// </summary>
 internal sealed class ActivityFeed : Grid
 {
@@ -24,6 +25,7 @@ internal sealed class ActivityFeed : Grid
     private readonly string _before;
     private Group? _group;
     private CommandRow? _command;
+    private Grid? _step;
     private bool _follow = true;
 
     /// <param name="before">The name of the group for what happens before the first case.</param>
@@ -65,7 +67,28 @@ internal sealed class ActivityFeed : Grid
         _group = null;
     }
 
-    public void Step(ActivityKind kind, string text) => Body.Children.Add(Row(Icons.Of(kind), text, Ui.Ink));
+    public void Step(ActivityKind kind, string text) => Body.Children.Add(_step = Row(Icons.Of(kind), text, Ui.Ink));
+
+    /// <summary>The last step failed, though the case carries on: it turns red, and pointing at it says why.</summary>
+    public void StepFailed(string message)
+    {
+        var group = _group ??= AddGroup();
+        group.Failed(message);
+        if (_step is null || !group.Body.Children.Contains(_step))
+        {
+            group.Body.Children.Add(_step = Row(Icons.Cross, message, Ui.Fail));
+            return;
+        }
+        // A row is its icon, its words and the time.
+        var icon = (TextBlock)_step.Children[0];
+        icon.Text = Icons.Cross;
+        icon.Foreground = Ui.Fail;
+        ((TextBlock)_step.Children[1]).Foreground = Ui.Fail;
+        _step.Background = Ui.FailSoft;
+        _step.ToolTip = new ToolTip { Content = Ui.Words(message, 12, Ui.Ink), MaxWidth = 380 };
+        ToolTipService.SetInitialShowDelay(_step, 150);
+        ToolTipService.SetShowDuration(_step, 60_000);
+    }
 
     /// <summary>A wait that took long enough to notice, once it is over.</summary>
     public void Waited(string what, TimeSpan took) => Body.Children.Add(Row(Icons.Wait, $"{what} · {Ui.Took(took)}", Ui.Faint, small: true));
@@ -86,8 +109,14 @@ internal sealed class ActivityFeed : Grid
         _command = null;
     }
 
-    public void Checkpoint(string title, IReadOnlyList<CheckResult> checks, IReadOnlyList<string> look, IReadOnlyList<ToolButton> tools, Action<ToolButton> open) =>
-        Body.Children.Add(new CheckpointCard(title, checks, look, tools, open));
+    /// <summary>Adds a checkpoint's card, red if a check failed or a step since the last checkpoint did. Says which.</summary>
+    public bool Checkpoint(string title, IReadOnlyList<CheckResult> checks, IReadOnlyList<string> look, IReadOnlyList<ToolButton> tools, Action<ToolButton> open)
+    {
+        var group = _group ??= AddGroup();
+        var card = new CheckpointCard(title, group.TakeFailures(), checks, look, tools, open);
+        group.Body.Children.Add(card);
+        return card.Failed;
+    }
 
     // Steps before the first case, such as cleaning up first, go in a group of their own.
     private StackPanel Body => (_group ??= AddGroup()).Body;
@@ -125,6 +154,7 @@ internal sealed class ActivityFeed : Grid
     /// <summary>A case: a header with its number, name and how it went, over its steps.</summary>
     private sealed class Group : StackPanel
     {
+        private readonly List<string> _failures = [];
         private readonly Border _badge;
         private readonly TextBlock _chevron, _took;
 
@@ -158,12 +188,22 @@ internal sealed class ActivityFeed : Grid
 
         public StackPanel Body { get; }
 
+        public void Failed(string message) => _failures.Add(message);
+
+        /// <summary>The steps that failed since the last checkpoint, for the next one to show.</summary>
+        public List<string> TakeFailures()
+        {
+            var failures = _failures.ToList();
+            _failures.Clear();
+            return failures;
+        }
+
         public void Finish(CaseResult result)
         {
             var color = Ui.Of(result.Status);
             _badge.Background = color;
             _badge.Child = Ui.IconText(Icons.Of(result.Status), $"{result.Number}", Brushes.White, 11, FontWeights.Bold);
-            _badge.ToolTip = result.Status.ToString();
+            _badge.ToolTip = result.Failures.Count == 0 ? result.Status.ToString() : $"{result.Status}:\n{string.Join("\n", result.Failures)}";
             _took.Text = Ui.Took(result.Duration);
             if (result.Status == CaseStatus.Passed)
                 Fold(true);
@@ -299,12 +339,16 @@ internal sealed class ActivityFeed : Grid
         }
     }
 
-    /// <summary>A checkpoint: what it checked, each with a tick or a cross, what to look at, and buttons that open things.</summary>
+    /// <summary>
+    /// A checkpoint: the steps before it that failed, what it checked, each with a tick or a cross, what to look at, and
+    /// buttons that open things. Red if anything failed.
+    /// </summary>
     private sealed class CheckpointCard : Border
     {
-        public CheckpointCard(string title, IReadOnlyList<CheckResult> checks, IReadOnlyList<string> look, IReadOnlyList<ToolButton> tools, Action<ToolButton> open)
+        public CheckpointCard(string title, IReadOnlyList<string> stepFailures, IReadOnlyList<CheckResult> checks, IReadOnlyList<string> look,
+            IReadOnlyList<ToolButton> tools, Action<ToolButton> open)
         {
-            var failed = checks.Any(check => !check.Passed);
+            var failed = Failed = stepFailures.Count > 0 || checks.Any(check => !check.Passed);
             BorderBrush = failed ? Ui.Fail : checks.Count > 0 ? Ui.Pass : Ui.Line;
             BorderThickness = new Thickness(3, 0, 0, 0);
             Background = failed ? Ui.FailSoft : Ui.Surface;
@@ -320,15 +364,16 @@ internal sealed class ActivityFeed : Grid
             heading.Children.Add(words);
             stack.Children.Add(heading);
 
+            foreach (var failure in stepFailures)
+            {
+                stack.Children.Add(Line(Icons.Cross, "A step before this checkpoint failed", Ui.Fail));
+                stack.Children.Add(Why(failure));
+            }
             foreach (var check in checks)
             {
                 stack.Children.Add(Line(check.Passed ? Icons.Tick : Icons.Cross, check.Label, check.Passed ? Ui.Pass : Ui.Fail));
                 if (!check.Passed && check.Detail is { } detail)
-                {
-                    var why = Ui.Words(detail, 11.5, Ui.Fail);
-                    why.Margin = new Thickness(22, 0, 0, 3);
-                    stack.Children.Add(why);
-                }
+                    stack.Children.Add(Why(detail));
             }
             foreach (var item in look)
                 stack.Children.Add(Line(Icons.Look, item, Ui.Accent));
@@ -346,6 +391,15 @@ internal sealed class ActivityFeed : Grid
                 stack.Children.Add(buttons);
             }
             Child = stack;
+        }
+
+        public bool Failed { get; }
+
+        private static TextBlock Why(string text)
+        {
+            var why = Ui.Words(text, 11.5, Ui.Fail);
+            why.Margin = new Thickness(22, 0, 0, 3);
+            return why;
         }
 
         private static Grid Line(string glyph, string text, Brush color)

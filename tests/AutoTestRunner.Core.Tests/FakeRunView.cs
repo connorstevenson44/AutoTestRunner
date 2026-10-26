@@ -16,6 +16,9 @@ internal sealed class FakeRunView(StuckAnswer answer = StuckAnswer.Stop) : IRunV
     /// <summary>Each command: "start line", then "out line" or "err line" for what it printed, then "exit code".</summary>
     public List<string> Commands { get; } = [];
 
+    /// <summary>The failures of steps the case carried on after.</summary>
+    public List<string> StepFailures { get; } = [];
+
     public int StuckCount { get; private set; }
 
     public void CaseStarted(int index, int count, Case item) => Shown.Add($"case {item.Name}");
@@ -31,6 +34,7 @@ internal sealed class FakeRunView(StuckAnswer answer = StuckAnswer.Stop) : IRunV
     public void CommandStarted(string line, string? script) => Commands.Add("start " + line);
     public void CommandOutput(string line, bool error) => Commands.Add((error ? "err " : "out ") + line);
     public void CommandFinished(int exitCode, TimeSpan took) => Commands.Add($"exit {exitCode}");
+    public void StepFailed(string message) => StepFailures.Add(message);
     public void ShowCheckpoint(string title, IReadOnlyList<CheckResult> checks, IReadOnlyList<string> look, IReadOnlyList<ToolButton> tools) => Checks.AddRange(checks);
     public void ShowCarryingOn(TimeSpan after) { }
 

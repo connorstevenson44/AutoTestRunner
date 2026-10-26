@@ -336,7 +336,7 @@ public sealed class Runner
                 ShowStep(text, ActivityKind.Type);
                 _driver.Point(control, text);
                 if (!_driver.ReplaceText(control, pattern, Text("replacement") ?? ""))
-                    Fail($"The text has nothing matching {pattern}, so I couldn't {Lower(text)}");
+                    FailStep($"The text has nothing matching {pattern}, so I couldn't {Lower(text)}");
                 Control.Wait(Control.Pace);
                 break;
             }
@@ -355,7 +355,7 @@ public sealed class Runner
                 var message = _driver.WaitDialog(title, Control.Scale(Within(DialogTimeout)));
                 ShowStep($"{say ?? $"Click {button}"}  ({title}: \"{message}\")", ActivityKind.Dialog);
                 if (Text("expect") is { } expect && !message.Contains(expect, StringComparison.Ordinal))
-                    Fail($"The \"{title}\" message was \"{message}\", expected \"{expect}\"");
+                    FailStep($"The \"{title}\" message was \"{message}\", expected \"{expect}\"");
                 Mark();
                 _driver.PressDialogButton(title, button);
                 Control.Wait(Control.Pace / 2);
@@ -442,7 +442,7 @@ public sealed class Runner
                 ShowStep(say ?? "Run a PowerShell script", ActivityKind.Command, CommandReportingMachine.CommandLine("powershell", arguments, null) + "\n" + script);
                 var output = _machine.PowerShell(script, arguments);
                 if (output.ExitCode != 0)
-                    Fail($"A PowerShell step failed with exit code {output.ExitCode}: {output.Output}");
+                    FailStep($"A PowerShell step failed with exit code {output.ExitCode}: {output.Output}");
                 KeepOutput(step, scope, output);
                 break;
             }
@@ -740,6 +740,13 @@ public sealed class Runner
     {
         _results.Log("FAIL", text);
         _current?.Failures.Add(text);
+    }
+
+    /// <summary>Records a failure of the step just shown, which the panel marks on it. The case carries on.</summary>
+    private void FailStep(string text)
+    {
+        Fail(text);
+        _view.StepFailed(text);
     }
 
     /// <summary>

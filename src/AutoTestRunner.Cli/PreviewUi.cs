@@ -116,6 +116,7 @@ internal static class PreviewUi
         Pause(600);
         view.CommandOutput("Get-Content : Cannot find path 'C:\\Apps\\Contoso.Orders\\qa\\heartbeat.txt' because it does not exist.", true);
         view.CommandFinished(1, TimeSpan.FromSeconds(0.8));
+        view.StepFailed("A PowerShell step failed with exit code 1: Get-Content : Cannot find path 'C:\\Apps\\Contoso.Orders\\qa\\heartbeat.txt' because it does not exist.");
         view.ShowStep("Check: qa was deployed from the command line", ActivityKind.Check);
         view.ShowCheckpoint("qa was deployed from the command line",
         [

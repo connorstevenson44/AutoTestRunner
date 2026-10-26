@@ -52,6 +52,8 @@ internal sealed class RunPanel : Window, IRunView
     private Timer? _typingPoll;
     private nint _hwnd;
     private int _caseIndex;
+    // Whether a step or check of the case running has failed, which a checkpoint's "Your turn" shows in red.
+    private bool _caseFailed;
 
     // What the run is waiting for, and since when; a command running counts too, but isn't added to the feed after.
     private string? _wait;
@@ -269,6 +271,7 @@ internal sealed class RunPanel : Window, IRunView
     {
         EndWait();
         _caseIndex = index - 1;
+        _caseFailed = false;
         _caseCount.Text = $"{index} / {count}";
         _caseName.Text = item.Name;
         _caseName.ToolTip = item.Covers;
@@ -317,12 +320,20 @@ internal sealed class RunPanel : Window, IRunView
         _feed.CommandFinished(exitCode, took);
     });
 
+    public void StepFailed(string message) => OnUi(() =>
+    {
+        _caseFailed = true;
+        _feed.StepFailed(message);
+    });
+
     public void ShowCheckpoint(string title, IReadOnlyList<CheckResult> checks, IReadOnlyList<string> look, IReadOnlyList<ToolButton> tools) => OnUi(() =>
     {
         EndWait();
-        _feed.Checkpoint(title, checks, look, tools, OpenTool);
-        if (checks.Any(check => !check.Passed))
+        if (_feed.Checkpoint(title, checks, look, tools, OpenTool))
+        {
+            _caseFailed = true;
             System.Media.SystemSounds.Exclamation.Play();
+        }
         else if (_control.StopAtCheckpoints || _control.StepByStep)
             System.Media.SystemSounds.Asterisk.Play();
     });
@@ -476,7 +487,9 @@ internal sealed class RunPanel : Window, IRunView
         {
             case HoldReason.Pause: SetState(Icons.Pause, "Paused", Ui.Hold, Ui.HoldSoft); break;
             case HoldReason.Step: SetState(Icons.Next, "Your step", Ui.Step, Ui.StepSoft, "Enter does it"); break;
-            case HoldReason.Checkpoint: SetState(Icons.Look, "Your turn", Ui.Pass, Ui.PassSoft, "Look it over, then Space carries on"); break;
+            case HoldReason.Checkpoint:
+                SetState(Icons.Look, "Your turn", _caseFailed ? Ui.Fail : Ui.Pass, _caseFailed ? Ui.FailSoft : Ui.PassSoft, "Look it over, then Space carries on");
+                break;
             case HoldReason.Stuck: SetState(Icons.Warning, "Stuck", Ui.Fail, Ui.FailSoft); break;
             default:
                 SetState(Icons.Running, _control.StepByStep ? "Doing it" : "Running", Ui.Accent, Ui.AccentSoft);

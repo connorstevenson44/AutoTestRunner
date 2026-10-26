@@ -33,6 +33,12 @@ public interface IRunView
 
     void CommandFinished(int exitCode, TimeSpan took);
 
+    /// <summary>
+    /// The step just shown failed, and the case carries on: a message box said something else, say. message says why.
+    /// A checkpoint's own checks show with it instead.
+    /// </summary>
+    void StepFailed(string message);
+
     void ShowCheckpoint(string title, IReadOnlyList<CheckResult> checks, IReadOnlyList<string> look, IReadOnlyList<ToolButton> tools);
 
     /// <summary>Shown at a checkpoint in a run that carries on by itself, which it does after the time given.</summary>

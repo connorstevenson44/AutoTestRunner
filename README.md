@@ -35,7 +35,9 @@ autotest preview-ui                 # plays a made-up run, to see the launcher a
 
 The panel shows the case and a bar of every case, coloured as each ends; the controls as icons, with their keys under
 them; what it is doing now, the command a step is about to run and what it is waiting for; and below, everything it
-has done: steps, checkpoints, and each command with its output, streaming while it runs, then its exit code.
+has done: steps, checkpoints, and each command with its output, streaming while it runs, then its exit code. A step
+that fails while the case carries on, such as a message box that says something else, turns red, and pointing at it
+says why; the next checkpoint is red too, and lists it.
 
 `--mode auto` (the default) shows each checkpoint for a few seconds and carries on; `pause-at-checkpoints` waits at
 each checkpoint; `step-by-step` waits for Enter before every step. The keys belong to the test unless you clicked into a text box
