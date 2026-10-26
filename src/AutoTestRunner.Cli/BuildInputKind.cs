@@ -6,6 +6,9 @@ internal enum BuildInputKind
     /// <summary>A click in the app while recording.</summary>
     Click,
 
+    /// <summary>A right-click in the app while recording, which may open a menu.</summary>
+    RightClick,
+
     /// <summary>A click that picks the control under it, while picking or with Ctrl held.</summary>
     Pick,
 

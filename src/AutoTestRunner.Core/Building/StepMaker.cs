@@ -62,6 +62,22 @@ public static class StepMaker
     public static DraftStep StartApp(Suite suite) =>
         new(new JsonObject { ["startApp"] = new JsonObject(), ["say"] = $"Start {suite.App.Window}" }, ActivityKind.App);
 
+    /// <summary>
+    /// A right-click on a control and the items of its menu picked in turn; with no items, only the right-click.
+    /// </summary>
+    public static DraftStep ContextMenu(TargetChoice target, ControlFacts control, IReadOnlyList<string> items)
+    {
+        if (items.Count == 0)
+            return Make("click", target, control, $"Right-click {control.Label}", ActivityKind.Click, ("how", "right"));
+        var json = new JsonObject
+        {
+            ["menu"] = new JsonArray([.. items.Select(item => (JsonNode?)JsonValue.Create(item))]),
+            ["on"] = target.Json.DeepClone(),
+            ["say"] = $"Pick {string.Join(" › ", items)} from {control.Label}'s menu",
+        };
+        return new DraftStep(json, ActivityKind.Click, control: control);
+    }
+
     public static DraftStep Click(TargetChoice target, ControlFacts control) =>
         Make("click", target, control, $"Click {control.Label}", ActivityKind.Click);
 

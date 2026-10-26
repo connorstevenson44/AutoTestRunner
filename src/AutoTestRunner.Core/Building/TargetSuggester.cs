@@ -77,6 +77,12 @@ public static class TargetSuggester
                 var with = (selector["with"] as JsonObject ?? []).Select(pair => pair.Value?.ToString());
                 return new TargetChoice(target, string.Join(' ', [element, .. with]), TargetQuality.Sturdy, $"Found by its name in elements.json, {element}.");
             }
+            case JsonObject selector when selector["cell"] is JsonObject cell:
+            {
+                var inside = selector["within"] is { } grid ? Describe(grid) : null;
+                return new TargetChoice(target, $"{cell["column"]} of row {cell["row"]}" + (inside is null ? "" : $" in {inside.Shown}"), TargetQuality.Sturdy,
+                    "Found by its row and column in the grid, which keep working when the grid's order changes.");
+            }
             case JsonObject selector:
             {
                 var inside = selector["within"] is { } within ? Describe(within) : null;

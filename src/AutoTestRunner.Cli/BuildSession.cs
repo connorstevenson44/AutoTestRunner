@@ -47,7 +47,7 @@ internal sealed class BuildSession
         _panel.Loaded += (_, _) =>
         {
             // A low-level hook runs on the thread that set it, which must pump messages: this one does.
-            _hook = new RecordingHook(OnDown, OnKeys, () => _playing);
+            _hook = new RecordingHook(OnDown, OnKeys, () => _playing, OnRight);
             var worker = new Thread(Work) { IsBackground = true, Name = "Builder" };
             worker.SetApartmentState(ApartmentState.MTA);
             worker.Start();
@@ -140,6 +140,13 @@ internal sealed class BuildSession
         var passOn = !pick && Desktop.IsDialog(window);
         _inputs.Add(new BuildInput(pick ? BuildInputKind.Pick : BuildInputKind.Click, x, y, PassOn: passOn));
         return pick || passOn;
+    }
+
+    // A right-click in the app while recording, which reaches the app: the menu it opens is recorded with it.
+    private void OnRight(int x, int y)
+    {
+        if (_panel.Mode == BuildMode.Recording && !_inputs.IsAddingCompleted && IsApp(Desktop.WindowAt(x, y)))
+            _inputs.Add(new BuildInput(BuildInputKind.RightClick, x, y));
     }
 
     // A key pressed in the app while recording. In a message box, Enter and Esc wait as its clicks do.

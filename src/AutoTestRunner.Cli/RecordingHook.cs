@@ -15,7 +15,7 @@ namespace AutoTestRunner.Cli;
 internal sealed class RecordingHook : IDisposable
 {
     private const int KeyboardHook = 13, MouseHook = 14;
-    private const int KeyDown = 0x0100, SystemKeyDown = 0x0104, LeftButtonDown = 0x0201, LeftButtonUp = 0x0202;
+    private const int KeyDown = 0x0100, SystemKeyDown = 0x0104, LeftButtonDown = 0x0201, LeftButtonUp = 0x0202, RightButtonDown = 0x0204;
     private const int LeftButton = 0x01, Control = 0x11, Shift = 0x10, Menu = 0x12;
 
     private readonly HookProc _keyboard, _mouse;
@@ -23,14 +23,16 @@ internal sealed class RecordingHook : IDisposable
     private readonly Func<int, int, bool, bool> _onDown;
     private readonly Func<string, bool> _onKeys;
     private readonly Func<bool> _playing;
+    private readonly Action<int, int>? _onRight;
     private bool _keepingUp;
 
     /// <param name="onDown">The left button went down at x, y, with whether Ctrl is held. True keeps the click from the app.</param>
     /// <param name="onKeys">A key a step can press was pressed, such as Enter or Ctrl+S. True keeps it from the app.</param>
     /// <param name="playing">Whether the builder is playing steps itself, when nothing is noticed.</param>
-    public RecordingHook(Func<int, int, bool, bool> onDown, Func<string, bool> onKeys, Func<bool> playing)
+    /// <param name="onRight">The right button went down at x, y. It always reaches the app.</param>
+    public RecordingHook(Func<int, int, bool, bool> onDown, Func<string, bool> onKeys, Func<bool> playing, Action<int, int>? onRight = null)
     {
-        (_onDown, _onKeys, _playing) = (onDown, onKeys, playing);
+        (_onDown, _onKeys, _playing, _onRight) = (onDown, onKeys, playing, onRight);
         _keyboard = OnKeyboard;
         _mouse = OnMouse;
         var module = GetModuleHandle(Process.GetCurrentProcess().MainModule?.ModuleName);
@@ -46,6 +48,8 @@ internal sealed class RecordingHook : IDisposable
 
     private nint OnMouse(int code, nint message, nint data)
     {
+        if (code >= 0 && message == RightButtonDown && _onRight is not null && !_playing())
+            _onRight(Marshal.ReadInt32(data), Marshal.ReadInt32(data, 4));
         if (code >= 0 && message is LeftButtonDown or LeftButtonUp)
         {
             var playing = _playing();
@@ -91,7 +95,8 @@ internal sealed class RecordingHook : IDisposable
         // Copy, paste, cut, undo, redo and select all belong to typing in a box.
         if (name is null || ctrl && !alt && name is "A" or "C" or "V" or "X" or "Z" or "Y")
             return null;
-        return (ctrl ? "Ctrl+" : "") + (alt ? "Alt+" : "") + (shift && (ctrl || alt || name.StartsWith('F')) ? "Shift+" : "") + name;
+        // Shift is kept with every key that gets here: letters and digits only do with Ctrl or Alt.
+        return (ctrl ? "Ctrl+" : "") + (alt ? "Alt+" : "") + (shift ? "Shift+" : "") + name;
     }
 
     private static bool Held(int key) => (GetAsyncKeyState(key) & 0x8000) != 0;

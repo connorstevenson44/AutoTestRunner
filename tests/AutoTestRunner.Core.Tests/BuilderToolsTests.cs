@@ -280,4 +280,30 @@ public sealed class BuilderToolsTests : IDisposable
         Assert.Equal("addButton", seen?.Target?.GetValue<string>());
         Assert.Null(runner.StuckAt);
     }
+
+    [Fact]
+    public void A_right_click_and_the_menu_items_after_it_make_one_menu_step_and_a_second_click_a_double_click()
+    {
+        var suite = Make(("01-a.json", """{ "name": "A", "steps": [] }"""));
+        var draft = new CaseDraft { Name = "A" };
+        var recorder = new Recorder(suite, draft, control => new TargetChoice(new JsonObject { ["name"] = control.Name }, control.Name, TargetQuality.Wording, ""));
+        var row = new ControlFacts("ListItem", "ORD-1001");
+
+        recorder.RightClicked(row);
+        Assert.Empty(recorder.Clicked(new ControlFacts("MenuItem", "Export")));
+        Assert.Empty(recorder.Clicked(new ControlFacts("MenuItem", "As CSV")));
+        var steps = recorder.Clicked(new ControlFacts("Button", "Save"));
+        recorder.Clicked(new ControlFacts("Button", "Again"));
+        var doubled = recorder.Doubled(new ControlFacts("Button", "Again"));
+        recorder.RightClicked(row);
+        var right = recorder.MenuDone();
+
+        Assert.Equal("""{ "menu": ["Export", "As CSV"], "on": { "name": "ORD-1001" }, "say": "Pick Export › As CSV from ORD-1001's menu" }""", JsonLine.Write(steps[0].Json));
+        Assert.Equal("click", steps[1].Verb);
+        Assert.Equal("double", doubled?.Json["how"]?.GetValue<string>());
+        Assert.Equal("Double-click Again", doubled?.Text);
+        Assert.Equal("right", right.Single().Json["how"]?.GetValue<string>());
+        Assert.Null(recorder.Doubled(new ControlFacts("Button", "Save")));
+        Assert.Equal("Quantity of row ORD-1001", TargetSuggester.Describe(JsonNode.Parse("""{ "cell": { "row": "ORD-1001", "column": "Quantity" } }""")!).Shown);
+    }
 }
