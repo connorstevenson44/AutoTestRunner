@@ -99,7 +99,10 @@ finally {
     # Back to the cases closes the builder and Order Desk, and opens the launcher, which is closed too.
     if (-not $problem) {
         Invoke (Find $panel $ui::NameProperty 'Back to the cases')
-        $launcher = Wait-For { Window 'AutoTestRunner' } 'the launcher' 30
+        # The launcher is titled for the suite it shows: it is the window of autotest's that isn't the panel.
+        $launcher = Wait-For { $root.FindAll([System.Windows.Automation.TreeScope]::Children,
+            (New-Object System.Windows.Automation.PropertyCondition($ui::ProcessIdProperty, $builder.Id))) |
+            Where-Object { $_.Current.Name -notlike 'New case:*' } | Select-Object -First 1 } 'the launcher' 30
         $launcher.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern).Close()
     }
     if (-not $builder.WaitForExit(30000)) { $builder.Kill() }
