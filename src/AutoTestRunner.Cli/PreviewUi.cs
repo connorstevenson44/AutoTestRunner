@@ -82,7 +82,7 @@ internal static class PreviewUi
         Pause(900);
         view.ShowStep("Click Open package", ActivityKind.Click);
         Pause(900);
-        view.ShowStep("LauncherChoice Contoso.Orders-1.0.0.zip", ActivityKind.File);
+        view.ShowStep("Pick Contoso.Orders-1.0.0.zip", ActivityKind.File);
         view.ShowWait("Wait for the status text to say \"Opened Contoso.Orders 1.0.0\"");
         Pause(1600);
         Shot("02-waiting");

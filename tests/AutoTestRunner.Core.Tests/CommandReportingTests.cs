@@ -57,6 +57,18 @@ public sealed class CommandReportingTests : IDisposable
         Assert.Equal(["start powershell \"a b\"", "out first", "err it broke", "exit 1"], view.Commands);
         Assert.Equal(CaseStatus.Failed, view.Ended.Single().Status);
         Assert.Contains("OUTPUT  it broke", File.ReadAllText(results.LogPath));
+        var summary = File.ReadAllText(Path.Combine(results.Folder, "summary.txt"));
+        Assert.Contains("\r\n            it broke\r\n", summary);
+        Assert.Contains("1 case: 0 passed, 1 failed", summary);
+    }
+
+    [Fact]
+    public void A_pick_step_without_a_say_names_the_file_it_picks()
+    {
+        var (view, _) = Run("""{ "pickFile": "Open package", "path": "packages/Contoso.Orders-1.0.0.zip" }""");
+
+        Assert.Equal("Pick Contoso.Orders-1.0.0.zip", view.Shown[1]);
+        Assert.Equal(ActivityKind.File, view.Kinds.Single());
     }
 
     [Fact]

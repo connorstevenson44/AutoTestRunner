@@ -368,7 +368,7 @@ public sealed class Runner
             case "pickFolder":
             {
                 var path = Text("path") ?? throw new ScriptException($"{kind} needs the path to pick.");
-                ShowStep(say ?? $"LauncherChoice {Path.GetFileName(path)}", ActivityKind.File);
+                ShowStep(say ?? $"Pick {Path.GetFileName(path)}", ActivityKind.File);
                 Mark();
                 _driver.PickFile(Text(kind)!, path, kind == "pickFolder");
                 Control.Wait(Control.Pace / 2);

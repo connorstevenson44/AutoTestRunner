@@ -57,12 +57,14 @@ public sealed class Results
         {
             text.Append(CultureInfo.InvariantCulture, $"{result.Status.ToString().ToUpperInvariant(),-8}{result.Number}. {result.Name}\r\n");
             foreach (var failure in result.Failures)
-                text.Append(CultureInfo.InvariantCulture, $"          ✗ {failure}\r\n");
+                text.Append(CultureInfo.InvariantCulture, $"          ✗ {Indent(failure)}\r\n");
             foreach (var note in result.Notes)
-                text.Append(CultureInfo.InvariantCulture, $"          note: {note}\r\n");
+                text.Append(CultureInfo.InvariantCulture, $"          note: {Indent(note)}\r\n");
         }
         int Count(CaseStatus status) => Cases.Count(result => result.Status == status);
-        text.Append(CultureInfo.InvariantCulture, $"\r\n{Cases.Count} cases: {Count(CaseStatus.Passed)} passed, {Count(CaseStatus.Failed)} failed, "
+        // A failure can span lines, such as a command's output: its other lines go under its first.
+        static string Indent(string message) => message.ReplaceLineEndings("\r\n            ");
+        text.Append(CultureInfo.InvariantCulture, $"\r\n{Cases.Count} {(Cases.Count == 1 ? "case" : "cases")}: {Count(CaseStatus.Passed)} passed, {Count(CaseStatus.Failed)} failed, "
             + $"{Count(CaseStatus.Skipped)} skipped, {Count(CaseStatus.Stopped)} stopped\r\n");
         var summary = text.ToString();
         File.WriteAllText(Path.Combine(Folder, "summary.txt"), summary, Encoding.UTF8);
