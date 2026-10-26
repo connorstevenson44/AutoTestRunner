@@ -72,6 +72,11 @@ jobs:
         shell: powershell
         run: ./tools/Try-Builder.ps1 -Bundle "$env:RUNNER_TEMP\demos" -Results artifacts/demo-results/builder
 
+      # Anything that went wrong in autotest itself, with where it happened.
+      - name: Show autotest's errors.log
+        if: failure()
+        run: Get-Content "$env:LOCALAPPDATA\AutoTestRunner\errors.log" -ErrorAction SilentlyContinue
+
       # On the run's Summary page, which demos ended as they should, and what went wrong with any that didn't.
       - name: Show how each demo ended
         if: always() && (github.event_name != 'workflow_dispatch' || inputs.check)
