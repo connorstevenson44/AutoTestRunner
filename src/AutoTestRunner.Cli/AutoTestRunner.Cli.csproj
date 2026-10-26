@@ -17,6 +17,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include="..\..\schema\*.json" LinkBase="schema" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

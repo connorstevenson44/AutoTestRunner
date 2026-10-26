@@ -23,11 +23,15 @@ autotest launch <suite folder>      # opens the launcher on one suite, with the 
 autotest record <suite folder> --name "Take an order"     # builds a new case by using the app; see Building a case
 autotest run <suite folder>         # runs while you watch, from the first case
 autotest run <suite folder> --cases 1-5,8 --mode step-by-step --speed Slow
-autotest run <suite folder> --unattended    # no panel and no pauses, as CI runs it
+autotest run <suite folder> --tags smoke,orders --unattended    # only the cases tagged smoke or orders, as CI runs it
 autotest validate <suite folder>    # reads every script and reports what's wrong, without running anything
 autotest list <suite folder>        # lists the cases in order
 autotest preview-ui                 # plays a made-up run, to see the launcher and panel without an app
+autotest run --help                 # every option a command takes
 ```
+
+`--unattended` runs with no panel and no pauses. `--tags` picks the cases tagged with any of the tags given, after
+`--cases` picks by number; a case's tags are in its `tags` list.
 
 | Key | What it does |
 | --- | --- |

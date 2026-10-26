@@ -20,14 +20,9 @@ namespace AutoTestRunner.Cli;
 /// </summary>
 internal static class PreviewUi
 {
-    public static int Run(string[] args)
+    public static int Run(string? folder)
     {
-        var shots = args is ["--shots", var folder] ? Path.GetFullPath(folder) : null;
-        if (args.Length > 0 && shots is null)
-        {
-            Console.Error.WriteLine("autotest preview-ui [--shots <folder>]");
-            return (int)ExitCode.ScriptError;
-        }
+        var shots = folder is null ? null : Path.GetFullPath(folder);
         if (shots is not null)
             Directory.CreateDirectory(shots);
         var suites = MadeUpSuites();

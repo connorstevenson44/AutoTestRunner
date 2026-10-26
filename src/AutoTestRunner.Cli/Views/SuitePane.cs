@@ -107,7 +107,7 @@ internal sealed class SuitePane : Grid
         SetRow(cases, 2);
         Children.Add(cases);
 
-        Tick(item => options.Cases is null || suite.Select(options.Cases).Contains(item));
+        Tick(item => options.Cases is null && options.Tags.Count == 0 || options.Pick(suite).Contains(item));
         CheckFiles();
         Loaded += (_, _) => CheckMachine();
     }
