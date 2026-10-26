@@ -1,5 +1,5 @@
 # Builds a case in Order Desk as a person would, with clicks and keys sent to the screen, then checks that the case
-# saved has the steps a person would write and that it passes when run. Then it opens case 1 to change it: runs it to
+# saved has the steps a person would write, file picker and all, and that it passes when run. Then it opens case 1 to change it: runs it to
 # a step, rolls back to an earlier one, and edits from a later one, which takes out the step after it and marks case 2,
 # which carries on from it; and checks both still pass. CI runs it against the demo bundle, after the demos; it builds
 # in a copy of the feature tour beside it, so the bundle is left as it was.
@@ -27,6 +27,9 @@ if (Test-Path -LiteralPath $suite) { Remove-Item -LiteralPath $suite -Recurse -F
 Copy-Item (Join-Path $Bundle 'order-desk-feature-tour') $suite -Recurse
 # Order numbers start again at 1001, as they do when the case runs.
 & (Join-Path $suite 'tools\Reset-OrderDesk.ps1')
+# A file with no orders in it, to import through Windows' file picker.
+$noOrders = Join-Path (Resolve-Path $Results).Path 'no-orders.csv'
+Set-Content -LiteralPath $noOrders 'customer,product,quantity,note'
 
 $ui = [System.Windows.Automation.AutomationElement]
 $root = $ui::RootElement
@@ -129,6 +132,33 @@ try {
     # The bar at the bottom says the order was added; the builder waits for it to keep still before a wait for it.
     Start-Sleep -Seconds 3
 
+    # Windows' file picker. Clicks in it go straight to it, and only Open is held back while the builder reads what
+    # the picker would open. The builder passes Open on without taking the mouse, which the person has moved on.
+    Click (Find $app $ui::AutomationIdProperty 'ImportButton')
+    $picker = Wait-For { $app.FindFirst([System.Windows.Automation.TreeScope]::Children,
+        (New-Object System.Windows.Automation.PropertyCondition($ui::NameProperty, 'Import orders'))) } 'the Import orders picker' 20
+    $name = Wait-For { $picker.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.AndCondition(
+        (New-Object System.Windows.Automation.PropertyCondition($ui::AutomationIdProperty, '1148')),
+        (New-Object System.Windows.Automation.PropertyCondition($ui::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit))))) } 'the picker''s name box' 10
+    Click $name
+    # Set rather than typed, so no list of matching files drops down over Open.
+    $name.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($noOrders)
+    $open = $picker.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.AndCondition(
+        (New-Object System.Windows.Automation.PropertyCondition($ui::AutomationIdProperty, '1')),
+        (New-Object System.Windows.Automation.PropertyCondition($ui::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button))))).Current.BoundingRectangle
+    [Pointer]::SetCursorPos([int]($open.X + $open.Width / 2), [int]($open.Y + $open.Height / 2)) | Out-Null
+    Start-Sleep -Milliseconds 500
+    [Pointer]::mouse_event(0x2, 0, 0, 0, [System.IntPtr]::Zero)
+    Start-Sleep -Milliseconds 80
+    [Pointer]::mouse_event(0x4, 0, 0, 0, [System.IntPtr]::Zero)
+    $away = New-Object System.Drawing.Point([int]($open.X - 150), [int]($open.Y - 120))
+    [Pointer]::SetCursorPos($away.X, $away.Y) | Out-Null
+    Saying $app 'Import finished*' 'the picker to close, and Order Desk to import nothing' 20
+    Start-Sleep -Milliseconds 500
+    $mouse = [System.Windows.Forms.Cursor]::Position
+    if ($mouse -ne $away) { throw "The mouse is at $mouse after the builder passed Open on, not at $away where it was put." }
+    Start-Sleep -Seconds 2
+
     Invoke (Find $panel $ui::NameProperty 'Save')
     Wait-For { $panel.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition) |
         Where-Object { $_.Current.Name -like 'Saved in*' } } 'the case to be saved' 20 | Out-Null
@@ -158,7 +188,8 @@ $text
 $expected = @(
     '"startApp": {}', '"type": "customer", "text": "Grace Hopper"', '"choose": "product", "option": "Coffee beans"',
     '"type": "quantity", "text": "3"', '"tick": "giftWrap"', '"click": "addOrder"',
-    '"call": "waitForStatusBar", "with": { "startsWith": "Added order 1001 for Grace Hopper" }'
+    '"call": "waitForStatusBar", "with": { "startsWith": "Added order 1001 for Grace Hopper" }',
+    '"click": "importOrders"', '"pickFile": "Import orders"'
 )
 $missing = @($expected | Where-Object { -not $text.Contains($_) })
 if ($missing) { throw "The case the builder saved doesn't have:`n$($missing -join "`n")" }
