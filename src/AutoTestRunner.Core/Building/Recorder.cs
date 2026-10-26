@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+using AutoTestRunner.Running;
 using AutoTestRunner.Scripting;
 
 namespace AutoTestRunner.Building;
@@ -5,9 +7,11 @@ namespace AutoTestRunner.Building;
 /// <summary>
 /// Turns what the person does in the app into steps, as a person would write them: a click on a drop-down's item is
 /// one choose, the text in a box is one type when they leave it, a click in a message box answers it. After a click
-/// that changes the app's status text, it adds a wait for the new words, so the case waits for the app to finish.
+/// that changes the text of a control the suite watches, such as the app's status text, it adds a wait for the new
+/// words, so the case waits for the app to finish; and after a click on a control with an afterClick hook, the hook's
+/// steps instead.
 /// </summary>
-/// <param name="suite">The suite, for its status text and its waitForStatusBar macro.</param>
+/// <param name="suite">The suite, for the controls it watches, its hooks and its macros.</param>
 /// <param name="draft">The case the steps go in.</param>
 /// <param name="name">Picks how a step finds a control: TargetSuggester, asked of the app.</param>
 public sealed class Recorder(Suite suite, CaseDraft draft, Func<ControlFacts, TargetChoice> name)
@@ -20,6 +24,7 @@ public sealed class Recorder(Suite suite, CaseDraft draft, Func<ControlFacts, Ta
     // Clicked on, these do nothing a step needs: typing is recorded as the box is left, scrolling is the runner's.
     private static readonly HashSet<string> NotSteps = new(["ComboBox", "Edit", "Document", "ScrollBar", "Thumb", "TitleBar"], StringComparer.OrdinalIgnoreCase);
 
+    private readonly HashSet<string> _waited = new(StringComparer.Ordinal);
     private ControlFacts? _box;
     private string _before = "";
     private bool _mayChangeStatus;
@@ -84,24 +89,92 @@ public sealed class Recorder(Suite suite, CaseDraft draft, Func<ControlFacts, Ta
         };
     }
 
-    /// <summary>The app's status text changed: a wait for it after the step that changed it.</summary>
-    public IReadOnlyList<DraftStep> StatusSaid(string text)
+    /// <summary>The controls watched: the suite's, and those the panel added, which take their place.</summary>
+    public IReadOnlyList<WatchHook> Watched
     {
-        if (!_mayChangeStatus || StepMaker.StatusWait(suite, text) is not { } wait)
-            return [];
-        _mayChangeStatus = false;
-        lock (draft.Steps)
-            draft.Steps.Add(wait);
-        return [wait];
+        get
+        {
+            lock (draft.NewWatch)
+                return [.. suite.Watched().Where(hook => !draft.NewWatch.Any(added => added.Element == hook.Element)), .. draft.NewWatch];
+        }
     }
 
-    /// <summary>Adds a step made some other way, such as from a picked control.</summary>
+    /// <summary>
+    /// A watched control's text changed after a step that may have changed it, and kept still: a wait for the new
+    /// words after that step, once for each control; and with the hook's check, a check of the words at the checkpoint.
+    /// </summary>
+    public IReadOnlyList<DraftStep> Changed(WatchHook hook, string text)
+    {
+        if (!_mayChangeStatus || _waited.Contains(hook.Element))
+            return [];
+        var keep = hook.Check ? KeepAs(hook.Element) : null;
+        var steps = StepMaker.WatchWait(suite, hook, text, keep);
+        if (steps.Count == 0)
+            return [];
+        _waited.Add(hook.Element);
+        lock (draft.Steps)
+            draft.Steps.AddRange(steps);
+        if (keep is not null)
+        {
+            lock (draft.Checks)
+                draft.Checks.Add(new JsonObject { ["equals"] = $"${{{keep}}}", ["to"] = text, ["label"] = $"{hook.Element} said \"{text}\"" });
+        }
+        return steps;
+    }
+
+    /// <summary>The app's status text changed: a wait for it after the step that changed it.</summary>
+    public IReadOnlyList<DraftStep> StatusSaid(string text) =>
+        suite.App.Status is { } status && Watched.FirstOrDefault(hook => hook.Element == status) is { } hook ? Changed(hook, text) : [];
+
+    /// <summary>
+    /// Adds a step made some other way, such as from a picked control. A click on a control with an afterClick hook
+    /// is followed by the hook's steps, which stand for a wait for what the click changes.
+    /// </summary>
     public IReadOnlyList<DraftStep> Add(DraftStep step, bool changesStatus)
     {
+        List<DraftStep> steps = [step];
+        if (step.Verb is "click" or "tick" or "choose" && ElementOf(step.Target?.Json) is { } element && AfterClick(element) is { } hook)
+        {
+            if (hook.Delay > 0)
+                steps.Add(StepMaker.Wait(hook.Delay));
+            var call = new JsonObject { ["call"] = hook.Call };
+            if (hook.With is { Count: > 0 } with)
+                call["with"] = with.DeepClone();
+            steps.Add(new DraftStep(call, ActivityKind.Say));
+            changesStatus = false;
+        }
         lock (draft.Steps)
-            draft.Steps.Add(step);
+            draft.Steps.AddRange(steps);
         _mayChangeStatus = changesStatus;
-        return [step];
+        _waited.Clear();
+        return steps;
+    }
+
+    private ClickHook? AfterClick(string element)
+    {
+        lock (draft.NewAfterClick)
+            return draft.NewAfterClick.LastOrDefault(hook => hook.Element == element) ?? suite.AfterClick.FirstOrDefault(hook => hook.Element == element);
+    }
+
+    // The element a target names, written as its name or with its parameters.
+    private static string? ElementOf(JsonNode? target) => target switch
+    {
+        JsonValue value when value.TryGetValue(out string? name) => name,
+        JsonObject selector when selector.Count <= 2 && selector["element"] is JsonValue element => element.GetValue<string>(),
+        _ => null,
+    };
+
+    // A name for a watched control's words, not taken by another step.
+    private string KeepAs(string element)
+    {
+        lock (draft.Steps)
+        {
+            var taken = draft.Steps.Select(step => step.Json["as"]?.GetValue<string>()).OfType<string>().ToHashSet(StringComparer.Ordinal);
+            var name = element;
+            for (var copy = 2; taken.Contains(name); copy++)
+                name = $"{element}{copy}";
+            return name;
+        }
     }
 
     // The control a click means: the one hit, or the button, item or tab around the text or picture that was hit.

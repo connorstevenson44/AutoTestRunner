@@ -35,6 +35,8 @@ public static class ScriptVocabulary
         ["set"] = new(Takes.Object),
         ["run"] = new(Takes.Text, "args", "env"),
         ["powershell"] = new(Takes.Text, "args"),
+        ["script"] = new(Takes.Text, "args"),
+        ["wait"] = new(Takes.Text),
         ["checkpoint"] = new(Takes.Text, "checks", "look", "tools"),
     };
 

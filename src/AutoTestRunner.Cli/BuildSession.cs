@@ -32,12 +32,16 @@ internal sealed class BuildSession
     private BuildSession(BuildRequest request, Options options, Action ended)
     {
         (_request, _options, _ended) = (request, options, ended);
-        _draft = new CaseDraft { AddingTo = request.AddTo, Name = request.AddTo?.Name ?? request.Name };
+        _draft = request.Edit is { } editing ? CaseDraft.Load(editing) : new CaseDraft { Name = request.Name };
         if (request.After is { } after)
             _draft.Needs.Add(after.Id);
         _panel = new BuilderPanel(request, _draft);
         _panel.Play += (step, add) => Post(new BuildInput(BuildInputKind.Play, Step: step, Add: add));
         _panel.Locate += step => Post(new BuildInput(BuildInputKind.Locate, Step: step));
+        _panel.AddStep += step => Post(new BuildInput(BuildInputKind.Add, Step: step));
+        _panel.RunTo += step => Post(new BuildInput(BuildInputKind.RunTo, Step: step));
+        _panel.RollBack += step => Post(new BuildInput(BuildInputKind.RollBack, Step: step));
+        _panel.EditFrom += (step, rewind) => Post(new BuildInput(BuildInputKind.EditFrom, Step: step, Rewind: rewind));
         _panel.Loaded += (_, _) =>
         {
             // A low-level hook runs on the thread that set it, which must pump messages: this one does.

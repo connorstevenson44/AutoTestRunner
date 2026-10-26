@@ -10,6 +10,45 @@ namespace AutoTestRunner.Building;
 /// </summary>
 public static class StepMaker
 {
+    /// <summary>A step of a case opened to change it, at this place in its file, not played yet.</summary>
+    public static DraftStep Written(JsonObject json, int source)
+    {
+        var verb = json.Select(pair => pair.Key).FirstOrDefault(ScriptVocabulary.Steps.ContainsKey) ?? "say";
+        var target = ScriptVocabulary.Steps.TryGetValue(verb, out var kind) && kind.Takes == Takes.Target && json[verb] is { } node
+            ? TargetSuggester.Describe(node)
+            : null;
+        return new DraftStep(json, KindOf(verb), target) { Source = source, State = DraftStepState.NotPlayed };
+    }
+
+    /// <summary>Runs a .ps1 file in the suite, given relative to its folder.</summary>
+    public static DraftStep Script(string path)
+    {
+        path = path.Replace('\\', '/');
+        return new(new JsonObject { ["script"] = path, ["say"] = $"Run {path[(path.LastIndexOf('/') + 1)..]}" }, ActivityKind.Command);
+    }
+
+    /// <summary>Waits a number of seconds, for an app that gives nothing to wait for.</summary>
+    public static DraftStep Wait(double seconds) => new(new JsonObject { ["wait"] = seconds }, ActivityKind.Say);
+
+    /// <summary>Says something, with nothing done.</summary>
+    public static DraftStep Say(string text) => new(new JsonObject { ["say"] = text }, ActivityKind.Say);
+
+    /// <summary>What a step's icon shows, by its key.</summary>
+    public static ActivityKind KindOf(string verb) => verb switch
+    {
+        "startApp" or "closeApp" => ActivityKind.App,
+        "click" or "tab" => ActivityKind.Click,
+        "type" or "replaceText" => ActivityKind.Type,
+        "choose" or "tick" => ActivityKind.Choose,
+        "hover" or "find" or "waitGone" or "waitText" or "whileShows" => ActivityKind.Point,
+        "key" => ActivityKind.Key,
+        "answerDialog" => ActivityKind.Dialog,
+        "pickFile" or "pickFolder" => ActivityKind.File,
+        "run" or "powershell" or "script" => ActivityKind.Command,
+        "checkpoint" => ActivityKind.Check,
+        _ => ActivityKind.Say,
+    };
+
     public static DraftStep StartApp(Suite suite) =>
         new(new JsonObject { ["startApp"] = new JsonObject(), ["say"] = $"Start {suite.App.Window}" }, ActivityKind.App);
 
@@ -80,20 +119,36 @@ public static class StepMaker
     }
 
     /// <summary>
-    /// Waits for the app's status text to say what it said after the last click, through the suite's waitForStatusBar
-    /// macro when it has one, so the case waits for the app rather than for a time.
+    /// The steps that wait for a watched control to say what it says now: the hook's macro, given startsWith when it
+    /// takes it, else a waitText; the app's status text waits for text new since the last click. With keep, they keep
+    /// what it says in a variable of that name, with a find after a macro that hands nothing back.
     /// </summary>
-    public static DraftStep? StatusWait(Suite suite, string text)
+    public static IReadOnlyList<DraftStep> WatchWait(Suite suite, WatchHook hook, string text, string? keep)
     {
         var start = StartOf(text);
         if (start.Length == 0)
-            return null;
-        if (suite.Macros.TryGetValue("waitForStatusBar", out var macro) && macro.Parameters.ContainsKey("startsWith"))
-            return new DraftStep(new JsonObject { ["call"] = "waitForStatusBar", ["with"] = new JsonObject { ["startsWith"] = start } }, ActivityKind.Say);
-        if (suite.App.Status is not { } status)
-            return null;
-        var target = new TargetChoice(JsonValue.Create(status), status, TargetQuality.Sturdy, $"The app's status text, {status} in elements.json.");
-        return new DraftStep(new JsonObject { ["waitText"] = status, ["startsWith"] = start, ["new"] = true }, ActivityKind.Say, target);
+            return [];
+        var target = new TargetChoice(JsonValue.Create(hook.Element), hook.Element, TargetQuality.Sturdy, $"Watched by the builder, {hook.Element} in elements.json.");
+        if (hook.Call is { } call && suite.Macros.TryGetValue(call, out var macro))
+        {
+            var json = new JsonObject { ["call"] = call };
+            if (macro.Parameters.ContainsKey("startsWith"))
+                json["with"] = new JsonObject { ["startsWith"] = start };
+            if (keep is null)
+                return [new DraftStep(json, ActivityKind.Say)];
+            if (macro.Returns is not null)
+            {
+                json["as"] = keep;
+                return [new DraftStep(json, ActivityKind.Say)];
+            }
+            return [new DraftStep(json, ActivityKind.Say), new DraftStep(new JsonObject { ["find"] = hook.Element, ["as"] = keep }, ActivityKind.Point, target)];
+        }
+        var wait = new JsonObject { ["waitText"] = hook.Element, ["startsWith"] = start };
+        if (hook.Element == suite.App.Status)
+            wait["new"] = true;
+        if (keep is not null)
+            wait["as"] = keep;
+        return [new DraftStep(wait, ActivityKind.Say, target)];
     }
 
     /// <summary>The start of what a control says, as a wait for it puts it: up to its first full stop, colon or comma, six words at most.</summary>

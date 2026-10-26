@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
 using System.Xml.Linq;
+using AutoTestRunner.Building;
 using AutoTestRunner.Driving;
 using AutoTestRunner.FlaUI;
 using AutoTestRunner.Running;
@@ -13,7 +14,8 @@ namespace AutoTestRunner.Cli.Views;
 
 /// <summary>
 /// One suite in the launcher: whether the app and its files are there and the machine is clean, with a button that
-/// cleans it; then its cases to tick, each with how it went last time, a pencil to add steps to it, and New case.
+/// cleans it; then its cases to tick, each with how it went last time, a warning when it needs looking at since a case
+/// it carries on from changed, a pencil to change it, and New case.
 /// </summary>
 internal sealed class SuitePane : Grid
 {
@@ -149,6 +151,7 @@ internal sealed class SuitePane : Grid
         row.ColumnDefinitions.Add(new ColumnDefinition());
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
         var box = new CheckBox { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Focusable = false };
         box.Checked += (_, _) => OnTicked();
@@ -161,17 +164,20 @@ internal sealed class SuitePane : Grid
         needs.Margin = new Thickness(0, 0, 6, 0);
         needs.Visibility = item.Needs.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         // The pencil shows while the mouse is over the row, as the app's own row buttons do.
-        var edit = Ui.IconButton(Icons.Edit, "Add steps to this case, by using the app", () => _build(new BuildRequest(_suite, item.Name, AddTo: item)), 14);
+        var edit = Ui.IconButton(Icons.Edit, "Open this case to change it: the builder takes the app to where it starts, and plays its steps as far as you want", () => _build(new BuildRequest(_suite, item.Name, Edit: item)), 14);
         edit.Padding = new Thickness(6, 3, 6, 3);
         edit.Visibility = Visibility.Hidden;
         var last = _last.TryGetValue(item.Number, out var status) ? Ui.Glyph(Icons.Of(status), 14, Ui.Of(status)) : new TextBlock();
         last.HorizontalAlignment = HorizontalAlignment.Center;
         last.ToolTip = _last.ContainsKey(item.Number) ? $"Last time: {status.ToString().ToLowerInvariant()}" : null;
+        var review = Review(item);
         SetColumn(number, 1);
         SetColumn(name, 2);
-        SetColumn(needs, 3);
-        SetColumn(edit, 4);
-        SetColumn(last, 5);
+        SetColumn(review, 3);
+        SetColumn(needs, 4);
+        SetColumn(edit, 5);
+        SetColumn(last, 6);
+        row.Children.Add(review);
         row.Children.Add(box);
         row.Children.Add(number);
         row.Children.Add(name);
@@ -190,11 +196,37 @@ internal sealed class SuitePane : Grid
         };
         row.MouseLeftButtonUp += (_, e) =>
         {
-            if (e.OriginalSource is not CheckBox && !edit.IsMouseOver)
+            if (e.OriginalSource is not CheckBox && !edit.IsMouseOver && !review.IsMouseOver)
                 box.IsChecked = box.IsChecked != true;
         };
         _rows.Add((item, box, needs));
         return row;
+    }
+
+    // An amber warning on a case that needs looking at, saying why; clicked once it has been looked at, it goes.
+    private Button Review(Case item)
+    {
+        Button? warning = null;
+        warning = Ui.IconButton(Icons.Warning, $"Needs a look: {item.Review}\n\nClick once it has been checked, to take the warning off.", () =>
+        {
+            if (MessageBox.Show(Window.GetWindow(this), $"Take the warning off case {item.Number}, {item.Name}?\n\n{item.Review}", "Needs a look",
+                MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                return;
+            try
+            {
+                CaseWriter.ClearReview(item);
+                warning!.Visibility = Visibility.Collapsed;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                MessageBox.Show(Window.GetWindow(this), ex.Message, "Needs a look", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }, 14);
+        ((TextBlock)warning.Content).Foreground = Ui.Hold;
+        warning.Padding = new Thickness(6, 3, 6, 3);
+        warning.Margin = new Thickness(0, 0, 4, 0);
+        warning.Visibility = item.Review is null ? Visibility.Collapsed : Visibility.Visible;
+        return warning;
     }
 
     private void Tick(Func<Case, bool> which)

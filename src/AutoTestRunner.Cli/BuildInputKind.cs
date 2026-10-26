@@ -17,4 +17,19 @@ internal enum BuildInputKind
 
     /// <summary>The mouse went over a step in the panel, to outline its control in the app; or left it.</summary>
     Locate,
+
+    /// <summary>A step from the panel to add without playing it, such as a new script to write first.</summary>
+    Add,
+
+    /// <summary>Plays the steps not played yet, up to and including this one.</summary>
+    RunTo,
+
+    /// <summary>Starts the app again from where the case starts, and plays the steps up to and including this one.</summary>
+    RollBack,
+
+    /// <summary>
+    /// The steps after this one were taken out: gets the app to just after it, starting again first when the steps
+    /// taken out had been played, and records from there.
+    /// </summary>
+    EditFrom,
 }

@@ -54,6 +54,42 @@ public static class TargetSuggester
         };
     }
 
+    /// <summary>
+    /// How sturdy a target written in a case is, as the panel shows it for a step of a case opened to change it: by a
+    /// name in elements.json or an AutomationId is sturdy, by words or a tooltip breaks when they change.
+    /// </summary>
+    public static TargetChoice Describe(JsonNode target)
+    {
+        switch (target)
+        {
+            case JsonValue value when value.TryGetValue(out string? name):
+                return new TargetChoice(target, name, TargetQuality.Sturdy, $"Found by its name in elements.json, {name}.");
+            case JsonArray { Count: > 0 } list:
+                return Describe(list[0]!) with { Json = target };
+            case JsonObject selector when selector["element"]?.GetValue<string>() is { } element:
+            {
+                var with = (selector["with"] as JsonObject ?? []).Select(pair => pair.Value?.ToString());
+                return new TargetChoice(target, string.Join(' ', [element, .. with]), TargetQuality.Sturdy, $"Found by its name in elements.json, {element}.");
+            }
+            case JsonObject selector:
+            {
+                var inside = selector["within"] is { } within ? Describe(within) : null;
+                var id = selector["id"]?.ToString();
+                var shorthand = Targets.Shorthands.Keys.FirstOrDefault(selector.ContainsKey);
+                var words = shorthand is not null ? $"{shorthand} \"{selector[shorthand]}\""
+                    : selector["name"] is { } name ? $"{selector["type"]?.ToString() ?? "control"} \"{name}\""
+                    : selector["helpText"] is { } tip ? $"{selector["type"]?.ToString() ?? "control"} with tip \"{tip}\""
+                    : selector["type"]?.ToString() ?? "a control";
+                var shown = (id is not null ? $"id {id}" : words) + (inside is null ? "" : $" in {inside.Shown}");
+                var sturdy = id is not null && inside is not { Quality: not TargetQuality.Sturdy };
+                return new TargetChoice(target, shown, sturdy ? TargetQuality.Sturdy : TargetQuality.Wording,
+                    sturdy ? "Found by its AutomationId." : $"Found by its words. {GiveItAnId}");
+            }
+            default:
+                return new TargetChoice(target, JsonLine.Write(target), TargetQuality.Ambiguous, "");
+        }
+    }
+
     /// <summary>The ways to find a control by what it says itself: its AutomationId, its words, its tooltip.</summary>
     private static IEnumerable<TargetChoice> Own(ControlFacts control)
     {

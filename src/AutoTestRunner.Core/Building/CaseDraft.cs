@@ -4,8 +4,9 @@ using AutoTestRunner.Scripting;
 namespace AutoTestRunner.Building;
 
 /// <summary>
-/// A case being built: its name, the case it carries on from, its steps, and the checkpoint it ends at. Adding to an
-/// existing case, the steps go in before its checkpoint, and the checks and things to look at go into it.
+/// A case being built: its name, the case it carries on from, its steps, and the checkpoint it ends at. A case opened
+/// to change it has its own steps first, as written, and its checkpoint stays: the checks and things to look at
+/// go into it.
 /// </summary>
 public sealed class CaseDraft
 {
@@ -22,6 +23,7 @@ public sealed class CaseDraft
 
     public string CheckpointTitle { get; set; } = "";
 
+    /// <summary>The checks to add to the checkpoint. The builder adds them for watched controls, so it is changed under a lock on it.</summary>
     public List<JsonObject> Checks { get; } = [];
 
     public List<string> Look { get; } = [];
@@ -29,17 +31,40 @@ public sealed class CaseDraft
     /// <summary>Controls named while building, to add to elements.json. Changed under a lock on it, as Steps is.</summary>
     public Dictionary<string, JsonNode> NewElements { get; } = new(StringComparer.Ordinal);
 
-    /// <summary>The case being added to, or null for a new one.</summary>
-    public Case? AddingTo { get; init; }
+    /// <summary>The case opened to change it, or null for a new one.</summary>
+    public Case? Editing { get; init; }
+
+    /// <summary>The case files to mark as needing looking at again when it is saved, with why.</summary>
+    public Dictionary<string, string> Review { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The controls to watch and clicks to follow, from the panel, to add to suite.json's builder.</summary>
+    public List<WatchHook> NewWatch { get; } = [];
+
+    /// <inheritdoc cref="NewWatch"/>
+    public List<ClickHook> NewAfterClick { get; } = [];
+
+    /// <summary>A case opened to change it: its steps up to its checkpoint, none of them played yet.</summary>
+    public static CaseDraft Load(Case item)
+    {
+        var draft = new CaseDraft { Editing = item, Name = item.Name };
+        draft.Needs.AddRange(item.Needs);
+        for (var index = 0; index < item.Steps.Count; index++)
+            if (item.Steps[index] is JsonObject step && (index < item.Steps.Count - 1 || step["checkpoint"] is null))
+                draft.Steps.Add(StepMaker.Written(step.DeepClone().AsObject(), index));
+        return draft;
+    }
 
     /// <summary>The checkpoint step it ends at, or null when nothing was said about one.</summary>
     public JsonObject? Checkpoint()
     {
-        if (CheckpointTitle.Trim().Length == 0 && Checks.Count == 0 && Look.Count == 0)
+        List<JsonObject> checks;
+        lock (Checks)
+            checks = [.. Checks];
+        if (CheckpointTitle.Trim().Length == 0 && checks.Count == 0 && Look.Count == 0)
             return null;
         var step = new JsonObject { ["checkpoint"] = CheckpointTitle.Trim().Length > 0 ? CheckpointTitle.Trim() : Name };
-        if (Checks.Count > 0)
-            step["checks"] = new JsonArray([.. Checks.Select(check => check.DeepClone())]);
+        if (checks.Count > 0)
+            step["checks"] = new JsonArray([.. checks.Select(check => check.DeepClone())]);
         if (Look.Count > 0)
             step["look"] = new JsonArray([.. Look.Select(line => (JsonNode?)JsonValue.Create(line))]);
         return step;
@@ -73,8 +98,9 @@ public sealed class CaseDraft
                 step.Target = named;
             }
         }
-        foreach (var check in Checks.Where(check => JsonNode.DeepEquals(check["shows"], selector)))
-            check["shows"] = JsonValue.Create(name);
+        lock (Checks)
+            foreach (var check in Checks.Where(check => JsonNode.DeepEquals(check["shows"], selector)))
+                check["shows"] = JsonValue.Create(name);
         return named;
     }
 }

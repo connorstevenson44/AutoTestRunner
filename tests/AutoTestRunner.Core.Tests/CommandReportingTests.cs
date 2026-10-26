@@ -45,6 +45,24 @@ public sealed class CommandReportingTests : IDisposable
     }
 
     [Fact]
+    public void A_script_step_runs_its_ps1_file_from_the_suite_with_its_args_and_a_wait_waits()
+    {
+        var tools = Path.Combine(_folder, "suite", "tools");
+        Directory.CreateDirectory(tools);
+        File.WriteAllText(Path.Combine(tools, "Hello.ps1"), "Write-Output \"Hello $($args[0])\"");
+
+        var (view, results) = Run("""{ "script": "tools/Hello.ps1", "args": ["Ada"], "as": "hello" }, { "wait": 0.1 }""");
+
+        var file = Path.Combine(tools, "Hello.ps1");
+        Assert.Equal(ActivityKind.Command, view.Kinds[0]);
+        Assert.Equal($"start powershell.exe -NoProfile -ExecutionPolicy Bypass -File {Quoted(file)} Ada", view.Commands[0]);
+        Assert.Contains("Wait 0.1 seconds", view.Waits);
+        Assert.Equal(CaseStatus.Passed, results.Cases.Single().Status);
+    }
+
+    private static string Quoted(string path) => path.Contains(' ', StringComparison.Ordinal) ? $"\"{path}\"" : path;
+
+    [Fact]
     public void A_powershell_step_without_a_say_is_still_shown_with_what_it_printed()
     {
         var machine = new FakeMachine();

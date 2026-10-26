@@ -13,4 +13,5 @@ namespace AutoTestRunner.Cli;
 /// <param name="PassOn">Whether the click or key was kept from the app until the builder had read it, and is passed on now.</param>
 /// <param name="Step">The step to play or outline.</param>
 /// <param name="Add">Whether a step played goes in the case.</param>
-internal sealed record BuildInput(BuildInputKind Kind, int X = 0, int Y = 0, string? Keys = null, bool PassOn = false, DraftStep? Step = null, bool Add = false);
+/// <param name="Rewind">For EditFrom: whether the app has to start again, as it went past the step.</param>
+internal sealed record BuildInput(BuildInputKind Kind, int X = 0, int Y = 0, string? Keys = null, bool PassOn = false, DraftStep? Step = null, bool Add = false, bool Rewind = false);

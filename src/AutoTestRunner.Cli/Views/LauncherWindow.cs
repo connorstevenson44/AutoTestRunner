@@ -304,7 +304,7 @@ internal sealed class LauncherWindow : Window
     {
         if (NeedsElevating(request.Suite))
         {
-            string[] which = request.AddTo is { } addTo ? ["--add-to", addTo.Id]
+            string[] which = request.Edit is { } editing ? ["--edit", editing.Id]
                 : request.After is { } after ? ["--name", request.Name, "--after", after.Id]
                 : ["--name", request.Name];
             Elevate(["record", request.Suite.Folder, .. which, .. (_options with { Cases = null }).Arguments()]);

@@ -124,6 +124,78 @@
         }
       },
       "description": "The smallest screen the suite is written for."
+    },
+    "builder": {
+      "type": "object",
+      "description": "What the builder does while recording a case.",
+      "properties": {
+        "watch": {
+          "type": "array",
+          "description": "Controls whose text the builder watches: when it changes after a step, it adds a wait for the new text. The app's status, and any element with a macro named waitFor and its name, are watched anyway.",
+          "items": {
+            "type": "object",
+            "required": [
+              "element"
+            ],
+            "properties": {
+              "element": {
+                "type": "string",
+                "description": "The control, by its name in elements.json."
+              },
+              "call": {
+                "type": "string",
+                "description": "The macro that waits for it, given startsWith when it takes it. A waitText when left out."
+              },
+              "check": {
+                "type": "boolean",
+                "description": "Also keeps what it said, and checks it at the checkpoint."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "afterClick": {
+          "type": "array",
+          "description": "Steps the builder adds after a control is clicked, instead of a wait for the status text.",
+          "items": {
+            "type": "object",
+            "required": [
+              "element",
+              "call"
+            ],
+            "properties": {
+              "element": {
+                "type": "string",
+                "description": "The control clicked, by its name in elements.json."
+              },
+              "call": {
+                "type": "string",
+                "description": "The macro to run after it."
+              },
+              "with": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": [
+                    "string",
+                    "number",
+                    "boolean"
+                  ]
+                },
+                "description": "The macro's parameters."
+              },
+              "delay": {
+                "type": [
+                  "number",
+                  "string"
+                ],
+                "description": "Seconds to wait before the macro, as a wait step."
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

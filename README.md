@@ -56,9 +56,8 @@ on Start means the suite needs administrator, which autotest asks for when it st
 
 ## Building a case
 
-**New case** in the launcher, or the pencil on a case, opens the builder: a panel beside the app, which gets the app
-to where the case starts (a fresh start, where another case leaves off, or the end of the case being added to), then
-records.
+**New case** in the launcher opens the builder: a panel beside the app, which gets the app to where the case starts
+(a fresh start, or where another case leaves off), then records.
 
 - **Record** (on at the start): use the app. Each click, pick from a drop-down, tick and tab becomes a step, what you
   type becomes one when you leave the box, and keys such as Enter or Ctrl+S become key steps. A click that changes the
@@ -71,12 +70,34 @@ records.
   for what it says, red when more than one control matches. **Name it** adds a red or amber one to `elements.json`
   and has the steps use the name. Over a step, ▶ tries it in the app, the arrows move it, and the bin takes it out;
   click its words to change what the panel says.
-- **Save** writes `cases/NN-name.json`, as a person would write it, or puts the new steps before the case's
-  checkpoint, then checks the suite. The checkpoint's title, checks and what to look at are at the bottom of the panel.
+- **Step** adds a step that isn't a click: **Run a script…** picks a `.ps1` in the suite and runs it; **New script…**
+  writes one in `tools/` from a short template and opens it, in Notepad++ when it is installed, else Notepad, and
+  its step plays once you've written it; **Say something…** and **Wait…**. The page icon on a script step opens its file.
+- **Watch it** under a picked control has the builder wait for its new words whenever a step changes them, as it
+  does for the status text; **After clicking it…** adds a macro after each click on it, after a delay if need be.
+  Both go in `suite.json`'s `builder` section, for every case built after: see [docs/format.md](docs/format.md).
+- **Save** writes `cases/NN-name.json`, as a person would write it, then checks the suite. The checkpoint's title,
+  checks and what to look at are at the bottom of the panel.
+
+### Changing a case
+
+The pencil on a case opens it in the builder. The app is taken to where the case starts, by playing the cases it
+carries on from, and its steps are listed, greyed until they have been played. Over a step:
+
+- **Run to here** plays the case up to that step.
+- **Roll back to here**, on a step already played, starts the app again from where the case starts, after the
+  suite's reset, and plays up to that step. The steps after it stay, greyed, to play again.
+- **Edit from here** takes the app to just after that step, takes out the steps after it, and records new ones. It
+  first shows which steps go, and the cases that carry on from this one, ticked: those ticked get a warning in the
+  launcher, saying why, until they are changed too or the warning is clicked away.
+
+Record and Pick wait until the app is at the last step. Saving writes only what changed: the steps before the first
+one changed, the checkpoint, and everything else in the file stay as they were written.
 
 `autotest record <suite folder>` opens the builder straight away: `--name` names a new case, `--after <case>` starts it
-where that case leaves off, and `--add-to <case>` adds steps to that case. CI builds a case in Order Desk this way, with
-clicks and keys sent to the screen, and runs it: [tools/Try-Builder.ps1](tools/Try-Builder.ps1).
+where that case leaves off, and `--edit <case>` opens that case to change it. CI builds a case in Order Desk this way,
+with clicks and keys sent to the screen, then changes case 1 from a step, and runs them:
+[tools/Try-Builder.ps1](tools/Try-Builder.ps1).
 
 ## Writing a suite
 

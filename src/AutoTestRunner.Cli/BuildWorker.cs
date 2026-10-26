@@ -12,12 +12,14 @@ namespace AutoTestRunner.Cli;
 
 /// <summary>
 /// The builder's thread: gets the app to where the case starts, then makes steps of what the person does in it, in the
-/// order they did it. Between inputs it keeps up with the app: the box being typed in, the status text, and the
-/// control under the mouse, which is read before it is clicked so that the step is for what the person saw.
+/// order they did it. A case opened to change it is played as far as the person asks, and started again to go back.
+/// Between inputs it keeps up with the app: the box being typed in, the text of the controls the suite watches, such
+/// as the status text, and the control under the mouse, which is read before it is clicked so that the step is for
+/// what the person saw.
 /// </summary>
 internal sealed class BuildWorker
 {
-    // How long the status text keeps still before a wait is made for it, in milliseconds.
+    // How long a watched control's text keeps still before a wait is made for it, in milliseconds.
     private const int StatusSettles = 700;
 
     // How often the app's process ids are read again, in milliseconds: an app can start helpers and windows.
@@ -40,10 +42,9 @@ internal sealed class BuildWorker
     private InspectedControl? _typing;
     private string? _typed;
 
-    // The status text a wait was last made for, or that was there; and a new one, until it keeps still.
-    private string? _status;
-    private string? _changing;
-    private long _changingSince;
+    // What each watched control said when a wait was last made for it, or that was there; and a new text, until it
+    // keeps still.
+    private readonly Dictionary<string, Watching> _watching = new(StringComparer.Ordinal);
 
     // Where the mouse was, the app's control there, and whether that is outlined.
     private (int X, int Y) _pointer = (int.MinValue, int.MinValue);
@@ -95,53 +96,115 @@ internal sealed class BuildWorker
                 case BuildInputKind.Locate:
                     Locate(input.Step);
                     break;
+                case BuildInputKind.Add when input.Step is { } step:
+                    LeaveBox();
+                    _panel.Add(_recorder.Add(step, changesStatus: false));
+                    _panel.Ready();
+                    break;
+                case BuildInputKind.RunTo when input.Step is { } step:
+                    GoTo(step, rewind: false);
+                    break;
+                case BuildInputKind.RollBack when input.Step is { } step:
+                    GoTo(step, rewind: true);
+                    break;
+                case BuildInputKind.EditFrom when input.Step is { } step:
+                    GoTo(step, input.Rewind, record: true);
+                    break;
             }
         }
     }
 
     // ===== Getting the app ready =====
 
-    // A new case starts the app; one that carries on from a case, or steps added to one, play that case first, and
-    // the cases it carries on from.
+    // A new case starts the app, or plays the case it carries on from and those that one carries on from. A case
+    // opened to change it plays the cases it carries on from, and its own steps wait to be played.
     private void GetReady()
     {
         _panel.Busy($"Getting {_suite.App.Window} ready");
-        string? problem;
-        if ((_request.AddTo ?? _request.After) is { } start)
+        if (_request.Edit is null && _request.After is null)
         {
-            var cases = Leading(start);
-            problem = Played(() =>
-            {
-                _runner.Prepare(cases);
-                foreach (var item in cases)
-                    _runner.Play(item.Steps, Path.GetFileName(item.File));
-            });
+            var start = StepMaker.StartApp(_suite);
+            start.State = DraftStepState.NotPlayed;
+            _panel.Add(_recorder.Add(start, changesStatus: false));
         }
-        else
+        var problem = Played(() =>
         {
-            var step = StepMaker.StartApp(_suite);
-            _panel.Add(_recorder.Add(step, changesStatus: false));
-            problem = Played(() => _runner.Play(new JsonArray(step.Json.DeepClone()), "The new case"));
-        }
-        ReadProcesses();
-        _status = Status();
+            _runner.Prepare(_request.Edit is { } editing ? _suite.Leading(editing) : Before());
+            PlayBefore();
+        });
+        if (problem is null && _request.Edit is null && _draft.Steps is [.., var last])
+            problem = PlayTo(last);
+        Caught();
         _panel.Ready(problem is null ? null : $"Couldn't get {_suite.App.Window} there: {problem} Carry on from where it is, or close the builder.");
     }
 
-    // A case and those it carries on from, in the order they run.
-    private List<Case> Leading(Case last)
+    // The cases played before the case's own steps: those the case carries on from, or the case a new one starts
+    // where it leaves off, and those they carry on from.
+    private IReadOnlyList<Case> Before() =>
+        _request.Edit is { } editing ? [.. _suite.Leading(editing).Where(item => item != editing)]
+        : _request.After is { } after ? _suite.Leading(after)
+        : [];
+
+    private void PlayBefore()
     {
-        var ids = new HashSet<string>(StringComparer.Ordinal);
-        var waiting = new Stack<Case>([last]);
-        while (waiting.TryPop(out var item))
+        foreach (var item in Before())
+            _runner.Play(item.Steps, Path.GetFileName(item.File));
+    }
+
+    // Takes the app to just after a step: plays the steps not played yet up to it, or starts again from where the
+    // case starts and plays them all up to it. Then it records, when asked.
+    private void GoTo(DraftStep step, bool rewind, bool record = false)
+    {
+        LeaveBox();
+        string? problem = null;
+        if (rewind)
         {
-            if (!ids.Add(item.Id))
-                continue;
-            foreach (var need in item.Needs)
-                if (_suite.Find(need) is { } needed)
-                    waiting.Push(needed);
+            _panel.Busy($"Starting {_suite.App.Window} again, from where the case starts");
+            lock (_draft.Steps)
+                foreach (var each in _draft.Steps)
+                    (each.State, each.Problem) = (DraftStepState.NotPlayed, null);
+            _panel.Refresh();
+            problem = Played(() =>
+            {
+                _driver.CloseAll(_runner.Exe);
+                _runner.ResetMachine();
+                _runner.Forget();
+                PlayBefore();
+            });
         }
-        return [.. _suite.Cases.Where(item => ids.Contains(item.Id))];
+        problem ??= PlayTo(step);
+        Caught();
+        _panel.Ready(problem, record && problem is null);
+    }
+
+    // Plays the steps not played yet, in order, up to and including this one, and stops at one that doesn't work.
+    private string? PlayTo(DraftStep last)
+    {
+        List<DraftStep> steps;
+        lock (_draft.Steps)
+            steps = [.. _draft.Steps.Take(_draft.Steps.IndexOf(last) + 1)];
+        for (var index = 0; index < steps.Count; index++)
+        {
+            var step = steps[index];
+            if (step.State == DraftStepState.Played)
+                continue;
+            _panel.Playing(step);
+            var problem = Played(() => _runner.Play(new JsonArray(Inline(step)), $"Step {index + 1}"));
+            (step.State, step.Problem) = problem is null ? (DraftStepState.Played, null) : (DraftStepState.Failed, problem);
+            _panel.Refresh(step);
+            if (problem is not null)
+                return $"Step {index + 1}, {step.Text}, didn't work: {problem}";
+        }
+        return null;
+    }
+
+    // After playing: the app may have started again, and what it shows now isn't a new step's.
+    private void Caught()
+    {
+        ReadProcesses();
+        _watching.Clear();
+        foreach (var hook in _recorder.Watched)
+            _watching[hook.Element] = new Watching(TextOf(hook.Element));
     }
 
     // ===== What the person did =====
@@ -210,8 +273,7 @@ internal sealed class BuildWorker
         {
             _panel.Tried(step, problem);
             // What a step tried again changes is not a new step's.
-            _status = Status();
-            _changing = null;
+            Caught();
         }
         else if (problem is null)
             _panel.Add(_recorder.Add(step, changesStatus: step.Verb == "click"));
@@ -248,7 +310,7 @@ internal sealed class BuildWorker
         if (mode == BuildMode.Recording)
         {
             FollowTyping();
-            FollowStatus();
+            FollowWatched();
         }
         else
             LeaveBox();
@@ -293,27 +355,40 @@ internal sealed class BuildWorker
         _panel.Add(_recorder.Left(box.Facts.IsPassword ? "" : FlaUiInspector.ValueOf(box) ?? _typed));
     }
 
-    private void FollowStatus()
+    // A watched control's text that changed and kept still gets a wait after the step that changed it.
+    private void FollowWatched()
     {
-        if (Status() is not { } now || now == _status)
+        foreach (var hook in _recorder.Watched)
         {
-            _changing = null;
-            return;
+            var now = TextOf(hook.Element);
+            if (!_watching.TryGetValue(hook.Element, out var watching))
+            {
+                _watching[hook.Element] = new Watching(now);
+                continue;
+            }
+            if (now is null || now == watching.Last)
+            {
+                watching.Changing = null;
+                continue;
+            }
+            if (now != watching.Changing)
+                (watching.Changing, watching.Since) = (now, Environment.TickCount64);
+            else if (Environment.TickCount64 - watching.Since >= StatusSettles)
+                Settle();
         }
-        if (now != _changing)
-            (_changing, _changingSince) = (now, Environment.TickCount64);
-        else if (Environment.TickCount64 - _changingSince >= StatusSettles)
-            Settle();
     }
 
-    // The status text changed and kept still, or something else is about to happen: a wait for it goes after the step
-    // that changed it.
+    // A watched control's text changed and kept still, or something else is about to happen: a wait for it goes
+    // after the step that changed it.
     private void Settle()
     {
-        if (_changing is not { } now)
-            return;
-        (_status, _changing) = (now, null);
-        _panel.Add(_recorder.StatusSaid(now));
+        foreach (var hook in _recorder.Watched)
+        {
+            if (!_watching.TryGetValue(hook.Element, out var watching) || watching.Changing is not { } now)
+                continue;
+            (watching.Last, watching.Changing) = (now, null);
+            _panel.Add(_recorder.Changed(hook, now));
+        }
     }
 
     // Reads the control under the mouse as it stops on one, so a click is of what was there before it; and outlines
@@ -421,18 +496,27 @@ internal sealed class BuildWorker
             ? named.DeepClone()
             : target.DeepClone();
 
-    // What the app's status text says now, or null when it has none or it can't be read.
-    private string? Status()
+    // What a watched control says now, or null when it isn't there or can't be read.
+    private string? TextOf(string element)
     {
-        if (_suite.App.Status is not { } status)
-            return null;
         try
         {
-            return _driver.TryFind(Targets.Resolve(status, _runner.Globals, _suite.Elements)) is { } control ? control.Value ?? control.Name : null;
+            var elements = Elements();
+            return _driver.TryFind(Targets.Resolve(element, _runner.Globals, elements)) is { } control ? control.Value ?? control.Name : null;
         }
         catch (Exception ex) when (ex is StuckException or ScriptException or COMException or InvalidOperationException)
         {
             return null;
         }
+    }
+
+    // A watched control's text: what it said when it was last waited for, and a new text and since when.
+    private sealed class Watching(string? last)
+    {
+        public string? Last { get; set; } = last;
+
+        public string? Changing { get; set; }
+
+        public long Since { get; set; }
     }
 }

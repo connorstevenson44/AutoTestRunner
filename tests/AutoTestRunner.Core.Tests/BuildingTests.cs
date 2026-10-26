@@ -207,7 +207,7 @@ public sealed class BuildingTests : IDisposable
         var suite = CopyOfTour();
         var existing = suite.Cases[0];
         var before = File.ReadAllText(existing.File);
-        var draft = new CaseDraft { AddingTo = existing };
+        var draft = CaseDraft.Load(existing);
         var express = new ControlFacts("CheckBox", "Express delivery", Id: "ExpressBox") { Checked = true };
         draft.Steps.Add(StepMaker.Tick(Name(suite, express), express, true));
         draft.Checks.Add(new JsonObject { ["shows"] = "addOrder" });
@@ -229,6 +229,156 @@ public sealed class BuildingTests : IDisposable
         foreach (var line in kept)
             at = lines.FindIndex(at, candidate => candidate.TrimEnd(',', '\r', ' ') == line.TrimEnd(',', '\r', ' ')) + 1;
         Assert.True(at > 0, "The case's own lines were changed.");
+    }
+
+    [Fact]
+    public void A_case_opened_to_change_it_has_its_steps_but_not_its_checkpoint_none_of_them_played()
+    {
+        var suite = Suite.Load(Tour);
+        var draft = CaseDraft.Load(suite.Cases[0]);
+
+        Assert.Equal(suite.Cases[0].Steps.Count - 1, draft.Steps.Count);
+        Assert.All(draft.Steps, step => Assert.Equal(DraftStepState.NotPlayed, step.State));
+        Assert.Equal(["take-an-order"], suite.Cases[1].Needs);
+        Assert.Equal("customer", draft.Steps[2].Target!.Shown);
+        Assert.Equal(TargetQuality.Sturdy, draft.Steps[2].Target!.Quality);
+        Assert.Equal("orderRow 1001", draft.Steps[^1].Target!.Shown);
+    }
+
+    [Fact]
+    public void Changing_a_case_from_a_step_keeps_the_steps_before_it_as_written_and_its_checkpoint()
+    {
+        var suite = CopyOfTour();
+        var existing = suite.Cases[0];
+        var before = File.ReadAllText(existing.File);
+        var draft = CaseDraft.Load(existing);
+        // Edit from step 5: the steps after it go, and new ones are recorded.
+        lock (draft.Steps)
+            draft.Steps.RemoveRange(5, draft.Steps.Count - 5);
+        var three = new ControlFacts("Edit", "Quantity", Id: "QuantityBox");
+        draft.Steps.Add(StepMaker.Type(Name(suite, three), three, "3"));
+        draft.Steps[1].Text = "The bar at the bottom says what the app is doing: ${ready}";
+
+        CaseWriter.Save(suite, draft);
+
+        var text = File.ReadAllText(existing.File);
+        var reloaded = Suite.Load(suite.Folder).Cases[0];
+        Assert.Equal(7, reloaded.Steps.Count);
+        Assert.Equal("""{ "find": "statusText", "as": "ready", "what": "the bar at the bottom", "say": "The bar at the bottom says what the app is doing: ${ready}" }""", JsonLine.Write(reloaded.Steps[1]));
+        Assert.Equal("""{ "type": "quantity", "text": "3", "say": "Type 3 in Quantity" }""", JsonLine.Write(reloaded.Steps[5]));
+        Assert.Equal("Ada's order was added and saved", reloaded.Steps[^1]!["checkpoint"]!.GetValue<string>());
+        // The first step is as it was written, and so is everything from the checkpoint on.
+        var first = before.Split('\n').First(line => line.Contains("startApp", StringComparison.Ordinal));
+        Assert.Contains(first, text, StringComparison.Ordinal);
+        Assert.EndsWith(before[before.IndexOf("{ \"checkpoint\"", StringComparison.Ordinal)..], text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_case_with_every_step_taken_out_keeps_its_checkpoint()
+    {
+        var suite = CopyOfTour();
+        var draft = CaseDraft.Load(suite.Cases[0]);
+        draft.Steps.Clear();
+
+        CaseWriter.Save(suite, draft);
+
+        var reloaded = Suite.Load(suite.Folder).Cases[0];
+        Assert.Single(reloaded.Steps);
+        Assert.NotNull(reloaded.Steps[0]!["checkpoint"]);
+    }
+
+    [Fact]
+    public void The_cases_that_carry_on_from_a_changed_case_can_be_marked_and_the_marks_cleared()
+    {
+        var suite = CopyOfTour();
+        var first = suite.Cases[0];
+        var after = suite.CarryingOn(first);
+        Assert.Contains(suite.Cases[1], after);
+        Assert.DoesNotContain(first, after);
+        Assert.All(after, item => Assert.Contains(first, suite.Leading(item)));
+
+        var draft = CaseDraft.Load(first);
+        draft.Review[suite.Cases[1].File] = "Case 1 changed from step 5.";
+        File.WriteAllText(first.File, CaseWriter.Flag(File.ReadAllText(first.File), "Left from before."));
+        CaseWriter.Save(suite, draft);
+
+        var reloaded = Suite.Load(suite.Folder);
+        Assert.Null(reloaded.Cases[0].Review);
+        Assert.Equal("Case 1 changed from step 5.", reloaded.Cases[1].Review);
+        CaseWriter.ClearReview(reloaded.Cases[1]);
+        Assert.Null(Suite.Load(suite.Folder).Cases[1].Review);
+        Assert.Equal(File.ReadAllText(Path.Combine(Tour, "cases", Path.GetFileName(suite.Cases[1].File))), File.ReadAllText(suite.Cases[1].File));
+    }
+
+    [Fact]
+    public void A_watched_control_gets_a_wait_through_its_waitFor_macro_and_a_check_when_asked()
+    {
+        var suite = CopyOfTour();
+        var macro = """{ "params": { "startsWith": {} }, "steps": [ { "waitText": "formProblem", "startsWith": "${startsWith}", "as": "problem" } ], "returns": "problem" }""";
+        File.WriteAllText(Path.Combine(suite.Folder, "macros", "waitForFormProblem.json"), macro);
+        suite = Suite.Load(suite.Folder);
+        Assert.Contains(new WatchHook("formProblem", "waitForFormProblem"), suite.Watched());
+        Assert.Contains(new WatchHook("statusText", "waitForStatusBar"), suite.Watched());
+
+        var draft = new CaseDraft { Name = "Watch the form" };
+        draft.NewWatch.Add(new WatchHook("formTotal", Check: true));
+        var recorder = new Recorder(suite, draft, control => Name(suite, control));
+        recorder.Clicked(new ControlFacts("CheckBox", "Gift wrap", Id: "GiftWrapBox") { Checked = true });
+        var problem = recorder.Watched.Single(hook => hook.Element == "formProblem");
+        var total = recorder.Watched.Single(hook => hook.Element == "formTotal");
+        recorder.Changed(problem, "Pick a product.");
+        recorder.Changed(problem, "Pick a product, please.");
+        recorder.Changed(total, "Total: £14.00");
+
+        string[] expected =
+        [
+            """{ "tick": "giftWrap", "say": "Tick Gift wrap" }""",
+            """{ "call": "waitForFormProblem", "with": { "startsWith": "Pick a product." } }""",
+            """{ "waitText": "formTotal", "startsWith": "Total", "as": "formTotal" }""",
+        ];
+        Assert.Equal(expected, draft.Steps.Select(step => JsonLine.Write(step.Json)));
+        Assert.Equal("""{ "equals": "${formTotal}", "to": "Total: £14.00", "label": "formTotal said \"Total: £14.00\"" }""", JsonLine.Write(Assert.Single(draft.Checks)));
+    }
+
+    [Fact]
+    public void A_click_with_a_hook_is_followed_by_its_steps_instead_of_a_wait_for_the_status()
+    {
+        var suite = CopyOfTour();
+        var draft = new CaseDraft { Name = "Hooks" };
+        draft.NewAfterClick.Add(new ClickHook("addOrder", "waitForStatusBar", new JsonObject { ["startsWith"] = "Added order" }, 0.5));
+        draft.NewWatch.Add(new WatchHook("formTotal"));
+        CaseWriter.AddHooks(suite, draft.NewWatch, draft.NewAfterClick);
+        suite = Suite.Load(suite.Folder);
+        Assert.Equal([new WatchHook("formTotal")], suite.Watch);
+        Assert.Equal("addOrder", Assert.Single(suite.AfterClick).Element);
+
+        var recorder = new Recorder(suite, new CaseDraft(), control => Name(suite, control));
+        var steps = recorder.Clicked(new ControlFacts("Button", "Add order", Id: "AddButton"));
+        recorder.StatusSaid("Added order 1001 for Ada Lovelace, £26.00.");
+
+        Assert.Equal(
+            ["""{ "click": "addOrder", "say": "Click Add order" }""", """{ "wait": 0.5 }""", """{ "call": "waitForStatusBar", "with": { "startsWith": "Added order" } }"""],
+            steps.Select(step => JsonLine.Write(step.Json)));
+
+        // A second hook goes on the end of the list that is there now.
+        CaseWriter.AddHooks(suite, [new WatchHook("formProblem", Check: true)], []);
+        Assert.Equal(2, Suite.Load(suite.Folder).Watch.Count);
+    }
+
+    [Fact]
+    public void A_script_step_names_a_ps1_file_in_the_suite()
+    {
+        var suite = CopyOfTour();
+        var step = StepMaker.Script(@"tools\Reset-OrderDesk.ps1");
+        Assert.Equal("""{ "script": "tools/Reset-OrderDesk.ps1", "say": "Run Reset-OrderDesk.ps1" }""", JsonLine.Write(step.Json));
+        Assert.Equal("tools/Reset-OrderDesk.ps1", step.Script);
+
+        var draft = new CaseDraft { Name = "Scripts" };
+        draft.Steps.Add(step);
+        draft.Steps.Add(StepMaker.Script("tools/Missing.ps1"));
+        CaseWriter.Save(suite, draft);
+        var problem = Assert.Single(Assert.Throws<SuiteException>(() => Suite.Load(suite.Folder)).Problems);
+        Assert.Contains("there is no script tools/Missing.ps1", problem, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -182,6 +182,9 @@ public sealed class Runner
         Steps(new JsonArray([.. steps.Where(step => step?["checkpoint"] is null).Select(step => step!.DeepClone())]), _played, where);
     }
 
+    /// <summary>Forgets what steps played outside a case kept, as the builder does when it starts the case again.</summary>
+    public void Forget() => _played = null;
+
     // ===== Steps =====
 
     private void Steps(JsonArray steps, VariableScope scope, string where)
@@ -457,6 +460,32 @@ public sealed class Runner
                 if (output.ExitCode != 0)
                     FailStep($"A PowerShell step failed with exit code {output.ExitCode}: {output.Output}");
                 KeepOutput(step, scope, output);
+                break;
+            }
+
+            case "script":
+            {
+                // A .ps1 file in the suite, run as the reset script is, so it can be opened and changed on its own.
+                var file = Path.GetFullPath(Path.Combine(_suite.Folder, Text("script")!));
+                if (!File.Exists(file))
+                    throw new ScriptException($"There is no script {file}.");
+                var arguments = (step["args"] as JsonArray ?? []).Select(arg => scope.Expand(arg!.ToString())).ToList();
+                List<string> line = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", file, .. arguments];
+                ShowStep(say ?? $"Run {Path.GetFileName(file)}", ActivityKind.Command, CommandReportingMachine.CommandLine("powershell.exe", line, null));
+                var output = _machine.Run("powershell.exe", line);
+                if (output.ExitCode != 0)
+                    FailStep($"{Path.GetFileName(file)} failed with exit code {output.ExitCode}: {output.Output}");
+                KeepOutput(step, scope, output);
+                break;
+            }
+
+            case "wait":
+            {
+                var seconds = double.Parse(Text("wait")!, CultureInfo.InvariantCulture);
+                if (say is not null)
+                    ShowStep(say);
+                _view.ShowWait($"Wait {seconds.ToString(CultureInfo.InvariantCulture)} seconds");
+                Control.Wait((int)(seconds * 1000));
                 break;
             }
 

@@ -25,6 +25,12 @@ public sealed class Suite
     public required IReadOnlyList<Case> Cases { get; init; }
     public (int Width, int Height)? Screen { get; init; }
 
+    /// <summary>The controls the builder watches while recording, from builder.watch in suite.json.</summary>
+    public IReadOnlyList<WatchHook> Watch { get; init; } = [];
+
+    /// <summary>The steps the builder adds after a control is clicked, from builder.afterClick in suite.json.</summary>
+    public IReadOnlyList<ClickHook> AfterClick { get; init; } = [];
+
     /// <summary>
     /// Reads a suite folder and checks every step against the vocabulary, so a misspelt step, element or macro is
     /// reported before anything runs. Throws SuiteException with every problem found.
@@ -89,12 +95,38 @@ public sealed class Suite
                 (item["needs"] as JsonArray ?? []).Select(need => need!.GetValue<string>()).ToList(),
                 item["needsNote"]?.GetValue<string>(),
                 item["covers"]?.GetValue<string>(),
-                item["steps"] as JsonArray ?? []));
+                item["steps"] as JsonArray ?? [])
+            {
+                Review = item["review"]?.GetValue<string>(),
+            });
         }
 
         var screen = root["screen"] is JsonObject size
             ? ((int)size["width"]!, (int)size["height"]!)
             : ((int, int)?)null;
+
+        var builder = root["builder"] as JsonObject ?? [];
+        var watch = new List<WatchHook>();
+        foreach (var node in builder["watch"] as JsonArray ?? [])
+        {
+            if (node is not JsonObject hook || hook["element"]?.GetValue<string>() is not { } element)
+            {
+                problems.Add("suite.json: each of builder.watch needs element, the control to watch.");
+                continue;
+            }
+            watch.Add(new WatchHook(element, hook["call"]?.GetValue<string>(), hook["check"]?.GetValue<bool>() ?? false));
+        }
+        var afterClick = new List<ClickHook>();
+        foreach (var node in builder["afterClick"] as JsonArray ?? [])
+        {
+            if (node is not JsonObject hook || hook["element"]?.GetValue<string>() is not { } element || hook["call"]?.GetValue<string>() is not { } call)
+            {
+                problems.Add("suite.json: each of builder.afterClick needs element, the control clicked, and call, the macro to run after it.");
+                continue;
+            }
+            var delay = hook["delay"] is { } seconds ? double.Parse(seconds.ToString(), CultureInfo.InvariantCulture) : 0;
+            afterClick.Add(new ClickHook(element, call, hook["with"]?.DeepClone() as JsonObject, delay));
+        }
 
         var suite = new Suite
         {
@@ -114,6 +146,8 @@ public sealed class Suite
             Macros = macros,
             Cases = cases,
             Screen = screen,
+            Watch = watch,
+            AfterClick = afterClick,
         };
         suite.Check(problems);
         if (problems.Count > 0)
@@ -147,6 +181,55 @@ public sealed class Suite
         return picked;
     }
 
+    /// <summary>A case and the cases it carries on from, in the order they run.</summary>
+    public IReadOnlyList<Case> Leading(Case last)
+    {
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        var waiting = new Stack<Case>([last]);
+        while (waiting.TryPop(out var item))
+        {
+            if (!ids.Add(item.Id))
+                continue;
+            foreach (var need in item.Needs)
+                if (Find(need) is { } needed)
+                    waiting.Push(needed);
+        }
+        return [.. Cases.Where(item => ids.Contains(item.Id))];
+    }
+
+    /// <summary>The cases that carry on from a case, directly or through others, in order: a change to it changes where they start.</summary>
+    public IReadOnlyList<Case> CarryingOn(Case first)
+    {
+        var after = new HashSet<string>(StringComparer.Ordinal) { first.Id };
+        for (var grew = true; grew;)
+        {
+            grew = false;
+            foreach (var item in Cases)
+                if (!after.Contains(item.Id) && item.Needs.Any(after.Contains))
+                    grew = after.Add(item.Id) || grew;
+        }
+        return [.. Cases.Where(item => item != first && after.Contains(item.Id))];
+    }
+
+    /// <summary>
+    /// The controls the builder watches: those in builder.watch, those with a macro named waitFor and their name, such
+    /// as waitForSavedText for savedText, and the app's status text, waited for with waitForStatusBar when there is one.
+    /// </summary>
+    public IReadOnlyList<WatchHook> Watched()
+    {
+        var watched = Watch.ToList();
+        bool Has(string element) => watched.Any(hook => hook.Element == element);
+        foreach (var element in Elements.Keys)
+            if (!Has(element) && Macros.ContainsKey(WaitMacro(element)))
+                watched.Add(new WatchHook(element, WaitMacro(element)));
+        if (App.Status is { } status && !Has(status))
+            watched.Add(new WatchHook(status, Macros.ContainsKey("waitForStatusBar") ? "waitForStatusBar" : null));
+        return watched;
+    }
+
+    /// <summary>The macro that waits for an element by its name alone, such as waitForSavedText for savedText.</summary>
+    public static string WaitMacro(string element) => "waitFor" + char.ToUpperInvariant(element[0]) + element[1..];
+
     private static IEnumerable<string> Files(string folder, string sub)
     {
         var path = Path.Combine(folder, sub);
@@ -173,6 +256,14 @@ public sealed class Suite
     {
         if (App.Status is { } status && !Elements.ContainsKey(status))
             problems.Add($"suite.json: app.status names {status}, which isn't in elements.json.");
+        foreach (var (element, call, where) in Watch.Select(hook => (hook.Element, hook.Call, "builder.watch"))
+            .Concat(AfterClick.Select(hook => (hook.Element, (string?)hook.Call, "builder.afterClick"))))
+        {
+            if (!Elements.ContainsKey(element))
+                problems.Add($"suite.json: {where} names {element}, which isn't in elements.json.");
+            if (call is not null && !Macros.ContainsKey(call))
+                problems.Add($"suite.json: {where} calls {call}, and there is no macro called that.");
+        }
         var ids = Cases.Select(item => item.Id).ToHashSet();
         foreach (var item in Cases)
         {
@@ -228,6 +319,10 @@ public sealed class Suite
                     break;
                 case "repeat":
                     CheckSteps(step["steps"] as JsonArray ?? [], at, problems);
+                    break;
+                case "script" when step["script"]?.GetValue<string>() is { } script && !script.Contains("${", StringComparison.Ordinal):
+                    if (!File.Exists(Path.Combine(Folder, script)))
+                        problems.Add($"{at}: there is no script {script} in the suite's folder.");
                     break;
                 case "whileShows":
                     if (step["untilText"] is { } until)

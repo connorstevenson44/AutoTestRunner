@@ -14,7 +14,7 @@ namespace AutoTestRunner.Cli;
 ///   autotest launch [&lt;folder&gt;]        the launcher, on a suite or the suites found in a folder
 ///   autotest run &lt;suite folder&gt; [--cases 1-5,8] [--unattended] [--speed Slow|Modest|Fast]
 ///            [--mode auto|pause-at-checkpoints|step-by-step] [--results &lt;folder&gt;] [--var name=value]...
-///   autotest record &lt;suite folder&gt; [--name &lt;name&gt;] [--after &lt;case&gt;] [--add-to &lt;case&gt;]   builds a case
+///   autotest record &lt;suite folder&gt; [--name &lt;name&gt;] [--after &lt;case&gt;] [--edit &lt;case&gt;]   builds or changes a case
 ///   autotest validate &lt;suite folder&gt;   reads every script and reports what is wrong with them
 ///   autotest list &lt;suite folder&gt;    lists the cases
 ///   autotest preview-ui [--shots &lt;folder&gt;]   plays a made-up run in the panel, and saves pictures of it
@@ -25,7 +25,7 @@ public static class Program
         autotest [launch [<suite folder, or a folder of suites>]] [the options of run, to start the launcher with]
         autotest run <suite folder> [--cases 1-5,8] [--unattended] [--speed Slow|Modest|Fast]
                  [--mode auto|pause-at-checkpoints|step-by-step] [--results <folder>] [--var name=value]...
-        autotest record <suite folder> [--name <name>] [--after <case>] [--add-to <case>]
+        autotest record <suite folder> [--name <name>] [--after <case>] [--edit <case>]
         autotest validate <suite folder>
         autotest list <suite folder>
         autotest preview-ui [--shots <folder>]
@@ -37,7 +37,8 @@ public static class Program
         --mode step-by-step          waits for Enter before each step
         --name                       record: what the new case is called
         --after                      record: the new case carries on from where this case leaves off, by number or id
-        --add-to                     record: adds steps to this case, before its checkpoint, by number or id
+        --edit                       record: opens this case to change it, by number or id: the app is taken to where it
+                                     starts, and its steps can be played to any of them, and recorded again from there
         """;
 
     [STAThread]
@@ -155,9 +156,9 @@ public static class Program
         BuildRequest request;
         try
         {
-            if (options.AddTo is not null && options.After is not null)
-                throw new SuiteException(["--add-to adds to a case, and --after starts a new one: give one of them."]);
-            request = new BuildRequest(suite, options.Name ?? "New case", Named(options.After, "--after"), Named(options.AddTo, "--add-to"));
+            if (options.Edit is not null && options.After is not null)
+                throw new SuiteException(["--edit changes a case, and --after starts a new one: give one of them."]);
+            request = new BuildRequest(suite, options.Name ?? "New case", Named(options.After, "--after"), Named(options.Edit, "--edit"));
         }
         catch (SuiteException ex)
         {
@@ -169,7 +170,7 @@ public static class Program
         var found = SuiteFinder.Find(SuiteFinder.Places(AppContext.BaseDirectory, Environment.CurrentDirectory, suite.Folder)).Select(FoundSuite.Load).ToList();
         if (!found.Any(each => SamePath(each.Folder, suite.Folder)))
             found.Insert(0, FoundSuite.Load(suite.Folder));
-        return WatchedRun.Launch(found, found.First(each => SamePath(each.Folder, suite.Folder)), options with { AddTo = null, After = null, Name = null }, request);
+        return WatchedRun.Launch(found, found.First(each => SamePath(each.Folder, suite.Folder)), options with { Edit = null, After = null, Name = null }, request);
     }
 
     private static int Problem(string? problem)

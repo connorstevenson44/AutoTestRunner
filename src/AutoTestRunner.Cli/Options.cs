@@ -16,8 +16,8 @@ public sealed record Options
     /// <summary>launch: start the cases given straight away, as after restarting as administrator to run them.</summary>
     public bool Start { get; init; }
 
-    /// <summary>record: the case to add steps to, by number or id.</summary>
-    public string? AddTo { get; init; }
+    /// <summary>record: the case to open and change, by number or id.</summary>
+    public string? Edit { get; init; }
 
     /// <summary>record: the case whose end the new case starts from, by number or id.</summary>
     public string? After { get; init; }
@@ -28,7 +28,7 @@ public sealed record Options
     /// <summary>The options as arguments again, to pass on when autotest restarts itself.</summary>
     public IEnumerable<string> Arguments()
     {
-        foreach (var (flag, value) in new[] { ("--cases", Cases), ("--mode", Mode), ("--speed", Speed.ToString()), ("--results", Results), ("--add-to", AddTo), ("--after", After), ("--name", Name) })
+        foreach (var (flag, value) in new[] { ("--cases", Cases), ("--mode", Mode), ("--speed", Speed.ToString()), ("--results", Results), ("--edit", Edit), ("--after", After), ("--name", Name) })
         {
             if (value is null)
                 continue;
@@ -73,8 +73,8 @@ public sealed record Options
                 case "--start":
                     options = options with { Start = true };
                     break;
-                case "--add-to":
-                    options = options with { AddTo = Next() };
+                case "--edit" or "--add-to":
+                    options = options with { Edit = Next() };
                     break;
                 case "--after":
                     options = options with { After = Next() };

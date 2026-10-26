@@ -8,22 +8,28 @@ using AutoTestRunner.Scripting;
 namespace AutoTestRunner.Building;
 
 /// <summary>
-/// Saves a case that was built: a new file in cases/, numbered after the last, or new steps and checks put into an
-/// existing case without touching the rest of its text; and the controls that were named, added to elements.json.
+/// Saves a case that was built: a new file in cases/, numbered after the last, or a case opened to change it, with
+/// only the steps that changed written afresh; and the controls that were named, added to elements.json.
 /// </summary>
 public static partial class CaseWriter
 {
     private const string SchemaFolder = "https://raw.githubusercontent.com/connorstevenson44/AutoTestRunner/main/schema/";
     private static readonly JsonReaderOptions ReadOptions = new() { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
 
-    /// <summary>Saves the draft, and returns the case file it went in.</summary>
+    /// <summary>
+    /// Saves the draft, and returns the case file it went in; with the controls it named, the hooks it added, and the
+    /// review lines for the cases that carry on from it.
+    /// </summary>
     public static string Save(Suite suite, CaseDraft draft)
     {
         AddElements(suite, draft.NewElements);
-        if (draft.AddingTo is { } existing)
+        AddHooks(suite, draft.NewWatch, draft.NewAfterClick);
+        foreach (var (file, why) in draft.Review)
+            File.WriteAllText(file, Flag(File.ReadAllText(file), why));
+        if (draft.Editing is { } existing)
         {
             var text = File.ReadAllText(existing.File);
-            File.WriteAllText(existing.File, Insert(text, draft));
+            File.WriteAllText(existing.File, Unflag(Rewrite(text, draft)));
             return existing.File;
         }
         var folder = Path.Combine(suite.Folder, "cases");
@@ -63,32 +69,48 @@ public static partial class CaseWriter
     }
 
     /// <summary>
-    /// An existing case's text with the draft's steps put in before its checkpoint (or at the end, when it has none),
-    /// and the draft's checks and things to look at put into that checkpoint. Everything else stays as it was written.
+    /// A case's text with its steps as the draft has them, and the draft's checks and things to look at put into its
+    /// checkpoint. The steps the draft keeps as they were, from the first, stay as written, comments and all; the rest
+    /// are written afresh, those unchanged as they were written. The checkpoint, and everything else, stays as it was.
     /// </summary>
-    public static string Insert(string text, CaseDraft draft)
+    public static string Rewrite(string text, CaseDraft draft)
     {
         var bytes = Encoding.UTF8.GetBytes(text);
         var layout = Read(bytes);
         var newline = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
-        var edits = new List<(int At, string Text)>();
-        var steps = draft.Steps.Select(step => step.Json).ToList();
-        var last = layout.Steps.Count > 0 ? layout.Steps[^1] : null;
-        var checkpoint = last is { IsCheckpoint: true } ? last : null;
-        var addCheckpoint = checkpoint is null && draft.Checkpoint() is { } made ? made : null;
-        if (addCheckpoint is not null)
-            steps.Add(addCheckpoint);
+        var edits = new List<(int At, int Length, string Text)>();
+        var checkpoint = layout.Steps.Count > 0 && layout.Steps[^1].IsCheckpoint ? layout.Steps[^1] : null;
+        var written = checkpoint is null ? layout.Steps : layout.Steps[..^1];
+        string? Written(DraftStep step) =>
+            step.Source is { } source && source < written.Count && Encoding.UTF8.GetString(bytes[written[source].Start..written[source].End]) is var original
+            && JsonNode.DeepEquals(JsonNode.Parse(original, documentOptions: new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true }), step.Json)
+                ? original
+                : null;
 
-        if (steps.Count > 0)
+        // The steps kept as they were, from the first, and those after them.
+        var steps = draft.Steps.ToList();
+        var kept = 0;
+        while (kept < steps.Count && kept < written.Count && steps[kept].Source == kept && Written(steps[kept]) is not null)
+            kept++;
+        var indent = layout.Steps.Count > 0 ? IndentAt(bytes, layout.Steps[0].Start) : "    ";
+        var lines = steps.Skip(kept).Select(step => Written(step) ?? JsonLine.Step(step.Json, indent, newline)).ToList();
+        if (checkpoint is null && draft.Checkpoint() is { } made)
+            lines.Add(JsonLine.Step(made, indent, newline));
+        if (kept < written.Count || lines.Count > 0)
         {
-            var indent = last is null ? "    " : IndentAt(bytes, last.Start);
-            var lines = steps.Select(step => JsonLine.Step(step, indent, newline)).ToList();
-            if (checkpoint is not null)
-                edits.Add((checkpoint.Start, string.Join("," + newline + indent, lines) + "," + newline + indent));
-            else if (last is not null)
-                edits.Add((last.End, "," + newline + indent + string.Join("," + newline + indent, lines)));
-            else
-                edits.Add((layout.StepsEnd, newline + indent + string.Join("," + newline + indent, lines) + newline + "  "));
+            var between = "," + newline + indent;
+            var from = kept > 0 ? written[kept - 1].End : layout.Steps.Count > 0 ? layout.Steps[0].Start : layout.StepsEnd;
+            var to = checkpoint?.Start ?? (written.Count > 0 ? written[^1].End : layout.StepsEnd);
+            var join = string.Join(between, lines);
+            var replace = (kept > 0, checkpoint is not null, layout.Steps.Count > 0) switch
+            {
+                (true, true, _) => between + (lines.Count > 0 ? join + between : ""),
+                (true, false, _) => lines.Count > 0 ? between + join : "",
+                (false, true, _) => lines.Count > 0 ? join + between : "",
+                (false, false, true) => join,
+                (false, false, false) => lines.Count > 0 ? newline + indent + join + newline + "  " : "",
+            };
+            edits.Add((from, to - from, replace));
         }
         if (checkpoint is not null)
         {
@@ -97,9 +119,143 @@ public static partial class CaseWriter
             AddItems(edits, bytes, checkpoint, "look", draft.Look.Select(line => (JsonNode)JsonValue.Create(line)), itemIndent, newline);
         }
 
+        foreach (var (at, length, insert) in edits.OrderByDescending(edit => edit.At))
+            bytes = [.. bytes[..at], .. Encoding.UTF8.GetBytes(insert), .. bytes[(at + length)..]];
+        return Encoding.UTF8.GetString(bytes);
+    }
+
+    /// <summary>
+    /// A case's text marked as needing looking at again, with why, as a review line after its name: the launcher
+    /// shows a warning on it until it is changed and saved, or the warning is cleared.
+    /// </summary>
+    public static string Flag(string text, string why)
+    {
+        text = Unflag(text);
+        var name = NameLine().Match(text);
+        if (!name.Success)
+            return text;
+        var newline = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        var line = $"\"review\": {JsonLine.Quote(why)}";
+        var after = name.Index + name.Length;
+        return name.Value.EndsWith(',')
+            ? text[..after] + newline + name.Groups[1].Value + line + "," + text[after..]
+            : text[..after] + "," + newline + name.Groups[1].Value + line + text[after..];
+    }
+
+    /// <summary>A case's text without its review line.</summary>
+    public static string Unflag(string text)
+    {
+        var line = ReviewLine().Match(text);
+        if (line.Success)
+            return text.Remove(line.Index, line.Length);
+        var last = ReviewLast().Match(text);
+        return last.Success ? text.Remove(last.Index, last.Length) : text;
+    }
+
+    /// <summary>Clears a case's review in its file.</summary>
+    public static void ClearReview(Case item) => File.WriteAllText(item.File, Unflag(File.ReadAllText(item.File)));
+
+    /// <summary>
+    /// Adds controls to watch and clicks to follow to suite.json's builder, keeping the rest of it as it was written:
+    /// on the end of builder.watch and builder.afterClick, made when they aren't there.
+    /// </summary>
+    public static void AddHooks(Suite suite, IReadOnlyList<WatchHook> watch, IReadOnlyList<ClickHook> afterClick)
+    {
+        if (watch.Count == 0 && afterClick.Count == 0)
+            return;
+        var path = Path.Combine(suite.Folder, "suite.json");
+        var text = File.ReadAllText(path);
+        var newline = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        var items = new Dictionary<string, List<string>>
+        {
+            ["watch"] = [.. watch.Select(hook => JsonLine.Write(Hook(hook)))],
+            ["afterClick"] = [.. afterClick.Select(hook => JsonLine.Write(Hook(hook)))],
+        };
+        var bytes = Encoding.UTF8.GetBytes(text);
+        var reader = new Utf8JsonReader(bytes, ReadOptions);
+        string? property = null;
+        int? builderStart = null, rootEnd = null, lastRootValueEnd = null;
+        var arrays = new Dictionary<string, (int Start, int? LastItemEnd)>();
+        string? inArray = null;
+        while (reader.Read())
+        {
+            var depth = reader.CurrentDepth;
+            switch (reader.TokenType)
+            {
+                case JsonTokenType.PropertyName:
+                    property = reader.GetString();
+                    continue;
+                case JsonTokenType.StartObject when depth == 1 && property == "builder":
+                    builderStart = (int)reader.TokenStartIndex;
+                    break;
+                case JsonTokenType.StartArray when depth == 2 && builderStart is not null && property is "watch" or "afterClick":
+                    inArray = property;
+                    arrays[property] = ((int)reader.TokenStartIndex, null);
+                    break;
+                case JsonTokenType.EndArray when depth == 2 && inArray is not null:
+                    inArray = null;
+                    break;
+                case JsonTokenType.EndObject when depth == 3 && inArray is not null:
+                    arrays[inArray] = (arrays[inArray].Start, (int)reader.BytesConsumed);
+                    break;
+                case JsonTokenType.EndObject when depth == 0:
+                    rootEnd = (int)reader.TokenStartIndex;
+                    break;
+            }
+            if (depth == 1 && reader.TokenType is not (JsonTokenType.StartObject or JsonTokenType.StartArray))
+                lastRootValueEnd = (int)reader.BytesConsumed;
+            property = null;
+        }
+        if (rootEnd is null)
+            throw new JsonException("suite.json isn't a JSON object.");
+        var edits = new List<(int At, string Text)>();
+        var indent = "      ";
+        var missing = new List<string>();
+        foreach (var (key, lines) in items.Where(pair => pair.Value.Count > 0))
+        {
+            if (arrays.TryGetValue(key, out var array))
+                edits.Add(array.LastItemEnd is { } end
+                    ? (end, "," + newline + indent + string.Join("," + newline + indent, lines))
+                    : (array.Start + 1, newline + indent + string.Join("," + newline + indent, lines) + newline + "    "));
+            else
+                missing.Add($"{JsonLine.Quote(key)}: [{newline}{indent}{string.Join("," + newline + indent, lines)}{newline}    ]");
+        }
+        if (missing.Count > 0 && builderStart is { } start)
+            edits.Add((start + 1, newline + "    " + string.Join("," + newline + "    ", missing) + ","));
+        else if (missing.Count > 0)
+            edits.Add((LastValueEnd(bytes, rootEnd.Value), "," + newline + "  \"builder\": {" + newline + "    " + string.Join("," + newline + "    ", missing) + newline + "  }"));
         foreach (var (at, insert) in edits.OrderByDescending(edit => edit.At))
             bytes = [.. bytes[..at], .. Encoding.UTF8.GetBytes(insert), .. bytes[at..]];
-        return Encoding.UTF8.GetString(bytes);
+        File.WriteAllText(path, Encoding.UTF8.GetString(bytes));
+    }
+
+    private static JsonObject Hook(WatchHook hook)
+    {
+        var json = new JsonObject { ["element"] = hook.Element };
+        if (hook.Call is { } call)
+            json["call"] = call;
+        if (hook.Check)
+            json["check"] = true;
+        return json;
+    }
+
+    private static JsonObject Hook(ClickHook hook)
+    {
+        var json = new JsonObject { ["element"] = hook.Element, ["call"] = hook.Call };
+        if (hook.With is { Count: > 0 } with)
+            json["with"] = with.DeepClone();
+        if (hook.Delay > 0)
+            json["delay"] = hook.Delay;
+        return json;
+    }
+
+    // Where the last thing before an object's closing brace ends, so a property can go after it.
+    private static int LastValueEnd(byte[] bytes, int close)
+    {
+        var at = close;
+        while (at > 0 && bytes[at - 1] is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n')
+            at--;
+        return at;
     }
 
     /// <summary>Adds named controls to the end of elements.json, keeping the rest of it as it was written.</summary>
@@ -130,21 +286,21 @@ public static partial class CaseWriter
     }
 
     // Items go on the end of a checkpoint's array, or in a new array at its start when it has none.
-    private static void AddItems(List<(int At, string Text)> edits, byte[] bytes, StepLayout checkpoint, string key, IEnumerable<JsonNode> items, string indent, string newline)
+    private static void AddItems(List<(int At, int Length, string Text)> edits, byte[] bytes, StepLayout checkpoint, string key, IEnumerable<JsonNode> items, string indent, string newline)
     {
         var lines = items.Select(JsonLine.Write).ToList();
         if (lines.Count == 0)
             return;
         if (!checkpoint.Arrays.TryGetValue(key, out var array))
         {
-            edits.Add((checkpoint.Start + 1, $" {JsonLine.Quote(key)}: [ {string.Join(", ", lines)} ],"));
+            edits.Add((checkpoint.Start + 1, 0, $" {JsonLine.Quote(key)}: [ {string.Join(", ", lines)} ],"));
             return;
         }
         var multiline = Encoding.UTF8.GetString(bytes[array.Start..array.End]).Contains('\n', StringComparison.Ordinal);
         var separator = multiline ? "," + newline + indent : ", ";
         edits.Add(array.LastItemEnd is { } end
-            ? (end, separator + string.Join(separator, lines))
-            : (array.Start + 1, (multiline ? newline + indent : " ") + string.Join(separator, lines) + " "));
+            ? (end, 0, separator + string.Join(separator, lines))
+            : (array.Start + 1, 0, (multiline ? newline + indent : " ") + string.Join(separator, lines) + " "));
     }
 
     // Where a case file's steps are, from its text: each step's start and end, and a checkpoint's arrays.
@@ -229,6 +385,18 @@ public static partial class CaseWriter
     private static string NewLine(Suite suite) =>
         suite.Cases is [var item, ..] && File.ReadAllText(item.File).Contains("\r\n", StringComparison.Ordinal) ? "\r\n"
         : suite.Cases.Count > 0 ? "\n" : Environment.NewLine;
+
+    // A case's name line, with its indent: the review line goes after it.
+    [GeneratedRegex(@"(?m)^([ \t]*)""name""[ \t]*:[ \t]*""(?:[^""\\\r\n]|\\.)*""[ \t]*,?")]
+    private static partial Regex NameLine();
+
+    // A review line, as Flag writes it, on a line of its own with a comma after it.
+    [GeneratedRegex(@"(?m)^[ \t]*""review""[ \t]*:[ \t]*""(?:[^""\\\r\n]|\\.)*""[ \t]*,[ \t]*\r?\n")]
+    private static partial Regex ReviewLine();
+
+    // A review written last, with the comma before it.
+    [GeneratedRegex(@",\s*""review""\s*:\s*""(?:[^""\\\r\n]|\\.)*""")]
+    private static partial Regex ReviewLast();
 
     [GeneratedRegex(@"^\d+")]
     private static partial Regex Leading();
