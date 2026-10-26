@@ -997,8 +997,7 @@ internal sealed partial class BuilderPanel : Window
     private void EditSay(DraftStep step, StackPanel words, TextBlock say)
     {
         var box = new TextBox { Text = step.Text, FontSize = 13, Padding = new Thickness(2, 1, 2, 1) };
-        var index = words.Children.IndexOf(say);
-        words.Children[index] = box;
+        Swap(words, say, box);
         void Done(bool keep)
         {
             if (!words.Children.Contains(box))
@@ -1009,7 +1008,7 @@ internal sealed partial class BuilderPanel : Window
                 _changes++;
             }
             say.Text = step.Text;
-            words.Children[words.Children.IndexOf(box)] = say;
+            Swap(words, box, say);
         }
         box.KeyDown += (_, e) =>
         {
@@ -1020,6 +1019,16 @@ internal sealed partial class BuilderPanel : Window
         Activate();
         box.Focus();
         box.SelectAll();
+    }
+
+    // Puts one in the other's place. A panel's child can't be set over another, which WPF says is still connected.
+    private static void Swap(Panel panel, UIElement from, UIElement to)
+    {
+        var index = panel.Children.IndexOf(from);
+        if (index < 0)
+            return;
+        panel.Children.RemoveAt(index);
+        panel.Children.Insert(index, to);
     }
 
     private void Move(DraftStep step, int by)
