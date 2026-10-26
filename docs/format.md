@@ -34,6 +34,8 @@ the scripts never turn into a programming language that a person can't read as a
 | `requires` | Paths that must exist; if one doesn't, autotest exits with 2 |
 | `reset.leftovers` | A script that prints one line for each thing an earlier run left. Unattended, or when a watched run starts from the first case, anything it prints is cleaned up first. |
 | `reset.powershell` | The script that cleans up |
+| `builder.watch` | Controls whose text the builder watches while recording: `{ "element": "savedText", "call": "waitForSaved", "check": true }`. When it changes after a step, the builder adds a wait for its new words, through `call` (given `startsWith` when the macro takes it) or a `waitText`; with `check`, it keeps the words and checks them at the checkpoint. The app's `status`, and any element with a macro named `waitFor` and its name, such as `waitForSavedText`, are watched anyway. |
+| `builder.afterClick` | Steps the builder adds after a control is clicked, instead of a wait for the status text: `{ "element": "deploy", "call": "waitForDeploy", "with": { "within": "300" }, "delay": 0.5 }` adds a `wait` of `delay` seconds, then the call. |
 
 ## Cases
 
@@ -45,6 +47,7 @@ the scripts never turn into a programming language that a person can't read as a
 | `needs` | The ids of the cases it carries on from |
 | `needsNote` | What it needs, in words, when that isn't another case ("A clean computer") |
 | `covers` | What it tries |
+| `review` | Why it needs looking at again, such as a change to a case it carries on from. The builder writes it; the launcher shows a warning until the case is changed, or the warning is clicked away. |
 | `steps` | The steps |
 
 ## Steps
@@ -54,7 +57,7 @@ Each step does one thing, named by its key. Any step can also have:
 | Property | What it is |
 | --- | --- |
 | `say` | What the panel says. On an action it is shown before the action; on `find`, `waitText` and `waitGone` after it, with time to read it. Alone, it is narration. |
-| `as` | Keeps what the step found in a variable: `${name}` is a control's text, `${name.value}`, `${name.helpText}`, `${name.id}`, `${name.selection}` its other parts. After `run` and `powershell`: `${name.code}`, `${name.output}`, `${name.first}`. |
+| `as` | Keeps what the step found in a variable: `${name}` is a control's text, `${name.value}`, `${name.helpText}`, `${name.id}`, `${name.selection}` its other parts. After `run`, `powershell` and `script`: `${name.code}`, `${name.output}`, `${name.first}`. |
 | `within` | Seconds to wait before it counts as stuck. Unattended runs triple it. |
 | `what` | What to call the control in a message: "I couldn't find *the start screen*." |
 | `note` | For whoever maintains the script |
@@ -84,6 +87,8 @@ Each step does one thing, named by its key. Any step can also have:
 | `set` | `{ name: value }` | Sets variables |
 | `run` | a program, `args`, `env` | Runs a program |
 | `powershell` | a script, or a list of lines, `args` | Runs PowerShell with `args` as `$args`. `${...}` in the script is PowerShell's. |
+| `script` | a `.ps1` file in the suite, `args` | Runs it with Windows PowerShell, from the suite folder, with `args` as `$args`. It fails when it exits with a code other than 0. |
+| `wait` | seconds | Waits, for an app that shows nothing to wait for. A wait for what the app shows is sturdier. |
 | `checkpoint` | a title, `checks`, `look`, `tools` | Ends a case: see below |
 
 ## Targets

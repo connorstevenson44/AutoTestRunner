@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
@@ -76,12 +77,18 @@ internal static class Ui
     public static Button IconButton(string glyph, string tip, Action click, double size = 18)
     {
         var button = new Button { Content = Glyph(glyph, size), ToolTip = tip, Style = (Style)Theme["IconButton"] };
+        // An icon says nothing to a screen reader, or to a test that drives the window: the tip names it.
+        AutomationProperties.SetName(button, tip);
         button.Click += (_, _) => click();
         return button;
     }
 
-    public static ToggleButton Toggle(string glyph, string tip, double size = 18) =>
-        new() { Content = Glyph(glyph, size), ToolTip = tip, Style = (Style)Theme["ToggleIcon"] };
+    public static ToggleButton Toggle(string glyph, string tip, double size = 18)
+    {
+        var toggle = new ToggleButton { Content = Glyph(glyph, size), ToolTip = tip, Style = (Style)Theme["ToggleIcon"] };
+        AutomationProperties.SetName(toggle, tip);
+        return toggle;
+    }
 
     /// <summary>A button with an icon and a word or two, for answers and things to open.</summary>
     public static Button LabelledButton(string glyph, string text, Action click, string style = "PlainButton", Brush? glyphColor = null)
@@ -90,6 +97,7 @@ internal static class Ui
         content.Children.Add(Glyph(glyph, 14, glyphColor));
         content.Children.Add(new TextBlock { Text = text, Margin = new Thickness(7, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
         var button = new Button { Content = content, Style = (Style)Theme[style] };
+        AutomationProperties.SetName(button, text);
         button.Click += (_, _) => click();
         return button;
     }
@@ -105,6 +113,39 @@ internal static class Ui
         row.Children.Add(Glyph(glyph, size, color));
         row.Children.Add(new TextBlock { Text = text, Foreground = color, FontSize = size, FontWeight = weight ?? FontWeights.SemiBold, Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
         return row;
+    }
+
+    /// <summary>Asks for a few words in a small window of its own, and returns them, or null when it was closed.</summary>
+    public static string? Prompt(Window owner, string title, string message, string initial = "", string button = "Save", string glyph = Icons.Note, bool tall = true)
+    {
+        string? text = null;
+        var window = new Window
+        {
+            Title = title, Owner = owner, Topmost = true, SizeToContent = SizeToContent.Height, Width = 480, ResizeMode = ResizeMode.NoResize,
+            WindowStartupLocation = WindowStartupLocation.CenterScreen, Background = Brushes.White, FontFamily = Text,
+        };
+        window.Resources.MergedDictionaries.Add(Theme);
+        var stack = new StackPanel { Margin = new Thickness(20, 16, 20, 16) };
+        var box = new TextBox { Margin = new Thickness(0, 10, 0, 0), Height = tall ? 60 : double.NaN, TextWrapping = TextWrapping.Wrap, AcceptsReturn = false, Padding = new Thickness(4), Text = initial };
+        var save = LabelledButton(glyph, button, () =>
+        {
+            text = box.Text;
+            window.Close();
+        }, "MainButton");
+        save.IsDefault = true;
+        save.HorizontalAlignment = HorizontalAlignment.Left;
+        save.Margin = new Thickness(0, 12, 0, 0);
+        stack.Children.Add(Words(message, 13, Ink));
+        stack.Children.Add(box);
+        stack.Children.Add(save);
+        window.Content = stack;
+        window.Loaded += (_, _) =>
+        {
+            box.Focus();
+            box.SelectAll();
+        };
+        window.ShowDialog();
+        return text;
     }
 
     /// <summary>How long something took, as people say it: 0.4 s, 12 s, 2 min 5 s.</summary>

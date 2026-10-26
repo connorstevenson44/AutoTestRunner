@@ -28,6 +28,9 @@ public sealed class Runner
     private readonly VariableScope _globals;
     private CaseResult? _current;
 
+    // What steps played outside a case keep, for the next ones played.
+    private VariableScope? _played;
+
     // The status text before the last click, so a wait for a new status doesn't take the old one.
     private string? _marked;
 
@@ -168,6 +171,19 @@ public sealed class Runner
         _view.Finished(summary, _results.Folder, failed == 0);
         return failed;
     }
+
+    /// <summary>
+    /// Plays steps outside a case, as the builder does to get the app ready and to try a step, without their
+    /// checkpoints. What they keep stays for the next steps played. A step that gets stuck asks the view, as in a case.
+    /// </summary>
+    public void Play(JsonArray steps, string where)
+    {
+        _played ??= _globals.Child();
+        Steps(new JsonArray([.. steps.Where(step => step?["checkpoint"] is null).Select(step => step!.DeepClone())]), _played, where);
+    }
+
+    /// <summary>Forgets what steps played outside a case kept, as the builder does when it starts the case again.</summary>
+    public void Forget() => _played = null;
 
     // ===== Steps =====
 
@@ -444,6 +460,32 @@ public sealed class Runner
                 if (output.ExitCode != 0)
                     FailStep($"A PowerShell step failed with exit code {output.ExitCode}: {output.Output}");
                 KeepOutput(step, scope, output);
+                break;
+            }
+
+            case "script":
+            {
+                // A .ps1 file in the suite, run as the reset script is, so it can be opened and changed on its own.
+                var file = Path.GetFullPath(Path.Combine(_suite.Folder, Text("script")!));
+                if (!File.Exists(file))
+                    throw new ScriptException($"There is no script {file}.");
+                var arguments = (step["args"] as JsonArray ?? []).Select(arg => scope.Expand(arg!.ToString())).ToList();
+                List<string> line = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", file, .. arguments];
+                ShowStep(say ?? $"Run {Path.GetFileName(file)}", ActivityKind.Command, CommandReportingMachine.CommandLine("powershell.exe", line, null));
+                var output = _machine.Run("powershell.exe", line);
+                if (output.ExitCode != 0)
+                    FailStep($"{Path.GetFileName(file)} failed with exit code {output.ExitCode}: {output.Output}");
+                KeepOutput(step, scope, output);
+                break;
+            }
+
+            case "wait":
+            {
+                var seconds = double.Parse(Text("wait")!, CultureInfo.InvariantCulture);
+                if (say is not null)
+                    ShowStep(say);
+                _view.ShowWait($"Wait {seconds.ToString(CultureInfo.InvariantCulture)} seconds");
+                Control.Wait((int)(seconds * 1000));
                 break;
             }
 

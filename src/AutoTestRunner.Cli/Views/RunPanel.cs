@@ -461,7 +461,7 @@ internal sealed class RunPanel : Window, IRunView
         if (_runner is not { } runner || _over)
             return;
         _asking = true;
-        var text = Prompt("Note a problem", "What looks wrong? It's saved with this case's results, with a screenshot of the screen now.");
+        var text = Ui.Prompt(this, "Note a problem", "What looks wrong? It's saved with this case's results, with a screenshot of the screen now.");
         _asking = false;
         if (string.IsNullOrWhiteSpace(text))
             return;
@@ -651,34 +651,6 @@ internal sealed class RunPanel : Window, IRunView
             Child = stack, BorderBrush = allPassed ? Ui.Pass : Ui.Fail, BorderThickness = new Thickness(3, 0, 0, 0), CornerRadius = new CornerRadius(4),
             Background = allPassed ? Ui.PassSoft : Ui.FailSoft, Padding = new Thickness(12, 10, 12, 4), Margin = new Thickness(0, 6, 0, 0),
         };
-    }
-
-    private string? Prompt(string title, string message)
-    {
-        string? text = null;
-        var window = new Window
-        {
-            Title = title, Owner = this, Topmost = true, SizeToContent = SizeToContent.Height, Width = 480, ResizeMode = ResizeMode.NoResize,
-            WindowStartupLocation = WindowStartupLocation.CenterScreen, Background = Brushes.White, FontFamily = Ui.Text,
-        };
-        window.Resources.MergedDictionaries.Add(Ui.Theme);
-        var stack = new StackPanel { Margin = new Thickness(20, 16, 20, 16) };
-        var box = new TextBox { Margin = new Thickness(0, 10, 0, 0), Height = 60, TextWrapping = TextWrapping.Wrap, AcceptsReturn = false, Padding = new Thickness(4) };
-        var save = Ui.LabelledButton(Icons.Note, "Save", () =>
-        {
-            text = box.Text;
-            window.Close();
-        }, "MainButton");
-        save.IsDefault = true;
-        save.HorizontalAlignment = HorizontalAlignment.Left;
-        save.Margin = new Thickness(0, 12, 0, 0);
-        stack.Children.Add(Ui.Words(message, 13, Ui.Ink));
-        stack.Children.Add(box);
-        stack.Children.Add(save);
-        window.Content = stack;
-        window.Loaded += (_, _) => box.Focus();
-        window.ShowDialog();
-        return text;
     }
 
     // ===== Helpers =====

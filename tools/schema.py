@@ -43,6 +43,8 @@ steps = {
  "set": step("set", {"type":"object","additionalProperties":{"type":["string","number","boolean"]}}, "Sets variables."),
  "run": step("run", {"type":"string"}, "Runs a program and keeps its exit code and output (with as: ${name.code}, ${name.output}, ${name.first}).", args={"type":"array","items":{"type":"string"}}, env={"type":"object","additionalProperties":{"type":"string"}}),
  "powershell": step("powershell", {"type":["string","array"],"items":{"type":"string"}}, "Runs a PowerShell script, which gets args as $args. ${...} in the script is PowerShell's, not the runner's.", args={"type":"array","items":{"type":"string"}}),
+ "script": step("script", {"type":"string"}, "Runs a .ps1 file in the suite, relative to its folder, which gets args as $args. It fails when the script exits with a code other than 0; with as, it keeps the code and output.", args={"type":"array","items":{"type":"string"}}),
+ "wait": step("wait", {"type":["number","string"]}, "Waits this many seconds, for an app that shows nothing to wait for."),
  "checkpoint": step("checkpoint", {"type":"string"}, "Ends a case: checks the runner makes, things to look at, and buttons that open them.", checks={"type":"array","items":{"$ref":"#/definitions/check"}}, look={"type":"array","items":{"type":"string"}}, tools={"type":"array","items":{"$ref":"#/definitions/tool"}}),
 }
 def check(kind, desc, required_extra=(), **extra):
@@ -107,7 +109,8 @@ case = {"$schema":S,"$id":"case.schema.json","title":"AutoTestRunner case","desc
  "type":"object","required":["name","steps"],"properties":{"$schema":{"type":"string"},"name":text("What the case does, as the launcher lists it."),
  "needs":{"type":"array","items":{"type":"string"},"description":"The ids of the cases it carries on from (their file names without the number)."},
  "needsNote":text("What it needs, in words, for the launcher's Run after column, such as Any time."),
- "covers":text("What it tries, for the launcher."),"steps":{"$ref":"#/definitions/steps"}},"additionalProperties":False,"definitions":defs}
+ "covers":text("What it tries, for the launcher."),
+ "review":text("Why the case needs looking at again, such as a change to a case it carries on from. The launcher shows a warning on it until it is changed, or the warning is cleared."),"steps":{"$ref":"#/definitions/steps"}},"additionalProperties":False,"definitions":defs}
 macro = {"$schema":S,"$id":"macro.schema.json","title":"AutoTestRunner macro","description":"Reusable steps with parameters, run with { \"call\": name }.",
  "type":"object","required":["steps"],"properties":{"$schema":{"type":"string"},"name":text("Its name, if not the file's."),"description":text("What it does."),
  "params":{"type":"object","additionalProperties":{"type":"object","properties":{"description":{"type":"string"},"default":{"type":["string","number","boolean"]}},"additionalProperties":False}},
@@ -123,6 +126,14 @@ suite = {"$schema":S,"$id":"suite.schema.json","title":"AutoTestRunner suite","d
  "helpers":{"type":"object","additionalProperties":{"type":"object","required":["regex"],"properties":{"regex":text("${name(value)} gives the regex's first group in value.")},"additionalProperties":False}},
  "requires":{"type":"array","items":{"type":"string"},"description":"Paths that must exist before a run starts. If one doesn't, autotest exits with code 2."},
  "reset":{"type":"object","properties":{"powershell":text("A script that removes what the suite leaves on the machine."),"leftovers":text("A script that prints one line for each thing an earlier run left; nothing on a clean machine.")},"additionalProperties":False},
- "screen":{"type":"object","properties":{"width":{"type":"integer"},"height":{"type":"integer"}},"description":"The smallest screen the suite is written for."}},"additionalProperties":False}
+ "screen":{"type":"object","properties":{"width":{"type":"integer"},"height":{"type":"integer"}},"description":"The smallest screen the suite is written for."},
+ "builder":{"type":"object","description":"What the builder does while recording a case.","properties":{
+   "watch":{"type":"array","description":"Controls whose text the builder watches: when it changes after a step, it adds a wait for the new text. The app's status, and any element with a macro named waitFor and its name, are watched anyway.","items":{"type":"object","required":["element"],"properties":{
+     "element":text("The control, by its name in elements.json."),"call":text("The macro that waits for it, given startsWith when it takes it. A waitText when left out."),
+     "check":{"type":"boolean","description":"Also keeps what it said, and checks it at the checkpoint."}},"additionalProperties":False}},
+   "afterClick":{"type":"array","description":"Steps the builder adds after a control is clicked, instead of a wait for the status text.","items":{"type":"object","required":["element","call"],"properties":{
+     "element":text("The control clicked, by its name in elements.json."),"call":text("The macro to run after it."),
+     "with":{"type":"object","additionalProperties":{"type":["string","number","boolean"]},"description":"The macro's parameters."},
+     "delay":{"type":["number","string"],"description":"Seconds to wait before the macro, as a wait step."}},"additionalProperties":False}}},"additionalProperties":False}},"additionalProperties":False}
 for name, doc in [("case",case),("macro",macro),("elements",elements),("suite",suite)]:
     open(f"{out}/{name}.schema.json","w").write(json.dumps(doc, indent=2, ensure_ascii=False)+"\n")

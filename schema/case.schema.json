@@ -31,6 +31,10 @@
       "type": "string",
       "description": "What it tries, for the launcher."
     },
+    "review": {
+      "type": "string",
+      "description": "Why the case needs looking at again, such as a change to a case it carries on from. The launcher shows a warning on it until it is changed, or the warning is cleared."
+    },
     "steps": {
       "$ref": "#/definitions/steps"
     }
@@ -259,6 +263,12 @@
         },
         {
           "$ref": "#/definitions/powershellStep"
+        },
+        {
+          "$ref": "#/definitions/scriptStep"
+        },
+        {
+          "$ref": "#/definitions/waitStep"
         },
         {
           "$ref": "#/definitions/checkpointStep"
@@ -1493,6 +1503,95 @@
           "items": {
             "type": "string"
           }
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "scriptStep": {
+      "type": "object",
+      "required": [
+        "script"
+      ],
+      "properties": {
+        "script": {
+          "type": "string",
+          "description": "Runs a .ps1 file in the suite, relative to its folder, which gets args as $args. It fails when the script exits with a code other than 0; with as, it keeps the code and output."
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "say": {
+          "type": "string",
+          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "waitStep": {
+      "type": "object",
+      "required": [
+        "wait"
+      ],
+      "properties": {
+        "wait": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "Waits this many seconds, for an app that shows nothing to wait for."
         },
         "say": {
           "type": "string",

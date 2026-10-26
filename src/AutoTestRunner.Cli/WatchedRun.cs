@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using System.Windows;
 using AutoTestRunner.Cli.Views;
@@ -11,55 +12,101 @@ namespace AutoTestRunner.Cli;
 /// <summary>
 /// A run you watch: the panel beside the app shows what is happening and what to look at, Space pauses and carries on,
 /// Enter goes a step at a time and Esc stops. The run goes on a worker thread; the panel keeps the UI thread. Opened
-/// from the launcher, the panel's Run more goes back to it to pick the next cases.
+/// from the launcher, the panel's Run more goes back to it to pick the next cases, as closing the builder does.
 /// </summary>
 internal static class WatchedRun
 {
-    /// <summary>Runs these cases, or with none given, shows the launcher to pick them. Returns the last run's exit code.</summary>
-    public static int Run(Suite suite, IReadOnlyList<Case>? cases, Options options)
+    /// <summary>Runs these cases while you watch, from autotest run. Returns the run's exit code.</summary>
+    public static int Run(Suite suite, IReadOnlyList<Case> cases, Options options)
     {
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         var code = ExitCode.Passed;
-        void Next(Options picked, IReadOnlyList<Case> run, bool fromLauncher)
+        app.Startup += (_, _) => Watch(suite, cases, options, canRunAgain: false, result => code = result, _ => app.Shutdown());
+        app.Run();
+        return (int)code;
+    }
+
+    /// <summary>
+    /// The launcher, with the suites found near the runner, open on the one chosen. What is picked there runs, or a
+    /// case is built, and the launcher comes back when that is over. With --start, the chosen suite's cases run first,
+    /// as after autotest restarted as administrator to run them; with build, that case is built first. Returns the
+    /// last run's exit code.
+    /// </summary>
+    public static int Launch(IReadOnlyList<FoundSuite> suites, FoundSuite chosen, Options options, BuildRequest? build = null)
+    {
+        var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        var code = ExitCode.Passed;
+        var found = suites;
+
+        // The launcher on a suite, loaded again, as a run or the builder may have changed it; tick is a case file to
+        // tick, such as the one just built.
+        void ShowLauncher(string folder, Options last, string? tick = null)
         {
-            var ended = new TaskCompletionSource();
-            var panel = Start(suite, run, picked, fromLauncher, result =>
-            {
-                code = result;
-                ended.TrySetResult();
-            });
-            // A panel closed after Stop goes before the run has written its results: wait for it to end, but not for
-            // ever if the app it drives won't let go.
-            panel.Closed += (_, _) => Task.WhenAny(ended.Task, Task.Delay(TimeSpan.FromSeconds(30))).ContinueWith(_ => app.Dispatcher.BeginInvoke(() =>
-            {
-                if (panel.RunAgain)
-                    ShowLauncher(picked);
-                else
-                    app.Shutdown();
-            }));
-        }
-        void ShowLauncher(Options last)
-        {
-            var launcher = new LauncherWindow(suite, last);
+            found = LauncherWindow.Reload(found, folder);
+            var open = found.FirstOrDefault(each => SamePath(each.Folder, folder)) ?? found[0];
+            if (tick is not null && open.Suite?.Cases.FirstOrDefault(item => SamePath(item.File, tick)) is { } built)
+                last = last with { Cases = built.Number.ToString(CultureInfo.InvariantCulture) };
+            var launcher = new LauncherWindow(found, open, last);
             launcher.Closed += (_, _) =>
             {
                 if (launcher.Picked is { } picked)
-                    Next(picked.Options, picked.Cases, fromLauncher: true);
+                    RunPicked(picked.Suite, picked.Cases, picked.Options);
+                else if (launcher.Build is { } request)
+                    Build(request, last);
                 else
                     app.Shutdown();
             };
             launcher.Show();
         }
+
+        void RunPicked(Suite suite, IReadOnlyList<Case> cases, Options picked) =>
+            Watch(suite, cases, picked, canRunAgain: true, result => code = result, again =>
+            {
+                if (again)
+                    ShowLauncher(suite.Folder, picked);
+                else
+                    app.Shutdown();
+            });
+
+        void Build(BuildRequest request, Options last)
+        {
+            var ended = new TaskCompletionSource();
+            var panel = BuildSession.Open(request, last, () => ended.TrySetResult());
+            panel.Closed += (_, _) => AfterEnded(panel, ended.Task, () => ShowLauncher(request.Suite.Folder, last with { Cases = null }, panel.SavedAs));
+        }
+
         app.Startup += (_, _) =>
         {
-            if (cases is null)
-                ShowLauncher(options);
+            if (build is not null)
+                Build(build, options);
+            else if (options.Start && chosen.Suite is { } suite)
+                RunPicked(suite, suite.Select(options.Cases), options with { Start = false });
             else
-                Next(options, cases, fromLauncher: false);
+                ShowLauncher(chosen.Folder, options);
         };
         app.Run();
         return (int)code;
     }
+
+    // Shows a run's panel; closed is called with whether Run more was clicked, once the run has ended.
+    private static void Watch(Suite suite, IReadOnlyList<Case> cases, Options options, bool canRunAgain, Action<ExitCode> result, Action<bool> closed)
+    {
+        var ended = new TaskCompletionSource();
+        var panel = Start(suite, cases, options, canRunAgain, code =>
+        {
+            result(code);
+            ended.TrySetResult();
+        });
+        panel.Closed += (_, _) => AfterEnded(panel, ended.Task, () => closed(panel.RunAgain));
+    }
+
+    // A panel closed after Stop goes before the run has written its results, and the builder's before it has closed
+    // the app: wait for it to end, but not for ever if the app it drives won't let go.
+    private static void AfterEnded(Window panel, Task ended, Action then) =>
+        Task.WhenAny(ended, Task.Delay(TimeSpan.FromSeconds(30))).ContinueWith(_ => panel.Dispatcher.BeginInvoke(then), TaskScheduler.Default);
+
+    private static bool SamePath(string one, string other) =>
+        string.Equals(Path.GetFullPath(one).TrimEnd('\\', '/'), Path.GetFullPath(other).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
 
     // Shows the panel, and starts the run once it is on the screen.
     private static RunPanel Start(Suite suite, IReadOnlyList<Case> cases, Options options, bool canRunAgain, Action<ExitCode> ended)
