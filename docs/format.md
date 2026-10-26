@@ -58,7 +58,7 @@ Each step does one thing, named by its key. Any step can also have:
 
 | Property | What it is |
 | --- | --- |
-| `say` | What the panel says. On an action it is shown before the action; on `find`, `waitText` and `waitGone` after it, with time to read it. Alone, it is narration. |
+| `say` | Your words for the step, shown when pointing at its row. The row itself shows what the step does, such as Click [Add order], with the control on a badge. Alone, `say` is a line of its own, for what isn't a step. |
 | `as` | Keeps what the step found in a variable: `${name}` is a control's text, `${name.value}`, `${name.helpText}`, `${name.id}`, `${name.selection}` its other parts. After `run`, `powershell` and `script`: `${name.code}`, `${name.output}`, `${name.first}`. Any step's `${name.seconds}` is how long it took, for an `atMost` check. |
 | `within` | Seconds to wait before it counts as stuck. Unattended runs triple it. |
 | `what` | What to call the control in a message: "I couldn't find *the start screen*." |
