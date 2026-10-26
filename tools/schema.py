@@ -22,14 +22,20 @@ steps = {
  "say": {"type":"object","required":["say"],"properties":common,"additionalProperties":False},
  "startApp": step("startApp", {"type":["object","boolean"]}, "Closes any copy of the app, starts it, and places it beside the panel."),
  "closeApp": step("closeApp", {"type":["object","boolean"]}, "Closes the app."),
- "click": step("click", target, "Clicks a control: invokes, toggles or selects it, or with how: mouse, clicks it with the mouse.", how={"enum":["mouse"], "description":"mouse clicks with the mouse, for controls UI Automation can't invoke."}, whileEnabled={"type":"boolean","description":"Clicks it again and again while it is there and can be used, such as Up until the top folder. Not being there is fine."}),
+ "click": step("click", target, "Clicks a control: invokes, toggles or selects it, or with how, clicks it with the mouse.", how={"enum":["mouse","right","double"], "description":"mouse clicks with the mouse, for controls UI Automation can't invoke; right right-clicks; double double-clicks."}, whileEnabled={"type":"boolean","description":"Clicks it again and again while it is there and can be used, such as Up until the top folder. Not being there is fine."}),
+ "drag": step("drag", target, "Drags a control with the mouse and drops it on another.", ["to"], to={"$ref":"#/definitions/target","description":"The control to drop it on."}),
+ "menu": step("menu", {"type":["array","string"],"items":{"type":"string"}}, "Picks from a menu: each item in turn, such as [\"File\", \"Export…\"]. From the menu bar, or with on, a control's right-click menu.", on={"$ref":"#/definitions/target","description":"Right-clicks this control first, and picks from the menu that opens."}),
  "type": step("type", target, "Types into a text box a key at a time, then Tab.", ["text"], text=text("What to type. Empty clears the box."), secret={"type":"boolean","description":"Kept out of the log, and not checked after typing."}),
  "choose": step("choose", target, "Picks an option from a drop-down.", ["option"], option=text("The option's text.")),
  "tick": step("tick", target, "Ticks or clears a tick box.", checked={"type":"boolean","description":"false clears it. Ticks it when left out."}),
+ "setValue": step("setValue", target, "Sets a slider's or a number box's value, or a box's text in one go, such as a date picker's.", ["to"], to=text("The value, such as 150 or 2026-10-26.")),
+ "expand": step("expand", {"type":["array","string"],"items":{"type":"string"}}, "Opens a tree item by its path, such as [\"Contoso\", \"Orders\"]: it opens each item on the way and selects the last.", **{"in": {"$ref":"#/definitions/target","description":"The tree, when the window has more than one."}}),
  "hover": step("hover", target, "Points the mouse at a control, such as a row whose buttons only show on hover."),
  "tab": step("tab", {"type":"string"}, "Opens a tab by its header."),
  "find": step("find", target, "Waits for a control to be on screen."),
  "waitGone": step("waitGone", target, "Waits for a control to go."),
+ "waitEnabled": step("waitEnabled", target, "Waits for a control to be there and usable, not greyed out."),
+ "useWindow": step("useWindow", {"type":"string"}, "Waits for another window of the app's by its title, and drives that one from now on, as after a sign-in window."),
  "waitText": step("waitText", target, "Waits for a control's text to read a certain way.", startsWith=text("Waits until it starts with this."), contains=text("Waits until it has this in it."), equals=text("Waits until it is exactly this."), matches=text("Waits until it matches this .NET regex."), changes={"type":"boolean","description":"Waits until it differs from when the step started."}, new={"type":"boolean","description":"Waits until it differs from the app's status before the last click (suite.json app.status)."}),
  "replaceText": step("replaceText", target, "Replaces the first match of a regex in a text box's value, in one go as a paste would.", ["regex"], regex=text("A .NET regex, multi-line."), replacement=text("What to put instead; $1 is the first group.")),
  "key": step("key", {"type":"string"}, "Presses a key or a combination, such as Tab, Enter or Ctrl+A."),
@@ -37,7 +43,7 @@ steps = {
  "pickFile": step("pickFile", {"type":"string"}, "Picks a file in the Windows file picker with this title, by typing its path.", ["path"], path=text("The file to pick.")),
  "pickFolder": step("pickFolder", {"type":"string"}, "Picks a folder in the Windows folder picker with this title.", ["path"], path=text("The folder to pick.")),
  "call": step("call", {"type":"string"}, "Runs a macro from macros/.", **{"with": {"type":"object","additionalProperties":{"type":["string","number","boolean"]},"description":"The macro's parameters."}}),
- "repeat": step("repeat", {"type":["array","string"],"items":{"type":"string"}}, "Runs steps once for each item.", ["steps"], steps={"$ref":"#/definitions/steps"}, item=text("The variable each item goes in. item when left out.")),
+ "repeat": step("repeat", {"type":["array","string","object"],"items":{"type":"string"},"properties":{"rows":text("A CSV file whose first line names its columns, or a JSON list of objects, in the suite's folder. Each row is ${item}, its columns ${item.Column}.")},"required":["rows"],"additionalProperties":False}, "Runs steps once for each item of a list, or each row of a data file.", ["steps"], steps={"$ref":"#/definitions/steps"}, item=text("The variable each item goes in. item when left out.")),
  "whileShows": step("whileShows", target, "Runs steps each time a control shows, such as a window asking about each step of a removal, until another control's text says it is done.", ["steps","untilText"], steps={"$ref":"#/definitions/steps"}, untilText={"$ref":"#/definitions/target","description":"The control whose text says it is done, such as a status bar."}, startsWith=text("Done when untilText starts with this."), contains=text("Done when untilText has this in it."), equals=text("Done when untilText is exactly this."), matches=text("Done when untilText matches this .NET regex."), new={"type":"boolean","description":"Only text that differs from the app's status before the last click counts."}),
  "if": step("if", {"$ref":"#/definitions/check"}, "Runs steps when a check passes, and else when it doesn't.", ["steps"], steps={"$ref":"#/definitions/steps"}, **{"else": {"$ref":"#/definitions/steps"}}),
  "set": step("set", {"type":"object","additionalProperties":{"type":["string","number","boolean"]}}, "Sets variables."),
@@ -45,6 +51,14 @@ steps = {
  "powershell": step("powershell", {"type":["string","array"],"items":{"type":"string"}}, "Runs a PowerShell script, which gets args as $args. ${...} in the script is PowerShell's, not the runner's.", args={"type":"array","items":{"type":"string"}}),
  "script": step("script", {"type":"string"}, "Runs a .ps1 file in the suite, relative to its folder, which gets args as $args. It fails when the script exits with a code other than 0; with as, it keeps the code and output.", args={"type":"array","items":{"type":"string"}}),
  "wait": step("wait", {"type":["number","string"]}, "Waits this many seconds, for an app that shows nothing to wait for."),
+ "copy": step("copy", {"type":"string"}, "Copies a file, or a folder and everything in it, replacing what is there.", ["to"], to=text("Where to: a file, a folder to copy a file into, or the folder to copy a folder as.")),
+ "delete": step("delete", {"type":"string"}, "Deletes a file, or a folder and everything in it. Nothing being there is fine."),
+ "writeFile": step("writeFile", {"type":"string"}, "Writes a file, making its folder if need be.", ["text"], text={"type":["string","array"],"items":{"type":"string"},"description":"What to write: a text, or a list of lines."}, append={"type":"boolean","description":"Adds to the end of the file instead of replacing it."}),
+ "unzip": step("unzip", {"type":"string"}, "Unzips a .zip file into a folder, replacing the folder when it is there.", ["to"], to=text("The folder.")),
+ "startService": step("startService", {"type":"string"}, "Starts a Windows service and waits until it runs."),
+ "stopService": step("stopService", {"type":"string"}, "Stops a Windows service and waits until it has stopped."),
+ "setJsonValue": step("setJsonValue", {"type":"string"}, "Sets a setting in a JSON file, such as appsettings.json. Comments in the file are dropped.", ["path","to"], path=text("The setting's path, such as Orders:Region."), to=text("The value. A number or true and false stays one when the old value was.")),
+ "setAppSetting": step("setAppSetting", {"type":"string"}, "Sets an appSettings value in a .config file, adding it when it isn't there.", ["key","to"], key=text("The appSettings key."), to=text("The value.")),
  "checkpoint": step("checkpoint", {"type":"string"}, "Ends a case: checks the runner makes, things to look at, and buttons that open them.", checks={"type":"array","items":{"$ref":"#/definitions/check"}}, look={"type":"array","items":{"type":"string"}}, tools={"type":"array","items":{"$ref":"#/definitions/tool"}}),
 }
 def check(kind, desc, required_extra=(), **extra):
@@ -68,8 +82,26 @@ checks = {
  "contains": check("contains","A value, usually ${captured}.", ["text"], text=text("Text it should have.")),
  "lacks": check("lacks","A value, usually ${captured}.", ["text"], text=text("Text it shouldn't have.")),
  "shows": {"type":"object","required":["shows"],"properties":{"shows":{"$ref":"#/definitions/target","description":"A control that should be in the app now."},"label":text("What the check says instead of its own wording."),"within":seconds},"additionalProperties":False},
+ "enabled": {"type":"object","required":["enabled"],"properties":{"enabled":{"$ref":"#/definitions/target","description":"A control that should be there and usable."},"label":text("What the check says instead of its own wording."),"within":seconds},"additionalProperties":False},
+ "disabled": {"type":"object","required":["disabled"],"properties":{"disabled":{"$ref":"#/definitions/target","description":"A control that should be greyed out."},"label":text("What the check says instead of its own wording."),"within":seconds},"additionalProperties":False},
+ "ticked": {"type":"object","required":["ticked"],"properties":{"ticked":{"$ref":"#/definitions/target","description":"A tick box that should be ticked."},"label":text("What the check says instead of its own wording."),"within":seconds},"additionalProperties":False},
+ "notTicked": {"type":"object","required":["notTicked"],"properties":{"notTicked":{"$ref":"#/definitions/target","description":"A tick box that shouldn't be ticked."},"label":text("What the check says instead of its own wording."),"within":seconds},"additionalProperties":False},
+ "selected": {"type":"object","required":["selected"],"properties":{"selected":{"$ref":"#/definitions/target","description":"An item, tab or option that should be the one picked."},"label":text("What the check says instead of its own wording."),"within":seconds},"additionalProperties":False},
+ "focused": {"type":"object","required":["focused"],"properties":{"focused":{"$ref":"#/definitions/target","description":"A control that should have the keyboard."},"label":text("What the check says instead of its own wording."),"within":seconds},"additionalProperties":False},
+ "says": {"type":"object","required":["says"],"properties":{"says":{"$ref":"#/definitions/target","description":"A control whose text, or what is typed in it, should read a certain way."},"equals":text("It is exactly this."),"startsWith":text("It starts with this."),"contains":text("It has this in it."),"matches":text("It matches this .NET regex."),"label":text("What the check says instead of its own wording."),"within":seconds},"additionalProperties":False},
+ "rows": {"type":"object","required":["rows","equals"],"properties":{"rows":{"$ref":"#/definitions/target","description":"A list, grid or tree."},"equals":{"type":["integer","string"],"description":"How many rows or items it should have."},"label":text("What the check says instead of its own wording."),"within":seconds},"additionalProperties":False},
  "nothingLeft": {"type":"object","required":["nothingLeft"],"properties":{"nothingLeft":{"type":"boolean","description":"Nothing the suite's leftovers script finds is left."},"label":text("What the check says."),"within":seconds},"additionalProperties":False},
 }
+checks.update({
+ "fileMatches": check("fileMatches","A file.", ["regex"], regex=text("A .NET regex its text should match; ^ and $ match at each line.")),
+ "registry": check("registry","A registry key, such as HKLM\\SOFTWARE\\Contoso.", ["value","equals"], value=text("The value's name."), equals=text("What it should be, or <absent>.")),
+ "process": check("process","A program, by its name with or without .exe.", running={"type":"boolean","description":"false: it shouldn't be running."}),
+ "eventLog": check("eventLog","A Windows event log, such as Application.", ["contains"], source=text("The source that wrote it."), contains=text("Text the entry should have. Entries since the case started count.")),
+ "web": check("web","A web address, such as http://localhost:5000/health.", status={"type":["integer","string"],"description":"The HTTP status it should answer with. 200 when left out."}, contains=text("Text the page should have.")),
+ "clipboard": check("clipboard","Text the clipboard should have."),
+ "atMost": check("atMost","A number, usually ${kept}, such as ${deploy.seconds}.", ["to"], to=text("The most it may be.")),
+ "atLeast": check("atLeast","A number, usually ${kept}.", ["to"], to=text("The least it may be.")),
+})
 def tool(kind, desc, **extra):
     return {"type":"object","required":[kind],"properties":{kind: text(desc), "label": text("The button's text."), **extra},"additionalProperties":False}
 tools = {
@@ -90,8 +122,9 @@ selector_props = {
  "within": {"$ref":"#/definitions/target","description":"Only looks inside this control, or with type Window, this window of the app's."},
  "sameRowAs": {"$ref":"#/definitions/target","description":"Only controls on the same row as this one, such as the buttons beside a file's name."},
  "scrollToFind": {"type":"boolean","description":"Scrolls the window's long lists until it is built, for lists that only build the rows in view."},
+ "cell": {"type":"object","required":["row","column"],"properties":{"row":text("What one of the row's cells says."),"column":text("The column's header.")},"additionalProperties":False,"description":"A grid's cell, by its row and its column."},
 }
-for short, t in [("button","Button"),("text","Text"),("edit","Edit"),("tabItem","TabItem"),("comboBox","ComboBox"),("checkBox","CheckBox"),("radioButton","RadioButton"),("listItem","ListItem"),("list","List"),("window","Window")]:
+for short, t in [("button","Button"),("text","Text"),("edit","Edit"),("tabItem","TabItem"),("comboBox","ComboBox"),("checkBox","CheckBox"),("radioButton","RadioButton"),("listItem","ListItem"),("list","List"),("window","Window"),("treeItem","TreeItem"),("menuItem","MenuItem"),("dataItem","DataItem"),("hyperlink","Hyperlink")]:
     selector_props[short] = text(f"Shorthand for type {t} with this name.")
 defs = {
  "target": {"description":"A control: an element's name from elements.json, a selector, or a list of either to try in order.",
@@ -110,6 +143,7 @@ case = {"$schema":S,"$id":"case.schema.json","title":"AutoTestRunner case","desc
  "needs":{"type":"array","items":{"type":"string"},"description":"The ids of the cases it carries on from (their file names without the number)."},
  "needsNote":text("What it needs, in words, for the launcher's Run after column, such as Any time."),
  "covers":text("What it tries, for the launcher."),
+ "tags":{"type":"array","items":{"type":"string"},"description":"Words to pick cases by, such as smoke: the launcher filters by them, and autotest run --tags runs only those cases."},
  "review":text("Why the case needs looking at again, such as a change to a case it carries on from. The launcher shows a warning on it until it is changed, or the warning is cleared."),"steps":{"$ref":"#/definitions/steps"}},"additionalProperties":False,"definitions":defs}
 macro = {"$schema":S,"$id":"macro.schema.json","title":"AutoTestRunner macro","description":"Reusable steps with parameters, run with { \"call\": name }.",
  "type":"object","required":["steps"],"properties":{"$schema":{"type":"string"},"name":text("Its name, if not the file's."),"description":text("What it does."),
@@ -120,7 +154,7 @@ elements = {"$schema":S,"$id":"elements.schema.json","title":"AutoTestRunner ele
 suite = {"$schema":S,"$id":"suite.schema.json","title":"AutoTestRunner suite","description":"How to start and reset an app, and the suite's variables.",
  "type":"object","required":["name","app"],"properties":{"$schema":{"type":"string"},"name":text("The suite's name."),
  "app":{"type":"object","required":["exe","window"],"properties":{"exe":text("The program to start; ${variables} allowed."),"arguments":text("What to start it with."),
-   "window":text("Its main window's title."),"runAsAdmin":{"type":"boolean","description":"Restarts autotest as administrator, as the app needs it."},
+   "window":text("Its main window's title."),"startWindow":text("The title of the window it opens first, when that isn't its main window, such as a sign-in window. A useWindow step moves on to the main window."),"runAsAdmin":{"type":"boolean","description":"Restarts autotest as administrator, as the app needs it."},
    "status":text("An element whose text says what the app is doing, such as a status bar. Its text before each click is kept for waitText's new.")},"additionalProperties":False},
  "variables":{"type":"object","additionalProperties":{"anyOf":[{"type":["string","number","boolean"]},{"type":"object","required":["firstExisting"],"properties":{"firstExisting":{"type":"array","items":{"type":"string"},"description":"The first path that exists, relative to the suite folder; the last when none does."}},"additionalProperties":False}]}},
  "helpers":{"type":"object","additionalProperties":{"type":"object","required":["regex"],"properties":{"regex":text("${name(value)} gives the regex's first group in value.")},"additionalProperties":False}},

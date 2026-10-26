@@ -10,6 +10,30 @@ internal sealed class FakeMachine : IMachine
 
     public bool TaskExists(string path) => false;
 
+    public void SetServiceRunning(string name, bool running) => Services[name] = running ? "Running" : "Stopped";
+
+    /// <summary>Registry values by key and name, as "HKLM\SOFTWARE\Contoso|Region".</summary>
+    public Dictionary<string, string> Registry { get; } = [];
+
+    public string? RegistryValue(string key, string name) => Registry.GetValueOrDefault($"{key}|{name}");
+
+    public HashSet<string> Processes { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public bool ProcessRunning(string name) => Processes.Contains(name.Replace(".exe", "", StringComparison.OrdinalIgnoreCase));
+
+    public List<string> Events { get; } = [];
+
+    public bool EventLogged(string log, string? source, string text, DateTime since) => Events.Any(entry => entry.Contains(text, StringComparison.Ordinal));
+
+    public string ClipboardText { get; set; } = "";
+
+    public string Clipboard() => ClipboardText;
+
+    /// <summary>What each web address answers.</summary>
+    public Dictionary<string, (int Status, string Body)> Pages { get; } = [];
+
+    public (int Status, string Body) Get(string url) => Pages.GetValueOrDefault(url, (404, ""));
+
     /// <summary>What a PowerShell script prints and its exit code, by its first line.</summary>
     public Dictionary<string, ProcessOutput> Scripts { get; } = [];
 

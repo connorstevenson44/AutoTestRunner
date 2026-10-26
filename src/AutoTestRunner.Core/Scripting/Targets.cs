@@ -21,6 +21,10 @@ public static class Targets
         ["listItem"] = "ListItem",
         ["list"] = "List",
         ["window"] = "Window",
+        ["treeItem"] = "TreeItem",
+        ["menuItem"] = "MenuItem",
+        ["dataItem"] = "DataItem",
+        ["hyperlink"] = "Hyperlink",
     };
 
     /// <summary>The UI Automation control types a selector's type can name, compared ignoring case.</summary>
@@ -32,7 +36,7 @@ public static class Targets
         StringComparer.OrdinalIgnoreCase);
 
     public static readonly IReadOnlySet<string> SelectorKeys = new HashSet<string>(
-        ["element", "with", "id", "name", "type", "helpText", "className", "match", "within", "sameRowAs", "scrollToFind", .. Shorthands.Keys]);
+        ["element", "with", "id", "name", "type", "helpText", "className", "match", "within", "sameRowAs", "scrollToFind", "cell", .. Shorthands.Keys]);
 
     public static Target Resolve(JsonNode? node, VariableScope scope, IReadOnlyDictionary<string, JsonNode> elements, string? what = null)
     {
@@ -113,8 +117,13 @@ public static class Targets
             Match: match,
             Within: node["within"] is { } within ? Resolve(within, scope, elements) : null,
             SameRowAs: node["sameRowAs"] is { } row ? Resolve(row, scope, elements) : null,
-            ScrollToFind: node["scrollToFind"]?.GetValue<bool>() ?? false);
+            ScrollToFind: node["scrollToFind"]?.GetValue<bool>() ?? false,
+            Cell: node["cell"] is JsonObject cell ? Cell(cell, scope) : null);
     }
+
+    private static GridCell Cell(JsonObject cell, VariableScope scope) =>
+        new(scope.Expand(cell["row"]?.ToString() ?? throw new ScriptException("A cell needs its row: what one of the row's cells says.")),
+            scope.Expand(cell["column"]?.ToString() ?? throw new ScriptException("A cell needs its column: the column's header.")));
 
     // "newInstallName" as "new install name".
     private static string Words(string name) =>

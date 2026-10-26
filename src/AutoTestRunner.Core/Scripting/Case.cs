@@ -8,4 +8,7 @@ public sealed record Case(
 {
     /// <summary>Why the case needs looking at again, such as a change to a case it carries on from; null when it doesn't.</summary>
     public string? Review { get; init; }
+
+    /// <summary>Words to pick cases by, such as smoke.</summary>
+    public IReadOnlyList<string> Tags { get; init; } = [];
 }

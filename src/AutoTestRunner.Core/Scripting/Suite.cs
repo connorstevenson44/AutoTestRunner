@@ -98,6 +98,7 @@ public sealed class Suite
                 item["steps"] as JsonArray ?? [])
             {
                 Review = item["review"]?.GetValue<string>(),
+                Tags = (item["tags"] as JsonArray ?? []).Select(tag => tag!.GetValue<string>()).ToList(),
             });
         }
 
@@ -137,7 +138,8 @@ public sealed class Suite
                 app["window"]?.GetValue<string>() ?? "",
                 app["runAsAdmin"]?.GetValue<bool>() ?? false,
                 app["status"]?.GetValue<string>(),
-                app["arguments"]?.GetValue<string>()),
+                app["arguments"]?.GetValue<string>(),
+                app["startWindow"]?.GetValue<string>()),
             Reset = new ResetSettings(root["reset"]?["powershell"]?.GetValue<string>(), root["reset"]?["leftovers"]?.GetValue<string>()),
             Variables = root["variables"] as JsonObject ?? [],
             Requires = (root["requires"] as JsonArray ?? []).Select(path => path!.GetValue<string>()).ToList(),
@@ -180,6 +182,13 @@ public sealed class Suite
         }
         return picked;
     }
+
+    /// <summary>The cases with any of these tags, in order; all of them when there are none.</summary>
+    public static IReadOnlyList<Case> Tagged(IReadOnlyList<Case> cases, IReadOnlyCollection<string> tags) =>
+        tags.Count == 0 ? cases : [.. cases.Where(item => item.Tags.Any(tag => tags.Contains(tag, StringComparer.OrdinalIgnoreCase)))];
+
+    /// <summary>Every tag the cases have, in the order they first appear.</summary>
+    public IReadOnlyList<string> Tags => [.. Cases.SelectMany(item => item.Tags).Distinct(StringComparer.OrdinalIgnoreCase)];
 
     /// <summary>A case and the cases it carries on from, in the order they run.</summary>
     public IReadOnlyList<Case> Leading(Case last)
@@ -293,7 +302,7 @@ public sealed class Suite
                 problems.Add($"{at}: a step must be an object.");
                 continue;
             }
-            var kinds = step.Select(pair => pair.Key).Where(ScriptVocabulary.Steps.ContainsKey).ToList();
+            var kinds = ScriptVocabulary.Kinds(step).ToList();
             if (kinds.Count > 1)
             {
                 problems.Add($"{at}: has {string.Join(" and ", kinds)}; a step does one thing.");
@@ -315,6 +324,8 @@ public sealed class Suite
 
             if (definition.Takes == Takes.Target)
                 CheckTarget(step[kind], at, problems);
+            if (TargetKeys.GetValueOrDefault(kind) is { } other && step[other] is { } control)
+                CheckTarget(control, at, problems);
             switch (kind)
             {
                 case "call" when step["call"]?.GetValue<string>() is { } name:
@@ -332,7 +343,12 @@ public sealed class Suite
                     }
                     break;
                 case "repeat":
+                    if (step["repeat"] is JsonObject source && Written(source["rows"]) is { } rows && !File.Exists(Path.Combine(Folder, rows)))
+                        problems.Add($"{at}: there is no data file {rows} in the suite's folder.");
                     CheckSteps(step["steps"] as JsonArray ?? [], at, problems);
+                    break;
+                case "click" when Written(step["how"]) is { } how && how is not ("mouse" or "right" or "double"):
+                    problems.Add($"{at}: how is mouse, right or double, not {how}.");
                     break;
                 case "script" when step["script"]?.GetValue<string>() is { } script && !script.Contains("${", StringComparison.Ordinal):
                     if (!File.Exists(Path.Combine(Folder, script)))
@@ -362,8 +378,8 @@ public sealed class Suite
     {
         CheckItems(checks, ScriptVocabulary.Checks, ScriptVocabulary.CommonCheckKeys, "check", at, problems);
         foreach (var check in checks ?? [])
-            if (check is JsonObject { } item && item["shows"] is { } target)
-                CheckTarget(target, at, problems);
+            if (check is JsonObject { } item && Kinds.Of(item, ScriptVocabulary.Checks) is { } kind && ScriptVocabulary.ControlChecks.Contains(kind))
+                CheckTarget(item[kind], at, problems);
     }
 
     private void CheckTarget(JsonNode? target, string at, List<string> problems)
@@ -397,6 +413,9 @@ public sealed class Suite
                 break;
         }
     }
+
+    // The properties of steps, besides their own key, that are controls: drag's to, menu's on and expand's in.
+    private static readonly Dictionary<string, string> TargetKeys = new() { ["drag"] = "to", ["menu"] = "on", ["expand"] = "in" };
 
     // A property's text as written, when it has no ${...} to fill in first.
     private static string? Written(JsonNode? node) =>

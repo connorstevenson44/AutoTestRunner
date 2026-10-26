@@ -1,5 +1,6 @@
 using AutoTestRunner.Driving;
 using FlaUI.Core.AutomationElements;
+using FlaUI.Core.Definitions;
 
 namespace AutoTestRunner.FlaUI;
 
@@ -27,4 +28,12 @@ internal sealed class FlaUiControl(AutomationElement element) : IControl
     }
 
     public bool IsEnabled => Element.Properties.IsEnabled.ValueOrDefault;
+
+    public bool? IsChecked => Element.Patterns.Toggle.IsSupported
+        ? Element.Patterns.Toggle.Pattern.ToggleState.ValueOrDefault switch { ToggleState.On => true, ToggleState.Off => false, _ => null }
+        : null;
+
+    public bool IsSelected => Element.Patterns.SelectionItem.IsSupported && Element.Patterns.SelectionItem.Pattern.IsSelected.ValueOrDefault;
+
+    public bool HasFocus => Element.Properties.HasKeyboardFocus.ValueOrDefault;
 }

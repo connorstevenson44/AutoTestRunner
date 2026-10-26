@@ -35,6 +35,10 @@
           "type": "string",
           "description": "Its main window's title."
         },
+        "startWindow": {
+          "type": "string",
+          "description": "The title of the window it opens first, when that isn't its main window, such as a sign-in window. A useWindow step moves on to the main window."
+        },
         "runAsAdmin": {
           "type": "boolean",
           "description": "Restarts autotest as administrator, as the app needs it."

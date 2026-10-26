@@ -12,4 +12,13 @@ public interface IControl
     string? Selection { get; }
 
     bool IsEnabled { get; }
+
+    /// <summary>Whether a tick box is ticked; null when it isn't one.</summary>
+    bool? IsChecked { get; }
+
+    /// <summary>Whether an item of a list, a tab or an option is the one picked.</summary>
+    bool IsSelected { get; }
+
+    /// <summary>Whether it has the keyboard.</summary>
+    bool HasFocus { get; }
 }

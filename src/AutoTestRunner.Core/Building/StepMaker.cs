@@ -13,7 +13,7 @@ public static class StepMaker
     /// <summary>A step of a case opened to change it, at this place in its file, not played yet.</summary>
     public static DraftStep Written(JsonObject json, int source)
     {
-        var verb = json.Select(pair => pair.Key).FirstOrDefault(ScriptVocabulary.Steps.ContainsKey) ?? "say";
+        var verb = ScriptVocabulary.KindOf(json);
         var target = ScriptVocabulary.Steps.TryGetValue(verb, out var kind) && kind.Takes == Takes.Target && json[verb] is { } node
             ? TargetSuggester.Describe(node)
             : null;

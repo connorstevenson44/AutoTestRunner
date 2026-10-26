@@ -1,7 +1,10 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.IO.Compression;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using AutoTestRunner.Driving;
 using AutoTestRunner.Scripting;
 
@@ -33,6 +36,9 @@ public sealed class Runner
 
     // The status text before the last click, so a wait for a new status doesn't take the old one.
     private string? _marked;
+
+    // When the running case started, for checks of logs written since.
+    private DateTime _since = DateTime.Now;
 
     public Runner(Suite suite, IDriver driver, IMachine machine, IRunView view, RunControl control, Results results, IReadOnlyDictionary<string, string>? overrides = null)
     {
@@ -131,6 +137,7 @@ public sealed class Runner
         {
             var item = cases[index];
             _current = new CaseResult(item.Number, item.Name);
+            _since = DateTime.Now;
             _results.Cases.Add(_current);
             _view.CaseStarted(index + 1, cases.Count, item);
             _results.Log("CASE", $"{item.Number}. {item.Name}");
@@ -198,7 +205,9 @@ public sealed class Runner
             {
                 try
                 {
+                    var clock = Stopwatch.StartNew();
                     Step(step, scope);
+                    KeepSeconds(step, scope, clock.Elapsed);
                     break;
                 }
                 catch (StuckException ex)
@@ -215,10 +224,10 @@ public sealed class Runner
 
     private void Step(JsonObject step, VariableScope scope)
     {
-        var kind = step.Select(pair => pair.Key).FirstOrDefault(ScriptVocabulary.Steps.ContainsKey) ?? "say";
+        var kind = ScriptVocabulary.KindOf(step);
         string? Text(string key) => step[key] is { } node ? scope.Expand(node.ToString()) : null;
         // A wait's say comes after it, so it can tell what the step found: it is filled in then.
-        var after = kind is "find" or "waitGone" or "waitText" or "whileShows";
+        var after = kind is "find" or "waitGone" or "waitText" or "whileShows" or "waitEnabled" or "useWindow";
         var say = after ? null : Text("say");
         void SayAfter()
         {
@@ -227,7 +236,14 @@ public sealed class Runner
         }
         var what = Text("what");
         TimeSpan Within(TimeSpan normal) => step["within"] is { } seconds ? TimeSpan.FromSeconds(double.Parse(scope.Expand(seconds.ToString()), CultureInfo.InvariantCulture)) : normal;
-        Target TargetOf(string key) => Targets.Resolve(step[key], scope, _suite.Elements, what);
+        Target TargetOf(string key) => Targets.Resolve(step[key], scope, _suite.Elements, key == kind ? what : null);
+        List<string> ListOf(string key) => step[key] switch
+        {
+            JsonArray list => [.. list.Select(item => scope.Expand(item!.ToString()))],
+            { } one => [.. scope.Expand(one.ToString()).Split('>', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)],
+            null => throw new ScriptException($"{kind} needs {key}."),
+        };
+        string Required(string key) => Text(key) ?? throw new ScriptException($"{kind} needs {key}.");
         IControl Find(Target target)
         {
             _view.ShowWait($"Look for {target.What}");
@@ -251,7 +267,7 @@ public sealed class Runner
                 break;
 
             case "click" when step["whileEnabled"]?.GetValue<bool>() == true:
-                ClickWhileEnabled(TargetOf("click"), say, Text("how") == "mouse");
+                ClickWhileEnabled(TargetOf("click"), say, How(Text("how")));
                 break;
 
             case "click":
@@ -259,13 +275,89 @@ public sealed class Runner
             {
                 var target = kind == "tab" ? Target.Of(new Selector(Type: "TabItem", Name: Text("tab"))) : TargetOf("click");
                 var control = Find(target);
-                var text = say ?? (kind == "tab" ? $"Open the {Text("tab")} tab" : $"Click {control.Name}");
+                var how = How(Text("how"));
+                var verb = how switch { ClickHow.Right => "Right-click", ClickHow.Double => "Double-click", _ => "Click" };
+                var text = say ?? (kind == "tab" ? $"Open the {Text("tab")} tab" : $"{verb} {control.Name}");
                 ShowStep(text, ActivityKind.Click);
                 Mark();
                 _driver.Point(control, text);
                 if (!control.IsEnabled)
                     throw new StuckException(Lower(text), "It's greyed out, so it can't be used yet.");
-                _driver.Click(control, Text("how") == "mouse");
+                _driver.Click(control, how);
+                Control.Wait(Control.Pace / 2);
+                Keep(step, scope, control);
+                break;
+            }
+
+            case "drag":
+            {
+                var control = Find(TargetOf("drag"));
+                var onto = Find(TargetOf("to"));
+                var text = say ?? $"Drag {control.Name} onto {onto.Name}";
+                ShowStep(text, ActivityKind.Point);
+                Mark();
+                _driver.Point(control, text);
+                _driver.Drag(control, onto);
+                Control.Wait(Control.Pace / 2);
+                Keep(step, scope, control);
+                break;
+            }
+
+            case "menu":
+            {
+                var path = ListOf("menu");
+                var shown = string.Join(" > ", path);
+                if (step["on"] is not null)
+                {
+                    var on = Find(TargetOf("on"));
+                    var text = say ?? $"Right-click {on.Name}, then pick {shown}";
+                    ShowStep(text, ActivityKind.Click);
+                    Mark();
+                    _driver.Point(on, text);
+                    _driver.Click(on, ClickHow.Right);
+                    Control.Wait(300);
+                }
+                else
+                {
+                    ShowStep(say ?? $"Pick {shown} from the menu", ActivityKind.Click);
+                    Mark();
+                }
+                _driver.Menu(path);
+                Control.Wait(Control.Pace / 2);
+                break;
+            }
+
+            case "expand":
+            {
+                var path = ListOf("expand");
+                ShowStep(say ?? $"Open {string.Join(" > ", path)}", ActivityKind.Choose);
+                var parent = step["in"] is null ? null : TargetOf("in");
+                IControl? item = null;
+                for (var index = 0; index < path.Count; index++)
+                {
+                    var target = Target.Of(new Selector(Type: "TreeItem", Name: path[index], Within: parent));
+                    item = Find(target);
+                    _driver.Point(item, path[index]);
+                    if (index < path.Count - 1)
+                        _driver.Expand(item);
+                    else
+                        _driver.Click(item, ClickHow.Invoke);
+                    Control.Wait(Control.Pace / 2);
+                    parent = target;
+                }
+                if (item is not null)
+                    Keep(step, scope, item);
+                break;
+            }
+
+            case "setValue":
+            {
+                var control = Find(TargetOf("setValue"));
+                var value = Required("to");
+                var text = say ?? $"Set {control.Name} to {value}";
+                ShowStep(text, ActivityKind.Type);
+                _driver.Point(control, text);
+                _driver.SetValue(control, value);
                 Control.Wait(Control.Pace / 2);
                 Keep(step, scope, control);
                 break;
@@ -344,6 +436,23 @@ public sealed class Runner
                 SayAfter();
                 break;
 
+            case "waitEnabled":
+            {
+                var control = WaitEnabled(TargetOf("waitEnabled"), Within(FindTimeout));
+                Keep(step, scope, control);
+                SayAfter();
+                break;
+            }
+
+            case "useWindow":
+            {
+                var title = Required("useWindow");
+                _view.ShowWait($"Wait for the {title} window");
+                _driver.UseWindow(title, Control.Scale(Within(TimeSpan.FromSeconds(60))));
+                SayAfter();
+                break;
+            }
+
             case "replaceText":
             {
                 var control = Find(TargetOf("replaceText"));
@@ -397,9 +506,12 @@ public sealed class Runner
 
             case "repeat":
             {
-                var items = step["repeat"] is JsonArray list
-                    ? list.Select(item => scope.Expand(item!.ToString())).ToList()
-                    : scope.Expand(step["repeat"]!.ToString()).Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList();
+                var items = step["repeat"] switch
+                {
+                    JsonArray list => list.Select(item => Value.Of(scope.Expand(item!.ToString()))).ToList(),
+                    JsonObject { } source when source["rows"] is { } rows => DataRows.Read(Path.GetFullPath(Path.Combine(_suite.Folder, scope.Expand(rows.ToString())))),
+                    var text => scope.Expand(text!.ToString()).Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Select(Value.Of).ToList(),
+                };
                 var name = Text("item") ?? "item";
                 // The steps share the case's variables, so what they set is still there after the repeat.
                 foreach (var item in items)
@@ -417,7 +529,7 @@ public sealed class Runner
 
             case "if":
             {
-                var check = Checks.Build(step["if"]!.AsObject(), scope, _quiet, () => Leftovers(_suite, _quiet), Shows(scope));
+                var check = Checks.Build(step["if"]!.AsObject(), scope, Context(scope));
                 string? detail;
                 try
                 {
@@ -486,6 +598,91 @@ public sealed class Runner
                     ShowStep(say);
                 _view.ShowWait($"Wait {seconds.ToString(CultureInfo.InvariantCulture)} seconds");
                 Control.Wait((int)(seconds * 1000));
+                break;
+            }
+
+            case "copy":
+            {
+                var (from, to) = (SuitePath(Required("copy")), SuitePath(Required("to")));
+                ShowStep(say ?? $"Copy {Path.GetFileName(from.TrimEnd('\\', '/'))} to {to}", ActivityKind.File);
+                Files(() => Copy(from, to));
+                break;
+            }
+
+            case "delete":
+            {
+                var path = SuitePath(Required("delete"));
+                ShowStep(say ?? $"Delete {Path.GetFileName(path.TrimEnd('\\', '/'))}", ActivityKind.File);
+                Files(() =>
+                {
+                    if (Directory.Exists(path))
+                        Directory.Delete(path, recursive: true);
+                    else if (File.Exists(path))
+                        File.Delete(path);
+                });
+                break;
+            }
+
+            case "writeFile":
+            {
+                var path = SuitePath(Required("writeFile"));
+                var text = step["text"] is JsonArray lines ? string.Join("\r\n", lines.Select(line => scope.Expand(line!.ToString()))) + "\r\n" : Text("text") ?? "";
+                var append = step["append"]?.GetValue<bool>() ?? false;
+                ShowStep(say ?? $"{(append ? "Add to" : "Write")} {Path.GetFileName(path)}", ActivityKind.File);
+                Files(() =>
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                    if (append)
+                        File.AppendAllText(path, text);
+                    else
+                        File.WriteAllText(path, text);
+                });
+                break;
+            }
+
+            case "unzip":
+            {
+                var (zip, to) = (SuitePath(Required("unzip")), SuitePath(Required("to")));
+                ShowStep(say ?? $"Unzip {Path.GetFileName(zip)} into {to}", ActivityKind.File);
+                Files(() =>
+                {
+                    if (Directory.Exists(to))
+                        Directory.Delete(to, recursive: true);
+                    ZipFile.ExtractToDirectory(zip, to);
+                });
+                break;
+            }
+
+            case "startService":
+            case "stopService":
+            {
+                var name = Required(kind);
+                var start = kind == "startService";
+                ShowStep(say ?? $"{(start ? "Start" : "Stop")} the service {name}", ActivityKind.Command);
+                try
+                {
+                    _machine.SetServiceRunning(name, start);
+                }
+                catch (Exception ex) when (ex is not StopRunException)
+                {
+                    FailStep($"The service {name} didn't {(start ? "start" : "stop")}: {ex.Message}");
+                }
+                break;
+            }
+
+            case "setJsonValue":
+            {
+                var (file, path, value) = (SuitePath(Required("setJsonValue")), Required("path"), Required("to"));
+                ShowStep(say ?? $"Set {path} to {value} in {Path.GetFileName(file)}", ActivityKind.File);
+                Files(() => SetJsonValue(file, path, value));
+                break;
+            }
+
+            case "setAppSetting":
+            {
+                var (file, key, value) = (SuitePath(Required("setAppSetting")), Required("key"), Required("to"));
+                ShowStep(say ?? $"Set {key} to {value} in {Path.GetFileName(file)}", ActivityKind.File);
+                Files(() => SetAppSetting(file, key, value));
                 break;
             }
 
@@ -607,9 +804,113 @@ public sealed class Runner
     private static string WaitingFor(Target target, Wanted wanted) =>
         wanted.Expected == "new text" ? $"Wait for {target.What} to change" : $"Wait for {target.What} to say \"{wanted.Expected}\"";
 
+    // Waits until a control is there and can be used, such as a button greyed out while the app works.
+    private IControl WaitEnabled(Target target, TimeSpan within)
+    {
+        _view.ShowWait($"Wait for {target.What} to be usable");
+        var end = Environment.TickCount64 + (long)Control.Scale(within).TotalMilliseconds;
+        while (true)
+        {
+            Control.Gate();
+            var control = _driver.TryFind(target);
+            if (control is { IsEnabled: true })
+                return control;
+            if (_driver.OtherWindow() is { } other)
+                throw new StuckException($"see {target.What} become usable", $"The app is showing another window instead: {other}");
+            if (Environment.TickCount64 > end)
+                throw new StuckException($"see {target.What} become usable", control is null ? null : "It's still greyed out.");
+            Control.Wait(300);
+        }
+    }
+
+    private static ClickHow How(string? how) => how switch
+    {
+        null => ClickHow.Invoke,
+        "mouse" => ClickHow.Mouse,
+        "right" => ClickHow.Right,
+        "double" => ClickHow.Double,
+        _ => throw new ScriptException($"how is mouse, right or double, not {how}."),
+    };
+
+    // A step that changes files: one that can't, such as a file in use, fails the step and the case carries on.
+    private void Files(Action change)
+    {
+        try
+        {
+            change();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or JsonException or System.Xml.XmlException)
+        {
+            FailStep(ex.Message);
+        }
+    }
+
+    // A file into a folder or onto a file, or a folder in place of another.
+    private static void Copy(string from, string to)
+    {
+        if (Directory.Exists(from))
+        {
+            if (Directory.Exists(to))
+                Directory.Delete(to, recursive: true);
+            foreach (var folder in Directory.GetDirectories(from, "*", SearchOption.AllDirectories))
+                Directory.CreateDirectory(Path.Combine(to, Path.GetRelativePath(from, folder)));
+            Directory.CreateDirectory(to);
+            foreach (var file in Directory.GetFiles(from, "*", SearchOption.AllDirectories))
+                File.Copy(file, Path.Combine(to, Path.GetRelativePath(from, file)), overwrite: true);
+            return;
+        }
+        if (!File.Exists(from))
+            throw new FileNotFoundException($"There is no {from} to copy.");
+        var target = Directory.Exists(to) ? Path.Combine(to, Path.GetFileName(from)) : to;
+        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        File.Copy(from, target, overwrite: true);
+    }
+
+    /// <summary>
+    /// Sets a JSON setting by its path, such as Orders:Region, making the objects on the way when they aren't there. A
+    /// number or true and false stay a number or a true and false when the old value was one.
+    /// </summary>
+    public static void SetJsonValue(string file, string path, string value)
+    {
+        var root = JsonNode.Parse(File.ReadAllText(file), documentOptions: new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true }) as JsonObject
+            ?? throw new JsonException($"{Path.GetFileName(file)} isn't a JSON object.");
+        var keys = path.Split(':');
+        var node = root;
+        foreach (var key in keys[..^1])
+        {
+            var name = node.FirstOrDefault(pair => string.Equals(pair.Key, key, StringComparison.OrdinalIgnoreCase)).Key ?? key;
+            if (node[name] is not JsonObject inner)
+                node[name] = inner = new JsonObject();
+            node = inner;
+        }
+        var last = node.FirstOrDefault(pair => string.Equals(pair.Key, keys[^1], StringComparison.OrdinalIgnoreCase)).Key ?? keys[^1];
+        node[last] = node[last] switch
+        {
+            JsonValue old when old.GetValueKind() == JsonValueKind.Number && double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number) => number,
+            JsonValue old when old.GetValueKind() is JsonValueKind.True or JsonValueKind.False && bool.TryParse(value, out var flag) => flag,
+            _ => value,
+        };
+        File.WriteAllText(file, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    /// <summary>Sets an appSettings value in a .config file, adding it when it isn't there, and keeping the file's layout.</summary>
+    public static void SetAppSetting(string file, string key, string value)
+    {
+        var document = XDocument.Load(file, LoadOptions.PreserveWhitespace);
+        var root = document.Root ?? throw new System.Xml.XmlException($"{Path.GetFileName(file)} is empty.");
+        var settings = root.Element("appSettings");
+        if (settings is null)
+            root.Add(settings = new XElement("appSettings"));
+        var add = settings.Elements("add").FirstOrDefault(element => (string?)element.Attribute("key") == key);
+        if (add is null)
+            settings.Add(add = new XElement("add", new XAttribute("key", key)));
+        add.SetAttributeValue("value", value);
+        document.Save(file, SaveOptions.DisableFormatting);
+    }
+
     // Clicks a control again and again while it is there and can be used, such as Up until the top folder. Not being
     // there at all is fine: there is nothing to do.
-    private void ClickWhileEnabled(Target target, string? say, bool useMouse)
+    private void ClickWhileEnabled(Target target, string? say, ClickHow how)
     {
         for (var clicks = 0; _driver.TryFind(target) is { IsEnabled: true } control; clicks++)
         {
@@ -619,7 +920,7 @@ public sealed class Runner
             ShowStep(text, ActivityKind.Click);
             Mark();
             _driver.Point(control, text);
-            _driver.Click(control, useMouse);
+            _driver.Click(control, how);
             Control.Wait(Math.Max(Control.Pace / 2, 300));
         }
     }
@@ -627,12 +928,32 @@ public sealed class Runner
     // A control's text: what is typed in a text box or editor, or the name of anything else, such as a label.
     private static string TextOf(IControl control) => control.Value ?? control.Name;
 
-    // The shows check: whether a target is in the app now.
-    private Func<JsonNode, (string What, Func<bool> Shown)> Shows(VariableScope scope) => node =>
+    // What checks look at: the machine without showing, the suite's leftovers, the app's controls, and since when.
+    private CheckContext Context(VariableScope scope) => new(_quiet, () => Leftovers(_suite, _quiet), node =>
     {
         var target = Targets.Resolve(node, scope, _suite.Elements);
-        return (target.What, () => _driver.TryFind(target) is not null);
-    };
+        return new ControlProbe(target.What, () => _driver.TryFind(target), _driver.Rows);
+    }, _since);
+
+    /// <summary>
+    /// Makes a check now, as the builder does to try one before it is added: whether it passes and what it found. Its
+    /// variables are those of the steps played so far.
+    /// </summary>
+    public CheckResult TryCheck(JsonObject node)
+    {
+        var scope = _played ?? _globals.Child();
+        var check = Checks.Build(node, scope, Context(scope));
+        string? detail;
+        try
+        {
+            detail = check.Test();
+        }
+        catch (Exception ex) when (ex is not StopRunException)
+        {
+            detail = "Error: " + ex.Message;
+        }
+        return new CheckResult(check.Label, detail is null, detail);
+    }
 
     private void Checkpoint(JsonObject step, VariableScope scope)
     {
@@ -644,7 +965,7 @@ public sealed class Runner
         var results = new List<CheckResult>();
         foreach (var node in step["checks"] as JsonArray ?? [])
         {
-            var check = Checks.Build(node!.AsObject(), scope, _quiet, () => Leftovers(_suite, _quiet), Shows(scope));
+            var check = Checks.Build(node!.AsObject(), scope, Context(scope));
             var detail = Evaluate(check);
             results.Add(new CheckResult(check.Label, detail is null, detail));
             if (detail is null)
@@ -761,6 +1082,15 @@ public sealed class Runner
             ["selection"] = control.Selection ?? "",
         };
         scope.Set(name.GetValue<string>(), Value.Of(control.Name, parts));
+    }
+
+    // How long a step took, as a part of what it kept: ${name.seconds}.
+    private static void KeepSeconds(JsonObject step, VariableScope scope, TimeSpan took)
+    {
+        if (step["as"]?.GetValue<string>() is not { } name || !scope.TryGet(name, out var value))
+            return;
+        var parts = new Dictionary<string, string>(value.Parts) { ["seconds"] = took.TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture) };
+        scope.SetOuter(name, value with { Parts = parts });
     }
 
     private static void KeepOutput(JsonObject step, VariableScope scope, ProcessOutput output)

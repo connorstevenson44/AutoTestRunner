@@ -4,7 +4,8 @@ namespace AutoTestRunner.Scripting;
 /// One way to find a control, with every ${...} already filled in. Id is the AutomationId; Type is a UI Automation
 /// control type such as Button or Edit. Within limits the search to inside another control, and SameRowAs to controls
 /// on the same row as another, such as the buttons beside a file's name. ScrollToFind scrolls the window's long lists
-/// until the control is built, for rows of a list that only builds the rows in view.
+/// until the control is built, for rows of a list that only builds the rows in view. Cell finds a grid's cell by
+/// its row, any of whose cells says Row, and its column's header.
 /// </summary>
 public sealed record Selector(
     string? Id = null,
@@ -15,7 +16,8 @@ public sealed record Selector(
     NameMatch Match = NameMatch.Exact,
     Target? Within = null,
     Target? SameRowAs = null,
-    bool ScrollToFind = false)
+    bool ScrollToFind = false,
+    GridCell? Cell = null)
 {
     public bool Matches(string? id, string? name, string? type, string? helpText, string? className) =>
         (Id is null || Id == id)
@@ -50,9 +52,16 @@ public sealed record Selector(
             "CheckBox" => "tick box",
             "RadioButton" => "option",
             "ListItem" => "item",
+            "TreeItem" => "item",
+            "MenuItem" => "menu item",
+            "DataItem" => "row",
+            "Hyperlink" => "link",
+            "Slider" => "slider",
             "Window" => "window",
             _ => Type,
         };
+        if (Cell is { } cell)
+            return $"the {cell.Column} of {cell.Row}";
         if (Name is not null)
             return Type == "Text" ? $"\"{Name.TrimEnd()}\"{(Match == NameMatch.Exact ? "" : "…")}" : $"the {Name} {noun}";
         if (HelpText is not null)

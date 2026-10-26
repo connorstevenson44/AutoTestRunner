@@ -1,6 +1,8 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.ServiceProcess;
 using System.Text;
+using Microsoft.Win32;
 
 namespace AutoTestRunner.Running;
 
@@ -19,6 +21,78 @@ public sealed class WindowsMachine : IMachine
     }
 
     public bool TaskExists(string path) => Run("schtasks.exe", ["/query", "/tn", path]).ExitCode == 0;
+
+    public void SetServiceRunning(string name, bool running)
+    {
+        using var service = new ServiceController(name);
+        var wanted = running ? ServiceControllerStatus.Running : ServiceControllerStatus.Stopped;
+        if (service.Status == wanted)
+            return;
+        if (running)
+            service.Start();
+        else
+            service.Stop();
+        service.WaitForStatus(wanted, TimeSpan.FromMinutes(2));
+    }
+
+    public string? RegistryValue(string key, string name)
+    {
+        if (!OperatingSystem.IsWindows())
+            return null;
+        var (hive, path) = key.Split('\\', 2) switch
+        {
+            [var first, var rest] => (first.ToUpperInvariant(), rest),
+            [var first] => (first.ToUpperInvariant(), ""),
+            _ => ("", ""),
+        };
+        var root = hive switch
+        {
+            "HKLM" or "HKEY_LOCAL_MACHINE" => Registry.LocalMachine,
+            "HKCU" or "HKEY_CURRENT_USER" => Registry.CurrentUser,
+            "HKCR" or "HKEY_CLASSES_ROOT" => Registry.ClassesRoot,
+            "HKU" or "HKEY_USERS" => Registry.Users,
+            _ => throw new ArgumentException($"A registry key starts with HKLM, HKCU, HKCR or HKU, not {hive}."),
+        };
+        using var opened = root.OpenSubKey(path);
+        return opened?.GetValue(name) switch
+        {
+            null => null,
+            string[] lines => string.Join(" ", lines),
+            byte[] bytes => Convert.ToHexString(bytes),
+            var value => Convert.ToString(value, CultureInfo.InvariantCulture),
+        };
+    }
+
+    public bool ProcessRunning(string name) =>
+        Process.GetProcessesByName(name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? name[..^4] : name).Length > 0;
+
+    // Get-WinEvent reads every log, including those under Applications and Services Logs.
+    public bool EventLogged(string log, string? source, string text, DateTime since)
+    {
+        var output = PowerShell("""
+            $log, $source, $text, $since = $args
+            $filter = @{ LogName = $log; StartTime = [datetime]::Parse($since, [cultureinfo]::InvariantCulture) }
+            if ($source) { $filter.ProviderName = $source }
+            @(Get-WinEvent -FilterHashtable $filter -ErrorAction SilentlyContinue | Where-Object { $_.Message -like "*$text*" }).Count
+            """, [log, source ?? "", text, since.ToString("o", CultureInfo.InvariantCulture)]);
+        return int.TryParse(output.Output.Trim(), out var count) && count > 0;
+    }
+
+    public string Clipboard() => PowerShell("Get-Clipboard -Raw", []).Output;
+
+    public (int Status, string Body) Get(string url)
+    {
+        try
+        {
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+            using var response = client.GetAsync(new Uri(url)).GetAwaiter().GetResult();
+            return ((int)response.StatusCode, response.Content.ReadAsStringAsync().GetAwaiter().GetResult());
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UriFormatException)
+        {
+            return (0, ex.Message);
+        }
+    }
 
     public ProcessOutput Run(string program, IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string>? environment = null, TimeSpan? timeout = null,
         Action<string, bool>? output = null)

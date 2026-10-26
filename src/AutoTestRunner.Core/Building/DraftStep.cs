@@ -32,7 +32,7 @@ public sealed class DraftStep(JsonObject json, ActivityKind kind, TargetChoice? 
     public string? Script => Verb == "script" ? Json["script"]?.GetValue<string>() : null;
 
     /// <summary>The step's key, such as click or waitText.</summary>
-    public string Verb => Json.Select(pair => pair.Key).FirstOrDefault(ScriptVocabulary.Steps.ContainsKey) ?? "say";
+    public string Verb => ScriptVocabulary.KindOf(Json);
 
     /// <summary>Whether the step waits for the app rather than doing something.</summary>
     public bool Waits => Verb is "call" or "find" or "waitText" or "waitGone";

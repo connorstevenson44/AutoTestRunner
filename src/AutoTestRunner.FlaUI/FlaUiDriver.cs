@@ -51,19 +51,35 @@ public sealed class FlaUiDriver : IDriver
     {
         CloseAll(exe);
         _processName = Path.GetFileNameWithoutExtension(exe);
-        _windowTitle = app.Window;
+        // An app that signs in first opens that window; a useWindow step moves on to the main one.
+        _windowTitle = app.StartWindow ?? app.Window;
         var start = new ProcessStartInfo(exe) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(exe) };
         if (app.Arguments is { } arguments)
             start.Arguments = arguments;
         Process.Start(start);
 
         var end = Environment.TickCount64 + (long)_control.Scale(TimeSpan.FromSeconds(60)).TotalMilliseconds;
-        while ((_main = AppWindows().FirstOrDefault(hwnd => Native.Title(hwnd) == app.Window)) == 0)
+        while ((_main = AppWindows().FirstOrDefault(hwnd => Native.Title(hwnd) == _windowTitle)) == 0)
         {
             if (Environment.TickCount64 > end)
-                throw new StuckException($"see {app.Window}'s window open", exe);
+                throw new StuckException($"see {_windowTitle}'s window open", exe);
             _control.Wait(250);
         }
+        Place();
+    }
+
+    public void UseWindow(string title, TimeSpan timeout)
+    {
+        var end = Environment.TickCount64 + (long)timeout.TotalMilliseconds;
+        nint found;
+        while ((found = AppWindows().FirstOrDefault(hwnd => Native.Title(hwnd) == title && Native.IsVisible(hwnd))) == 0)
+        {
+            _control.Gate();
+            if (Environment.TickCount64 > end)
+                throw new StuckException($"see the {title} window open", OtherWindow() is { } other ? $"The app is showing another window instead: {other}" : null);
+            _control.Wait(250);
+        }
+        (_main, _windowTitle) = (found, title);
         Place();
     }
 
@@ -212,6 +228,9 @@ public sealed class FlaUiDriver : IDriver
             else
                 root = MainWindow();
 
+            if (selector.Cell is { } cell)
+                return pick(Cells(root, cell));
+
             var candidates = root.FindAllDescendants(Condition(selector)).Where(element => Fits(selector, element));
             if (selector.SameRowAs is { } rowOf)
             {
@@ -233,6 +252,48 @@ public sealed class FlaUiDriver : IDriver
         {
             return default;
         }
+    }
+
+    // A grid's cell, in the row one of whose cells says what the selector's row does, under its column's header: in the
+    // grid it is inside, or the grids inside that.
+    private IEnumerable<AutomationElement> Cells(AutomationElement root, Scripting.GridCell cell)
+    {
+        var grids = root.FindAllDescendants(Conditions.ByControlType(ControlType.DataGrid).Or(Conditions.ByControlType(ControlType.Table)));
+        foreach (var grid in grids.Prepend(root).Where(grid => grid.Patterns.Grid.IsSupported))
+        {
+            var pattern = grid.Patterns.Grid.Pattern;
+            var column = ColumnIndex(grid, cell.Column);
+            if (column < 0)
+                continue;
+            var (rows, columns) = (pattern.RowCount.ValueOrDefault, pattern.ColumnCount.ValueOrDefault);
+            for (var row = 0; row < rows; row++)
+            {
+                if (Enumerable.Range(0, columns).Any(index => pattern.GetItem(row, index) is { } item && CellText(item) == cell.Row)
+                    && pattern.GetItem(row, column) is { } found)
+                {
+                    yield return found;
+                    break;
+                }
+            }
+        }
+    }
+
+    private static int ColumnIndex(AutomationElement grid, string header)
+    {
+        var headers = grid.Patterns.Table.IsSupported
+            ? grid.Patterns.Table.Pattern.ColumnHeaders.ValueOrDefault ?? []
+            : grid.FindAllDescendants(grid.ConditionFactory.ByControlType(ControlType.HeaderItem));
+        return Array.FindIndex(headers, item => Name(item).Trim() == header);
+    }
+
+    // What a cell says: its value, its name, or the text inside it.
+    private static string CellText(AutomationElement cell)
+    {
+        if (cell.Patterns.Value.IsSupported && cell.Patterns.Value.Pattern.Value.ValueOrDefault is { Length: > 0 } value)
+            return value;
+        if (Name(cell) is { Length: > 0 } name)
+            return name;
+        return cell.FindFirstDescendant(cell.ConditionFactory.ByControlType(ControlType.Text)) is { } text ? Name(text) : "";
     }
 
     // Names and help texts compared by startsWith or contains are read from each control, as UI Automation can only
@@ -477,10 +538,10 @@ public sealed class FlaUiDriver : IDriver
         Thread.Sleep(120);
     }
 
-    public void Click(IControl control, bool useMouse)
+    public void Click(IControl control, ClickHow how)
     {
         var element = ((FlaUiControl)control).Element;
-        if (!useMouse)
+        if (how == ClickHow.Invoke)
         {
             if (element.Patterns.Invoke.IsSupported)
             {
@@ -499,7 +560,124 @@ public sealed class FlaUiDriver : IDriver
             }
         }
         Native.Activate(_main);
-        Mouse.LeftClick(Middle(Rect(element.BoundingRectangle)));
+        var middle = Middle(Rect(element.BoundingRectangle));
+        switch (how)
+        {
+            case ClickHow.Right:
+                Mouse.RightClick(middle);
+                break;
+            case ClickHow.Double:
+                Mouse.DoubleClick(middle);
+                break;
+            default:
+                Mouse.LeftClick(middle);
+                break;
+        }
+    }
+
+    // In small moves, so the app sees a drag start before the control arrives.
+    public void Drag(IControl control, IControl onto)
+    {
+        var from = Middle(Rect(((FlaUiControl)control).Element.BoundingRectangle));
+        var box = Rect(((FlaUiControl)onto).Element.BoundingRectangle);
+        _keepClear(box);
+        Native.Activate(_main);
+        Mouse.MoveTo(from);
+        Mouse.Down(MouseButton.Left);
+        Thread.Sleep(150);
+        Mouse.MoveTo(new Point(from.X + 12, from.Y + 12));
+        Thread.Sleep(150);
+        Mouse.MoveTo(Middle(box));
+        Thread.Sleep(250);
+        Mouse.Up(MouseButton.Left);
+        Wait.UntilInputIsProcessed();
+    }
+
+    public void Menu(IReadOnlyList<string> path)
+    {
+        for (var index = 0; index < path.Count; index++)
+        {
+            var item = WaitMenuItem(path[index]);
+            Point(new FlaUiControl(item), path[index]);
+            if (index < path.Count - 1 && item.Patterns.ExpandCollapse.IsSupported)
+                item.Patterns.ExpandCollapse.Pattern.Expand();
+            else if (item.Patterns.Invoke.IsSupported)
+                item.Patterns.Invoke.Pattern.Invoke();
+            else
+                Mouse.LeftClick(Middle(Rect(item.BoundingRectangle)));
+            _control.Wait(250);
+        }
+    }
+
+    private AutomationElement WaitMenuItem(string name)
+    {
+        var end = Environment.TickCount64 + (long)_control.Scale(TimeSpan.FromSeconds(10)).TotalMilliseconds;
+        while (true)
+        {
+            _control.Gate();
+            var items = MenuItems();
+            if (items.FirstOrDefault(item => Name(item) == name) is { } found)
+                return found;
+            if (Environment.TickCount64 > end)
+                throw new StuckException($"find {name} in the menu", items.Count == 0 ? "No menu is open." : $"The menu has: {string.Join(", ", items.Select(Name).Where(text => text.Length > 0))}");
+            _control.Wait(200);
+        }
+    }
+
+    // The menu items on screen: in the main window's menu bar, or in a menu open in a popup window of its own.
+    private List<AutomationElement> MenuItems()
+    {
+        var ids = ProcessIds();
+        var condition = Conditions.ByControlType(ControlType.MenuItem);
+        try
+        {
+            return [.. _automation.GetDesktop().FindAllChildren()
+                .Where(top => ids.Contains(top.Properties.ProcessId.ValueOrDefault))
+                .SelectMany(top => top.FindAllDescendants(condition))
+                .Where(IsShown)];
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or TimeoutException)
+        {
+            return [];
+        }
+    }
+
+    public void Expand(IControl control)
+    {
+        var element = ((FlaUiControl)control).Element;
+        if (element.Patterns.ExpandCollapse.IsSupported)
+        {
+            if (element.Patterns.ExpandCollapse.Pattern.ExpandCollapseState.ValueOrDefault != ExpandCollapseState.Expanded)
+                element.Patterns.ExpandCollapse.Pattern.Expand();
+            return;
+        }
+        Native.Activate(_main);
+        Mouse.DoubleClick(Middle(Rect(element.BoundingRectangle)));
+    }
+
+    public void SetValue(IControl control, string value)
+    {
+        var element = ((FlaUiControl)control).Element;
+        if (element.Patterns.RangeValue.IsSupported && double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number))
+        {
+            element.Patterns.RangeValue.Pattern.SetValue(number);
+            return;
+        }
+        // A date picker's text is in the box inside it.
+        var box = element.Patterns.Value.IsSupported ? element : element.FindFirstDescendant(Conditions.ByControlType(ControlType.Edit));
+        if (box is null || !box.Patterns.Value.IsSupported)
+            throw new StuckException($"set {Name(element)} to {value}", "It has no value that can be set: it isn't a slider, a number box or a box to type in.");
+        box.Patterns.Value.Pattern.SetValue(value);
+    }
+
+    // A grid's rows, or the items in a list or tree: all of them, including those scrolled out of view.
+    public int Rows(IControl control)
+    {
+        var element = ((FlaUiControl)control).Element;
+        if (element.Patterns.Grid.IsSupported)
+            return element.Patterns.Grid.Pattern.RowCount.ValueOrDefault;
+        return element.FindAllChildren(Conditions.ByControlType(ControlType.ListItem).Or(Conditions.ByControlType(ControlType.DataItem))
+            .Or(Conditions.ByControlType(ControlType.TreeItem))).Length;
     }
 
     // A key at a time so it can be watched, then Tab so the value is taken.
@@ -650,7 +828,7 @@ public sealed class FlaUiDriver : IDriver
         var found = Find(new Target([new Selector(Id: ((int)button).ToString(CultureInfo.InvariantCulture), Type: "Button", Within: new Target([new Selector(Type: "Window", Name: title)], title))],
             $"the {button} button"), _control.Scale(TimeSpan.FromSeconds(5)));
         Point(found, button.ToString());
-        Click(found, useMouse: false);
+        Click(found, ClickHow.Invoke);
         var end = Environment.TickCount64 + 10_000;
         while (Native.IsVisible(hwnd) && Environment.TickCount64 < end)
             Thread.Sleep(100);
@@ -671,7 +849,7 @@ public sealed class FlaUiDriver : IDriver
             if (TryFind(new Target([new Selector(Id: "1", Type: "Button", Within: window)], "Open")) is { } open)
             {
                 Point(open, "Open it");
-                Click(open, useMouse: false);
+                Click(open, ClickHow.Invoke);
             }
             var end = Environment.TickCount64 + 3_000;
             while (Native.IsVisible(hwnd) && Environment.TickCount64 < end)
