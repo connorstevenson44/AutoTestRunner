@@ -36,7 +36,12 @@ $root = $ui::RootElement
 function Wait-For([scriptblock] $find, [string] $what, [int] $seconds = 60) {
     $end = (Get-Date).AddSeconds($seconds)
     while ((Get-Date) -lt $end) {
-        $found = & $find
+        # A window closing while its controls are listed, such as the file picker, takes them away mid-list: look again.
+        try { $found = & $find }
+        catch {
+            if ($_.Exception.GetBaseException() -isnot [System.Windows.Automation.ElementNotAvailableException]) { throw }
+            $found = $null
+        }
         if ($found) { return $found }
         Start-Sleep -Milliseconds 250
     }
