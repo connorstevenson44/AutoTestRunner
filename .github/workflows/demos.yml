@@ -64,12 +64,18 @@ jobs:
         timeout-minutes: 20
         run: ./tools/Run-Demos.ps1 -Bundle "$env:RUNNER_TEMP\demos" -Results artifacts/demo-results
 
-      # Builds a case in Order Desk with clicks and keys sent to the screen, as a person would, then runs it.
+      # Builds a case in Order Desk with clicks and keys sent to the screen, as a person would, then runs it; changes
+      # case 1, adds a C# script step to a case, and makes a new suite from the launcher.
       - name: Build a case with the builder
         if: github.event_name != 'workflow_dispatch' || inputs.check
-        timeout-minutes: 8
+        timeout-minutes: 12
         shell: powershell
         run: ./tools/Try-Builder.ps1 -Bundle "$env:RUNNER_TEMP\demos" -Results artifacts/demo-results/builder
+
+      # Anything that went wrong in autotest itself, with where it happened.
+      - name: Show autotest's errors.log
+        if: failure()
+        run: Get-Content "$env:LOCALAPPDATA\AutoTestRunner\errors.log" -ErrorAction SilentlyContinue
 
       # On the run's Summary page, which demos ended as they should, and what went wrong with any that didn't.
       - name: Show how each demo ended

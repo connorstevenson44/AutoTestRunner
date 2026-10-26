@@ -28,6 +28,7 @@ internal static class PreviewUi
         var suites = MadeUpSuites();
         var suite = suites[0].Suite!;
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        Crashes.Watch(app);
         app.Startup += (_, _) =>
         {
             var launcher = new LauncherWindow(suites, suites[0], new Options());

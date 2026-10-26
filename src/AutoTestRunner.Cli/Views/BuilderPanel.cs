@@ -530,12 +530,18 @@ internal sealed partial class BuilderPanel : Window
             || name.Trim().Length == 0)
             return;
         var relative = ScriptEditor.Create(_suite, name, _draft.Name, csharp);
-        ScriptEditor.Open(Path.Combine(_suite.Folder, relative));
+        OpenScript(relative);
         var step = StepMaker.Script(relative);
         step.Text = name.Trim();
         // It is played with Run to here, once it is written.
         step.State = DraftStepState.NotPlayed;
         AddStep?.Invoke(step);
+    }
+
+    private void OpenScript(string relative)
+    {
+        if (!ScriptEditor.Open(Path.Combine(_suite.Folder, relative)))
+            Note($"Couldn't open Notepad. The script is {Path.Combine(_suite.Folder, relative)}.");
     }
 
     private void SaySomething()
@@ -884,7 +890,8 @@ internal sealed partial class BuilderPanel : Window
         }
         else if (Detail(step) is { } detail)
             words.Children.Add(Ui.Words(detail, 11, Ui.Muted, wrap: false));
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Visibility = Visibility.Hidden };
+        // Drawn again under the mouse, as after Apply, the buttons stay: the mouse won't come onto the row again to show them.
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Visibility = row.IsMouseOver ? Visibility.Visible : Visibility.Hidden };
         var actions = new List<(string Glyph, string Tip, Action Act)>();
         if (played)
         {
@@ -895,7 +902,7 @@ internal sealed partial class BuilderPanel : Window
             actions.Add((Icons.Next, "Run to here\nPlays the steps up to this one.", () => RunToHere(step)));
         actions.Add((Icons.Edit, "Edit from here\nPlays up to this step, removes the steps after it, and starts recording.", () => EditFromHere(step)));
         if (step.Script is { } script)
-            actions.Add((Icons.Document, "Open the script in Notepad++ or Notepad", () => ScriptEditor.Open(Path.Combine(_suite.Folder, script))));
+            actions.Add((Icons.Document, "Open the script in Notepad++ or Notepad", () => OpenScript(script)));
         if (step.Verb is "repeat" or "if")
             actions.Add((Icons.Back, "Take the steps out of it", () => Unwrap(step)));
         actions.Add((Icons.Blocked, off ? "Switch this step back on" : "Switch this step off: it is skipped when the case runs, and kept in the file", () => SwitchOff(step, !off)));
@@ -991,8 +998,7 @@ internal sealed partial class BuilderPanel : Window
     private void EditSay(DraftStep step, StackPanel words, TextBlock say)
     {
         var box = new TextBox { Text = step.Text, FontSize = 13, Padding = new Thickness(2, 1, 2, 1) };
-        var index = words.Children.IndexOf(say);
-        words.Children[index] = box;
+        Swap(words, say, box);
         void Done(bool keep)
         {
             if (!words.Children.Contains(box))
@@ -1003,7 +1009,7 @@ internal sealed partial class BuilderPanel : Window
                 _changes++;
             }
             say.Text = step.Text;
-            words.Children[words.Children.IndexOf(box)] = say;
+            Swap(words, box, say);
         }
         box.KeyDown += (_, e) =>
         {
@@ -1014,6 +1020,16 @@ internal sealed partial class BuilderPanel : Window
         Activate();
         box.Focus();
         box.SelectAll();
+    }
+
+    // Puts one in the other's place. A panel's child can't be set over another, which WPF says is still connected.
+    private static void Swap(Panel panel, UIElement from, UIElement to)
+    {
+        var index = panel.Children.IndexOf(from);
+        if (index < 0)
+            return;
+        panel.Children.RemoveAt(index);
+        panel.Children.Insert(index, to);
     }
 
     private void Move(DraftStep step, int by)
