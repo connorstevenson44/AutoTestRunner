@@ -15,7 +15,8 @@ namespace AutoTestRunner.Cli;
 /// order they did it. A case opened to change it is played as far as the person asks, and started again to go back.
 /// Between inputs it keeps up with the app: the box being typed in, the text of the controls the suite watches, such
 /// as the status text, and the control under the mouse, which is read before it is clicked so that the step is for
-/// what the person saw.
+/// what the person saw. Each look is a call into the app, answered on the app's UI thread, so each is made only as
+/// often as it needs to be, and the app stays smooth while the person uses it.
 /// </summary>
 internal sealed class BuildWorker
 {
@@ -28,6 +29,9 @@ internal sealed class BuildWorker
     // How often the app's process ids are read again, in milliseconds: an app can start helpers and windows.
     private const int ProcessesEvery = 1000;
 
+    // How often the box with the keyboard and the watched controls' text are read, in milliseconds.
+    private const int TypingEvery = 150, WatchedEvery = 250;
+
     private readonly BuildSession _session;
     private readonly BuildRequest _request;
     private readonly Suite _suite;
@@ -39,7 +43,8 @@ internal sealed class BuildWorker
     private readonly FlaUiInspector _inspector;
     private readonly Recorder _recorder;
 
-    private long _processesRead = long.MinValue;
+    // When each was last read, by Environment.TickCount64: 0 is long enough ago for each to be read straight away.
+    private long _processesRead, _typingRead, _watchedRead;
 
     // When the last click was and where, for a double-click; and when a right-click's menu was last clicked in.
     private (long At, int X, int Y) _lastClick = (long.MinValue, 0, 0);
@@ -53,10 +58,12 @@ internal sealed class BuildWorker
     // keeps still.
     private readonly Dictionary<string, Watching> _watching = new(StringComparer.Ordinal);
 
-    // Where the mouse was, the app's control there, and whether that is outlined.
+    // Where the mouse was, the app's control there once it was read, and whether that is outlined, with how a step
+    // would find the control outlined: naming one asks the app about each way to find it, so it is done once a control.
     private (int X, int Y) _pointer = (int.MinValue, int.MinValue);
     private InspectedControl? _under;
-    private bool _outlined;
+    private bool _read, _outlined;
+    private (ControlFacts Facts, TargetChoice Choice)? _named;
 
     public BuildWorker(BuildSession session, BuildRequest request, CaseDraft draft, BuilderPanel panel, BuilderView view, FlaUiDriver driver, Runner runner)
     {
@@ -354,10 +361,19 @@ internal sealed class BuildWorker
         // A right-click's menu that has had no click for a while is done with: its step is made.
         if (_recorder.MenuOpen && Environment.TickCount64 - _menuSince > MenuSettles)
             _panel.Add(_recorder.MenuDone());
+        var now = Environment.TickCount64;
         if (mode == BuildMode.Recording)
         {
-            FollowTyping();
-            FollowWatched();
+            if (now - _typingRead >= TypingEvery)
+            {
+                _typingRead = now;
+                FollowTyping();
+            }
+            if (now - _watchedRead >= WatchedEvery)
+            {
+                _watchedRead = now;
+                FollowWatched();
+            }
         }
         else
             LeaveBox();
@@ -377,7 +393,7 @@ internal sealed class BuildWorker
     // name box is not one: what it holds is the pick's.
     private void FollowTyping()
     {
-        var box = _inspector.TypingIn() is { Facts.Dialog: null } typing ? typing : null;
+        var box = _inspector.TypingIn(_typing) is { Facts.Dialog: null } typing ? typing : null;
         if (_typing is { } current)
         {
             if (box is not null && box.Is(current))
@@ -438,31 +454,44 @@ internal sealed class BuildWorker
         }
     }
 
-    // Reads the control under the mouse as it stops on one, so a click is of what was there before it; and outlines
-    // it, with how a step would find it, while picking or while Ctrl is held.
+    // Reads the control under the mouse once it stops on one, so a click is of what was there before it; while it is
+    // moving, nothing is read, as a click there reads what it is on. While picking or while Ctrl is held, the control
+    // is read as the mouse goes, and outlined with how a step would find it.
     private void FollowPointer(BuildMode mode)
     {
         var at = Desktop.Cursor();
         var moved = at != _pointer;
         if (moved)
+            (_pointer, _under, _read) = (at, null, false);
+        var outlining = mode == BuildMode.Picking || RecordingHook.ControlHeld;
+        if (!_read && (!moved || outlining))
         {
-            _pointer = at;
             _under = _session.IsApp(Desktop.WindowAt(at.X, at.Y)) ? _inspector.At(at.X, at.Y) : null;
+            _read = true;
         }
-        if ((mode == BuildMode.Picking || RecordingHook.ControlHeld) && _under is { } under)
+        if (outlining && _under is { } under)
         {
             if (!moved && _outlined)
                 return;
             var meant = under.Facts.Meant();
-            _panel.ShowHover(meant, Name(meant));
+            if (_outlined && _named is { } named && Same(named.Facts, meant))
+                return;
+            var choice = Name(meant);
+            _named = (meant, choice);
+            _panel.ShowHover(meant, choice);
             _outlined = true;
         }
         else
             EndHover();
     }
 
+    // Whether two reads are of the same control, as far as how a step finds it goes.
+    private static bool Same(ControlFacts one, ControlFacts other) =>
+        one.Type == other.Type && one.Name == other.Name && one.Id == other.Id && one.ClassName == other.ClassName && one.Bounds == other.Bounds;
+
     private void EndHover()
     {
+        _named = null;
         if (!_outlined)
             return;
         _panel.EndHover();
@@ -490,7 +519,7 @@ internal sealed class BuildWorker
         }
         finally
         {
-            _under = null;
+            (_under, _read) = (null, false);
             _panel.Values = _runner.Values();
         }
     }

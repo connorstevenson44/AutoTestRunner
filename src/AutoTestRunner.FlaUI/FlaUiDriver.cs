@@ -160,8 +160,19 @@ public sealed class FlaUiDriver : IDriver
 
     internal nint Main => _main;
 
-    internal IReadOnlySet<int> ProcessIds() =>
-        Process.GetProcessesByName(_processName).Select(process => process.Id).ToHashSet();
+    internal IReadOnlySet<int> ProcessIds()
+    {
+        var processes = Process.GetProcessesByName(_processName);
+        try
+        {
+            return processes.Select(process => process.Id).ToHashSet();
+        }
+        finally
+        {
+            foreach (var process in processes)
+                process.Dispose();
+        }
+    }
 
     internal List<nint> AppWindows() => Native.Windows(ProcessIds());
 

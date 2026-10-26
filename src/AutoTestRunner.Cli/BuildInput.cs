@@ -3,8 +3,8 @@ using AutoTestRunner.Building;
 namespace AutoTestRunner.Cli;
 
 /// <summary>
-/// Something the person did, passed from the UI thread, where the hook and the panel are, to the builder's thread,
-/// where the app is read and driven.
+/// Something the person did, passed from the hook's thread or the panel's UI thread to the builder's thread, where the
+/// app is read and driven.
 /// </summary>
 /// <param name="Kind">What it was.</param>
 /// <param name="X">Where a click was, in pixels.</param>
