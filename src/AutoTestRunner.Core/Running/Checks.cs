@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -6,9 +7,6 @@ using System.Xml.Linq;
 using AutoTestRunner.Scripting;
 
 namespace AutoTestRunner.Running;
-
-/// <summary>A check ready to run: its label, how long it may take to pass, and a test that returns null when it passes.</summary>
-public sealed record Check(string Label, TimeSpan Within, Func<string?> Test);
 
 /// <summary>
 /// The built-in checks a checkpoint can make, written the way the AutoHotkey runner's were: each label says what
@@ -18,6 +16,11 @@ public static class Checks
 {
     public const string Absent = "<absent>";
 
+    /// <summary>Reads a check from a checkpoint's "checks" list.</summary>
+    /// <param name="node">The check as the script writes it.</param>
+    /// <param name="scope">The variables to expand in its values.</param>
+    /// <param name="machine">The machine whose services, tasks and files it checks.</param>
+    /// <param name="leftovers">Lists what the case left behind, for the leftovers check.</param>
     /// <param name="shows">Finds a target in the app now, for the shows check: what to call it, and whether it is there.</param>
     public static Check Build(JsonObject node, VariableScope scope, IMachine machine, Func<IReadOnlyList<string>> leftovers,
         Func<JsonNode, (string What, Func<bool> Shown)>? shows = null)
@@ -41,7 +44,7 @@ public static class Checks
                 () => XmlValue(subject, "connectionStrings", "name", Text("name"), "connectionString") != Absent ? null : "it isn't there", 0),
             "fileContains" => ($"{name} has {Text("text")} in it", () => FileHas(subject, Text("text")), 0),
             "logged" => ($"The log says \"{Text("text")}\"", () => FileHas(subject, Text("text")), 0),
-            "fileCount" => Count(subject, Optional("pattern") ?? "*", int.Parse(Text("equals")), node["folders"]?.GetValue<bool>() ?? false,
+            "fileCount" => Count(subject, Optional("pattern") ?? "*", int.Parse(Text("equals"), CultureInfo.InvariantCulture), node["folders"]?.GetValue<bool>() ?? false,
                 node["recursive"]?.GetValue<bool>() ?? false),
             "fileVersion" => ($"{name} is version {Text("startsWith")}", () => Version(subject, Text("startsWith")), 0),
             "output" => Output(subject, (node["args"] as JsonArray ?? []).Select(arg => scope.Expand(arg!.ToString())).ToList(), Text("contains"), machine),
@@ -56,7 +59,7 @@ public static class Checks
             _ => throw new ScriptException($"There is no {kind} check."),
         };
 
-        var within = node["within"] is { } seconds ? TimeSpan.FromSeconds(double.Parse(scope.Expand(seconds.ToString()))) : TimeSpan.FromSeconds(check.Seconds);
+        var within = node["within"] is { } seconds ? TimeSpan.FromSeconds(double.Parse(scope.Expand(seconds.ToString()), CultureInfo.InvariantCulture)) : TimeSpan.FromSeconds(check.Seconds);
         return new Check(Optional("label") ?? check.Label, within, check.Test);
     }
 

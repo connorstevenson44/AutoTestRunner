@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -12,7 +13,7 @@ using AutoTestRunner.FlaUI;
 using AutoTestRunner.Running;
 using AutoTestRunner.Scripting;
 
-namespace AutoTestRunner.Cli;
+namespace AutoTestRunner.Cli.Views;
 
 /// <summary>
 /// The panel beside the app in a run you watch. From the top: the case and a bar of every case, coloured as each one
@@ -20,12 +21,12 @@ namespace AutoTestRunner.Cli;
 /// run and what it is waiting for; a question, when the run needs you; then everything it has done, with what each
 /// command printed as it printed it.
 /// </summary>
+[SuppressMessage("Design", "CA1001", Justification = "The key hook and the timer are disposed when the window closes.")]
 internal sealed class RunPanel : Window, IRunView
 {
     private const double PanelWidth = 440;
 
     private readonly RunControl _control;
-    private readonly IReadOnlyList<Case> _cases;
     private readonly string _resultsFolder;
     private readonly bool _canRunAgain;
     private readonly List<CaseResult> _ended = [];
@@ -64,7 +65,7 @@ internal sealed class RunPanel : Window, IRunView
 
     public RunPanel(Suite suite, IReadOnlyList<Case> cases, RunControl control, string resultsFolder, bool canRunAgain)
     {
-        (_control, _cases, _resultsFolder, _canRunAgain) = (control, cases, resultsFolder, canRunAgain);
+        (_control, _resultsFolder, _canRunAgain) = (control, resultsFolder, canRunAgain);
         Resources.MergedDictionaries.Add(Ui.Theme);
         Title = suite.Name;
         Width = PanelWidth;
@@ -396,7 +397,7 @@ internal sealed class RunPanel : Window, IRunView
         {
             if (_control.Waiting == HoldReason.Stuck || _asking)
                 return false;
-            GetWindowThreadProcessId(foreground, out var processId);
+            _ = GetWindowThreadProcessId(foreground, out var processId);
             if (processId == Environment.ProcessId || _typing)
                 return false;
         }

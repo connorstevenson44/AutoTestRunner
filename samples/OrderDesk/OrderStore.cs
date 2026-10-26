@@ -2,71 +2,8 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace OrderDesk;
-
-/// <summary>Something on sale, and its price for one.</summary>
-public sealed record Product(string Name, decimal Price)
-{
-    public static readonly IReadOnlyList<Product> All =
-    [
-        new("Coffee beans", 12.00m),
-        new("Green tea", 8.00m),
-        new("Mug", 6.00m),
-        new("Teapot", 24.00m),
-    ];
-
-    public static Product? Named(string? name) => All.FirstOrDefault(product => product.Name == name);
-}
-
-/// <summary>An order, as it is kept in orders.json.</summary>
-public sealed class Order
-{
-    public int Number { get; set; }
-    public string Customer { get; set; } = "";
-    public string Product { get; set; } = "";
-    public int Quantity { get; set; }
-    public bool GiftWrap { get; set; }
-    public bool Express { get; set; }
-    public string Notes { get; set; } = "";
-
-    /// <summary>The total with two decimals, such as 26.00, so a test can compare it as text.</summary>
-    public string Total { get; set; } = "";
-
-    public string Status { get; set; } = "New";
-
-    [JsonIgnore]
-    public string Title => $"{Number} {Customer}";
-
-    [JsonIgnore]
-    public string Summary => $"{Quantity} × {Product}{(GiftWrap ? ", gift wrapped" : "")}{(Express ? ", express" : "")}";
-
-    [JsonIgnore]
-    public string Tip => $"Order {Number}";
-
-    [JsonIgnore]
-    public bool IsShipped => Status == "Shipped";
-}
-
-public static class Pricing
-{
-    public const decimal GiftWrapFee = 2.00m;
-    public const decimal ExpressFee = 5.00m;
-
-    /// <summary>What the order costs: the products, then gift wrap and express delivery.</summary>
-    public static decimal Total(Product product, int quantity, bool giftWrap, bool express) =>
-        product.Price * quantity + (giftWrap ? GiftWrapFee : 0) + (express ? ExpressFee : 0);
-
-    // A deliberate bug, for the failure demo to catch: what is saved leaves out express delivery, so an express
-    // order's saved total is 5.00 less than the total the window shows.
-    public static decimal SavedTotal(Product product, int quantity, bool giftWrap, bool express) =>
-        product.Price * quantity + (giftWrap ? GiftWrapFee : 0);
-
-    public static string Money(decimal amount) => "£" + amount.ToString("0.00", CultureInfo.InvariantCulture);
-
-    public static string Plain(decimal amount) => amount.ToString("0.00", CultureInfo.InvariantCulture);
-}
 
 /// <summary>
 /// The orders, kept in orders.json in the data folder, with every change written to activity.log there too, so a
@@ -81,7 +18,7 @@ public sealed class OrderStore
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    private OrderFile _file = new();
+    private readonly OrderFile _file = new();
 
     public OrderStore(string folder)
     {
@@ -152,19 +89,4 @@ public sealed class OrderStore
         public int NextNumber { get; set; } = 1001;
         public SortedDictionary<string, Order> Orders { get; set; } = [];
     }
-}
-
-/// <summary>A line of a file to import: customer,product,quantity, with an optional note such as draft.</summary>
-public sealed record ImportLine(string Customer, string Product, int Quantity, string Note)
-{
-    public string Summary => $"{Customer}: {Quantity} × {Product}{(Note.Length > 0 ? $" ({Note})" : "")}";
-
-    public static IReadOnlyList<ImportLine> Read(string file) =>
-        File.ReadAllLines(file)
-            .Skip(1)
-            .Where(line => line.Trim().Length > 0)
-            .Select(line => line.Split(',').Select(part => part.Trim()).ToArray())
-            .Select(parts => new ImportLine(parts[0], parts.ElementAtOrDefault(1) ?? "",
-                int.TryParse(parts.ElementAtOrDefault(2), out var quantity) ? quantity : 0, parts.ElementAtOrDefault(3) ?? ""))
-            .ToList();
 }

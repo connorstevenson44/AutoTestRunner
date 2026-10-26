@@ -20,6 +20,10 @@ jobs:
       - name: Build
         run: dotnet build --configuration Release
 
+      # The build already fails on an analyzer or code style warning; this checks the layout .editorconfig sets.
+      - name: Check formatting
+        run: dotnet format whitespace --verify-no-changes
+
       - name: Test
         run: dotnet test --configuration Release --no-build
 

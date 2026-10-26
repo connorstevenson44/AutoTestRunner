@@ -1,21 +1,9 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 namespace AutoTestRunner.Scripting;
-
-/// <summary>A test case: the steps a person takes, ending at a checkpoint.</summary>
-public sealed record Case(
-    int Number, string Id, string Name, string File, IReadOnlyList<string> Needs, string? NeedsNote, string? Covers, JsonArray Steps);
-
-/// <summary>A reusable list of steps with parameters, called with { "call": name, "with": { ... } }.</summary>
-public sealed record Macro(string Name, string File, IReadOnlyDictionary<string, string?> Parameters, JsonArray Steps, string? Returns);
-
-/// <summary>How to start the app, and the control whose text says what it is doing, such as a status bar.</summary>
-public sealed record AppSettings(string Exe, string Window, bool RunAsAdmin, string? Status, string? Arguments);
-
-/// <summary>Scripts that put the machine back as it was before the suite ran, and list what is left over.</summary>
-public sealed record ResetSettings(string? PowerShell, string? Leftovers);
 
 /// <summary>
 /// A suite: one app's tests, in a folder. suite.json says how to start the app, its variables and how to reset the
@@ -151,7 +139,7 @@ public sealed class Suite
             if (range.Length == 2 && int.TryParse(range[0], out var from) && int.TryParse(range[1], out var to))
             {
                 for (var number = from; number <= to; number++)
-                    picked.Add(Find(number.ToString()) ?? throw new SuiteException([$"There is no case {number}."]));
+                    picked.Add(Find(number.ToString(CultureInfo.InvariantCulture)) ?? throw new SuiteException([$"There is no case {number}."]));
             }
             else
                 picked.Add(Find(part) ?? throw new SuiteException([$"There is no case {part}."]));
@@ -316,10 +304,4 @@ public sealed class Suite
                     problems.Add($"{at}: the {kind} {noun} doesn't take \"{key}\".");
         }
     }
-}
-
-/// <summary>A suite that can't be run as it is, with every problem found.</summary>
-public sealed class SuiteException(IReadOnlyList<string> problems) : Exception(string.Join(Environment.NewLine, problems))
-{
-    public IReadOnlyList<string> Problems { get; } = problems;
 }

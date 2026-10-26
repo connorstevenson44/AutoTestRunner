@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -5,7 +6,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using AutoTestRunner.Running;
 
-namespace AutoTestRunner.Cli;
+namespace AutoTestRunner.Cli.Views;
 
 /// <summary>
 /// Everything the run has done, newest at the bottom: each case with its steps, the commands it ran with what they
@@ -110,7 +111,7 @@ internal sealed class ActivityFeed : Grid
         icon.VerticalAlignment = VerticalAlignment.Top;
         icon.Margin = new Thickness(2, 2, 0, 0);
         var words = Ui.Words(text, small ? 11.5 : 12.5, color);
-        var time = Ui.Words(DateTime.Now.ToString("HH:mm:ss"), 10.5, Ui.Faint, wrap: false);
+        var time = Ui.Words(DateTime.Now.ToString("HH:mm:ss", CultureInfo.CurrentCulture), 10.5, Ui.Faint, wrap: false);
         time.VerticalAlignment = VerticalAlignment.Top;
         time.Margin = new Thickness(8, 2, 0, 0);
         Grid.SetColumn(words, 1);

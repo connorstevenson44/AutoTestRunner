@@ -5,7 +5,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using AutoTestRunner.Running;
 
-namespace AutoTestRunner.Cli;
+namespace AutoTestRunner.Cli.Views;
 
 /// <summary>autotest's colours, and the small pieces its windows are built from.</summary>
 internal static class Ui
@@ -19,7 +19,7 @@ internal static class Ui
     public static readonly Brush TerminalCommand = Brush("#9CDCFE"), TerminalScript = Brush("#8A8A8A");
     public static readonly FontFamily Text = new("Segoe UI"), Mono = new("Cascadia Mono, Consolas, Courier New");
 
-    public static ResourceDictionary Theme { get; } = new() { Source = new Uri("pack://application:,,,/autotest;component/Theme.xaml") };
+    public static ResourceDictionary Theme { get; } = new() { Source = new Uri("pack://application:,,,/autotest;component/Views/Theme.xaml") };
 
     public static Brush Of(CaseStatus status) => status switch
     {

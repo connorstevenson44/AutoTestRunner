@@ -1,20 +1,8 @@
+using System.Globalization;
 using System.Text;
 using System.Xml.Linq;
 
 namespace AutoTestRunner.Running;
-
-public enum CaseStatus { Passed, Failed, Skipped, Stopped }
-
-/// <summary>One case's result: what failed and what the person noted.</summary>
-public sealed class CaseResult(int number, string name)
-{
-    public int Number { get; } = number;
-    public string Name { get; } = name;
-    public CaseStatus Status { get; set; } = CaseStatus.Passed;
-    public List<string> Failures { get; } = [];
-    public List<string> Notes { get; } = [];
-    public TimeSpan Duration { get; set; }
-}
 
 /// <summary>
 /// A run's results folder: run.log as it goes, then summary.txt and junit.xml, with the screenshots and UI Automation
@@ -39,7 +27,7 @@ public sealed class Results
     public List<CaseResult> Cases { get; } = [];
 
     /// <summary>A folder named for now, inside parent, as "2026-10-25 141502".</summary>
-    public static string NewFolder(string parent) => Path.Combine(Path.GetFullPath(parent), DateTime.Now.ToString("yyyy-MM-dd HHmmss"));
+    public static string NewFolder(string parent) => Path.Combine(Path.GetFullPath(parent), DateTime.Now.ToString("yyyy-MM-dd HHmmss", CultureInfo.InvariantCulture));
 
     public void Log(string kind, string text)
     {
@@ -67,14 +55,14 @@ public sealed class Results
         var text = new StringBuilder($"{suiteName}, {DateTime.Now:yyyy-MM-dd HH:mm}\r\n\r\n");
         foreach (var result in Cases)
         {
-            text.Append($"{result.Status.ToString().ToUpperInvariant(),-8}{result.Number}. {result.Name}\r\n");
+            text.Append(CultureInfo.InvariantCulture, $"{result.Status.ToString().ToUpperInvariant(),-8}{result.Number}. {result.Name}\r\n");
             foreach (var failure in result.Failures)
-                text.Append($"          ✗ {failure}\r\n");
+                text.Append(CultureInfo.InvariantCulture, $"          ✗ {failure}\r\n");
             foreach (var note in result.Notes)
-                text.Append($"          note: {note}\r\n");
+                text.Append(CultureInfo.InvariantCulture, $"          note: {note}\r\n");
         }
         int Count(CaseStatus status) => Cases.Count(result => result.Status == status);
-        text.Append($"\r\n{Cases.Count} cases: {Count(CaseStatus.Passed)} passed, {Count(CaseStatus.Failed)} failed, "
+        text.Append(CultureInfo.InvariantCulture, $"\r\n{Cases.Count} cases: {Count(CaseStatus.Passed)} passed, {Count(CaseStatus.Failed)} failed, "
             + $"{Count(CaseStatus.Skipped)} skipped, {Count(CaseStatus.Stopped)} stopped\r\n");
         var summary = text.ToString();
         File.WriteAllText(Path.Combine(Folder, "summary.txt"), summary, Encoding.UTF8);

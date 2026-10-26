@@ -1,15 +1,16 @@
 using System.Diagnostics;
 using System.Drawing;
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using AutoTestRunner.Driving;
+using AutoTestRunner.Scripting;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Conditions;
 using FlaUI.Core.Definitions;
 using FlaUI.Core.Input;
 using FlaUI.Core.WindowsAPI;
 using FlaUI.UIA3;
-using AutoTestRunner.Driving;
-using AutoTestRunner.Scripting;
 
 namespace AutoTestRunner.FlaUI;
 
@@ -31,6 +32,7 @@ public sealed class FlaUiDriver : IDriver
     private nint _main;
     private bool _wheelNoted;
 
+    /// <param name="control">The run's pause, step and stop controls, which every action waits on.</param>
     /// <param name="panel">Where the panel is, so the app is placed beside it; null when there is none.</param>
     /// <param name="keepClear">Moves the panel off a control that is about to be used.</param>
     /// <param name="log">Notes for the run's log, such as a workaround being used.</param>
@@ -620,7 +622,7 @@ public sealed class FlaUiDriver : IDriver
             throw new StuckException($"see the \"{title}\" message");
         var dialog = _automation.FromHandle(hwnd);
         // Message box buttons have their command ids as automation ids, whatever the language.
-        var found = Find(new Target([new Selector(Id: ((int)button).ToString(), Type: "Button", Within: new Target([new Selector(Type: "Window", Name: title)], title))],
+        var found = Find(new Target([new Selector(Id: ((int)button).ToString(CultureInfo.InvariantCulture), Type: "Button", Within: new Target([new Selector(Type: "Window", Name: title)], title))],
             $"the {button} button"), _control.Scale(TimeSpan.FromSeconds(5)));
         Point(found, button.ToString());
         Click(found, useMouse: false);
@@ -685,7 +687,7 @@ public sealed class FlaUiDriver : IDriver
         var walker = _automation.TreeWalkerFactory.GetControlViewWalker();
         foreach (var hwnd in AppWindows())
         {
-            text.Append($"===== {Native.Title(hwnd)} ({Native.ClassName(hwnd)})\r\n");
+            text.Append(CultureInfo.InvariantCulture, $"===== {Native.Title(hwnd)} ({Native.ClassName(hwnd)})\r\n");
             var count = 0;
             void Walk(AutomationElement element, int depth)
             {
@@ -716,7 +718,7 @@ public sealed class FlaUiDriver : IDriver
             }
             catch (System.Runtime.InteropServices.COMException ex)
             {
-                text.Append($"(the window couldn't be read: {ex.Message})\r\n");
+                text.Append(CultureInfo.InvariantCulture, $"(the window couldn't be read: {ex.Message})\r\n");
             }
         }
         return text.ToString();
@@ -743,30 +745,4 @@ public sealed class FlaUiDriver : IDriver
     private static Point Middle(ScreenRect box) => new((box.Left + box.Right) / 2, (box.Top + box.Bottom) / 2);
 
     public void Dispose() => _automation.Dispose();
-}
-
-/// <summary>A control FlaUI found. What it says is read each time it is asked.</summary>
-internal sealed class FlaUiControl(AutomationElement element) : IControl
-{
-    public AutomationElement Element { get; } = element;
-
-    public string Name => Element.Properties.Name.ValueOrDefault ?? "";
-
-    public string? Value => Element.Patterns.Value.IsSupported ? Element.Patterns.Value.Pattern.Value.ValueOrDefault : null;
-
-    public string? HelpText => Element.Properties.HelpText.ValueOrDefault;
-
-    public string? AutomationId => Element.Properties.AutomationId.ValueOrDefault;
-
-    public string? Selection
-    {
-        get
-        {
-            if (Element.Patterns.Selection.IsSupported && Element.Patterns.Selection.Pattern.Selection.ValueOrDefault is [var picked, ..])
-                return picked.Properties.Name.ValueOrDefault;
-            return Value;
-        }
-    }
-
-    public bool IsEnabled => Element.Properties.IsEnabled.ValueOrDefault;
 }

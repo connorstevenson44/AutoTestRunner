@@ -3,21 +3,6 @@ using AutoTestRunner.Scripting;
 
 namespace AutoTestRunner.Running;
 
-/// <summary>A check at a checkpoint, and what the runner found.</summary>
-public sealed record CheckResult(string Label, bool Passed, string? Detail);
-
-/// <summary>
-/// A button on a checkpoint that opens something to look at, such as a folder or a file. Kind is the tool's name in the
-/// script: openFolder, openFile, app or console.
-/// </summary>
-public sealed record ToolButton(string Label, Action Open, string Kind = "app");
-
-/// <summary>What a step does, so a panel can show it with an icon.</summary>
-public enum ActivityKind { Say, App, Click, Type, Choose, Point, Key, Dialog, File, Command, Check }
-
-/// <summary>What the person picked when the run got stuck.</summary>
-public enum StuckAnswer { TryAgain, SkipCase, Stop }
-
 /// <summary>
 /// Where a run shows itself: the panel beside the app for a watched run, nothing for an unattended one, whose log
 /// goes to the console. Called on the run's thread; a panel moves the calls to its own.
@@ -63,22 +48,4 @@ public interface IRunView
     void KeepClear(ScreenRect rect);
 
     void Finished(string summary, string resultsFolder, bool allPassed);
-}
-
-/// <summary>An unattended run: everything is in the log, which goes to the console.</summary>
-public sealed class ConsoleRunView : IRunView
-{
-    public void CaseStarted(int index, int count, Case item) { }
-    public void CaseFinished(CaseResult result) { }
-    public void ShowStep(string text, ActivityKind kind = ActivityKind.Say, string? command = null) { }
-    public void ShowWait(string what) { }
-    public void CommandStarted(string line, string? script) { }
-    public void CommandOutput(string line, bool error) { }
-    public void CommandFinished(int exitCode, TimeSpan took) { }
-    public void ShowCheckpoint(string title, IReadOnlyList<CheckResult> checks, IReadOnlyList<string> look, IReadOnlyList<ToolButton> tools) { }
-    public void ShowCarryingOn(TimeSpan after) { }
-    public StuckAnswer AskStuck(string message, string screenshot) => StuckAnswer.Stop;
-    public bool AskScriptError(string message) => false;
-    public void KeepClear(ScreenRect rect) { }
-    public void Finished(string summary, string resultsFolder, bool allPassed) { }
 }

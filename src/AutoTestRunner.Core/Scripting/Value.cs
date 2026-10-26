@@ -17,6 +17,3 @@ public sealed record Value(string Text, IReadOnlyDictionary<string, string> Part
 
     public override string ToString() => Text;
 }
-
-/// <summary>A mistake in a script, such as an unknown variable, element or macro.</summary>
-public class ScriptException(string message) : Exception(message);

@@ -1,13 +1,11 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using AutoTestRunner.Driving;
 using AutoTestRunner.Scripting;
 
 namespace AutoTestRunner.Running;
-
-/// <summary>How a run ended, as the process's exit code. CI relies on these, as it did on the AutoHotkey runner's.</summary>
-public enum ExitCode { Passed = 0, Failed = 1, Missing = 2, ScriptError = 3, NotAdministrator = 4 }
 
 /// <summary>
 /// Runs a suite's cases: each step in turn at a pace a person can follow, holding when the run is paused or step by
@@ -212,7 +210,7 @@ public sealed class Runner
                 Say(text);
         }
         var what = Text("what");
-        TimeSpan Within(TimeSpan normal) => step["within"] is { } seconds ? TimeSpan.FromSeconds(double.Parse(scope.Expand(seconds.ToString()))) : normal;
+        TimeSpan Within(TimeSpan normal) => step["within"] is { } seconds ? TimeSpan.FromSeconds(double.Parse(scope.Expand(seconds.ToString()), CultureInfo.InvariantCulture)) : normal;
         Target TargetOf(string key) => Targets.Resolve(step[key], scope, _suite.Elements, what);
         IControl Find(Target target)
         {
@@ -511,7 +509,7 @@ public sealed class Runner
         var wanted = WantedText(step, scope, first: null);
         _view.ShowWait(WaitingFor(until, wanted));
         var end = Environment.TickCount64 + (long)Control.Scale(within).TotalMilliseconds;
-        for (var rounds = 0; ; )
+        for (var rounds = 0; ;)
         {
             Control.Gate();
             var found = _driver.TryFind(until) is { } control ? TextOf(control) : null;
@@ -730,7 +728,7 @@ public sealed class Runner
         scope.Set(name.GetValue<string>(), Value.Of(output.Output, new Dictionary<string, string>
         {
             ["output"] = output.Output,
-            ["code"] = output.ExitCode.ToString(),
+            ["code"] = output.ExitCode.ToString(CultureInfo.InvariantCulture),
             ["first"] = output.FirstLine,
         }));
     }

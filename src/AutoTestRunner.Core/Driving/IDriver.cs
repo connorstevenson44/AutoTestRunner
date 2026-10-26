@@ -2,32 +2,6 @@ using AutoTestRunner.Scripting;
 
 namespace AutoTestRunner.Driving;
 
-/// <summary>A rectangle on the screen, in pixels.</summary>
-public readonly record struct ScreenRect(int Left, int Top, int Right, int Bottom)
-{
-    public bool IsEmpty => Right <= Left || Bottom <= Top;
-
-    public bool Overlaps(ScreenRect other) =>
-        !(other.Right < Left || other.Left > Right || other.Bottom < Top || other.Top > Bottom);
-}
-
-/// <summary>A control that was found. What it says is read when asked, so it is up to date.</summary>
-public interface IControl
-{
-    string Name { get; }
-    string? Value { get; }
-    string? HelpText { get; }
-    string? AutomationId { get; }
-
-    /// <summary>The picked item of a drop-down or list, or null.</summary>
-    string? Selection { get; }
-
-    bool IsEnabled { get; }
-}
-
-/// <summary>Which button of a Windows message box to press.</summary>
-public enum DialogButton { Ok = 1, Cancel = 2, Yes = 6, No = 7 }
-
 /// <summary>
 /// Drives the app under test. It finds controls, shows the person what is next (the mouse, an outline) and uses
 /// them. Every wait calls <see cref="RunControl.Gate"/>, so a pause or a stop takes effect, and scales its timeout by
@@ -88,11 +62,4 @@ public interface IDriver : IDisposable
 
     /// <summary>The app's windows as UI Automation sees them, for working out why a control wasn't found.</summary>
     string DumpTree();
-}
-
-/// <summary>Something the run needs isn't there, or can't be used: what it was trying to do, and what it found instead.</summary>
-public sealed class StuckException(string what, string? detail = null) : Exception(detail is null ? $"I couldn't {what}." : $"I couldn't {what}. {detail}")
-{
-    public string What { get; } = what;
-    public string? Detail { get; } = detail;
 }

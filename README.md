@@ -89,9 +89,10 @@ keep working when the wording changes.
 | `AutoTestRunner.Cli` | `autotest`: the command line, and the panel and keys of a watched run. |
 | `schema/` | JSON schemas for suite.json, elements.json, macros and cases, written by `python3 tools/schema.py`. A test keeps them in step with the runner. |
 
-Inside `AutoTestRunner.Cli`, `LauncherWindow` picks the cases, `WatchedRun` runs them with the `RunPanel` beside the
-app, `ActivityFeed` is the panel's list of everything done so far, and `GlobalKeyHook` catches Space, Enter and Esc
-wherever the focus is. In `AutoTestRunner.Core`, `Runner` plays the steps, `RunControl` holds the pace and pauses,
+Inside `AutoTestRunner.Cli`, `WatchedRun` runs the cases with the panel beside the app, and `GlobalKeyHook` catches
+Space, Enter and Esc wherever the focus is. Its windows are in `Views/`: `LauncherWindow` picks the cases, `RunPanel`
+is the panel, and `ActivityFeed` is the panel's list of everything done so far. In `AutoTestRunner.Core`, whose
+folders are `Scripting/` (the format), `Running/` (the runner) and `Driving/` (what a driver does), `Runner` plays the steps, `RunControl` holds the pace and pauses,
 `CommandReportingMachine` shows each command and its output as it runs, and `IRunView` is what a run reports to: the
 panel when watched, the console when unattended.
 
