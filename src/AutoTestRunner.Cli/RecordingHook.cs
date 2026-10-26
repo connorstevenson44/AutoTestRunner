@@ -4,12 +4,11 @@ namespace AutoTestRunner.Cli;
 
 /// <summary>
 /// The person's clicks and keys while a case is built, wherever they go. A click or key can be kept from the app, as
-/// Pick and Ctrl+click do, and as a message box's are while the builder reads it. While the builder plays steps itself,
-/// everything is let through unnoticed. Input
-/// another program sends counts as the person's, so a test can build a case as a person would. The
-/// callbacks must be quick, as Windows drops a hook that keeps it waiting and the mouse waits for it, so they only note
-/// what happened: the builder reads the app on a thread of its own. They are called on the hook's own thread, not the
-/// UI thread, so a busy panel never holds up the mouse.
+/// a pick tool, Ctrl+click and the record key do, and as a message box's are while the builder reads it. While the
+/// builder plays steps itself, everything is let through unnoticed. Input another program sends counts as the
+/// person's, so a test can build a case as a person would. The callbacks must be quick, as Windows drops a hook that
+/// keeps it waiting and the mouse waits for it, so they only note what happened: the builder reads the app on a thread
+/// of its own. They are called on the hook's own thread, not the UI thread, so a busy panel never holds up the mouse.
 /// </summary>
 internal sealed class RecordingHook : IDisposable
 {

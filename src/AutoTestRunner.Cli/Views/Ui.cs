@@ -15,6 +15,8 @@ internal static class Ui
     public static readonly Brush Surface = Brush("#F5F7FA"), Accent = Brush("#0F6CBD"), AccentSoft = Brush("#E3EEF9"), AccentEdge = Brush("#C3DAF2");
     public static readonly Brush Pass = Brush("#107C10"), PassSoft = Brush("#E6F4E6"), Fail = Brush("#C42B1C"), FailSoft = Brush("#FBE9E7");
     public static readonly Brush Hold = Brush("#9A5B00"), HoldSoft = Brush("#FFF4E0"), Step = Brush("#6A3D9A"), StepSoft = Brush("#F1EAF8");
+    // A pick tool's colour, as the outline round the control it is used on: the outline, its ink, and its band.
+    public static readonly Brush Amber = Brush("#FF8C00"), AmberInk = Brush("#B35C00"), AmberSoft = Brush("#FFF4E5");
     public static readonly Brush Pending = Brush("#D5DCE4"), Skip = Brush("#A0AAB4");
     public static readonly Brush Terminal = Brush("#1E1E1E"), TerminalText = Brush("#D4D4D4"), TerminalError = Brush("#F48771");
     public static readonly Brush TerminalCommand = Brush("#9CDCFE"), TerminalScript = Brush("#8A8A8A");

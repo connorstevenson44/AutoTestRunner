@@ -50,7 +50,7 @@ public static class StepMaker
         "click" or "tab" => ActivityKind.Click,
         "type" or "replaceText" => ActivityKind.Type,
         "choose" or "tick" => ActivityKind.Choose,
-        "hover" or "find" or "waitGone" or "waitText" or "whileShows" => ActivityKind.Point,
+        "hover" or "find" or "waitGone" or "waitEnabled" or "waitText" or "whileShows" => ActivityKind.Point,
         "key" => ActivityKind.Key,
         "answerDialog" => ActivityKind.Dialog,
         "pickFile" or "pickFolder" => ActivityKind.File,
@@ -134,6 +134,9 @@ public static class StepMaker
 
     public static DraftStep WaitGone(TargetChoice target, ControlFacts control) =>
         Make("waitGone", target, control, $"{Capital(control.Label)} has gone", ActivityKind.Point);
+
+    public static DraftStep WaitEnabled(TargetChoice target, ControlFacts control) =>
+        Make("waitEnabled", target, control, $"{Capital(control.Label)} can be used", ActivityKind.Point);
 
     public static DraftStep WaitText(TargetChoice target, ControlFacts control, string text) =>
         new(new JsonObject { ["waitText"] = target.Json.DeepClone(), ["startsWith"] = StartOf(text) }, ActivityKind.Point, target, control);

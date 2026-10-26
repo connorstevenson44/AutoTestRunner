@@ -9,8 +9,8 @@ using AutoTestRunner.Driving;
 namespace AutoTestRunner.Cli.Views;
 
 /// <summary>
-/// An orange outline around a control of the app, with a label under it saying how a step will find it, as the run
-/// outlines each control it uses. The mouse goes straight through it to the app. It is placed in screen pixels, as UI
+/// An amber outline around a control of the app, with a label under it saying how a step will find it, as the run
+/// outlines each control it uses; or a grey one saying why the builder's pick tool can't be used on it. The mouse goes straight through it to the app. It is placed in screen pixels, as UI
 /// Automation gives them, whatever the screen's scale.
 /// </summary>
 internal sealed class OutlineWindow : Window
@@ -33,7 +33,7 @@ internal sealed class OutlineWindow : Window
         ShowActivated = false;
         Focusable = false;
         IsHitTestVisible = false;
-        _box = new Border { BorderBrush = Brushes.DarkOrange, BorderThickness = new Thickness(2), CornerRadius = new CornerRadius(3) };
+        _box = new Border { BorderBrush = Ui.Amber, BorderThickness = new Thickness(2), CornerRadius = new CornerRadius(3) };
         _dot = new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
         _text = new TextBlock { Foreground = Brushes.White, FontFamily = Ui.Mono, FontSize = 11.5, VerticalAlignment = VerticalAlignment.Center };
         var line = new StackPanel { Orientation = Orientation.Horizontal };
@@ -62,15 +62,30 @@ internal sealed class OutlineWindow : Window
     /// <summary>Outlines a place on the screen, with how it is found under it; null takes the label away.</summary>
     public void Show(ScreenRect box, string? label, TargetQuality quality = TargetQuality.Sturdy)
     {
+        _box.BorderBrush = Ui.Amber;
+        Place(box, label, Quality(quality));
+    }
+
+    /// <summary>Outlines a control in grey, with why the pick tool can't be used on it under it.</summary>
+    public void Refuse(ScreenRect box, string why)
+    {
+        _box.BorderBrush = Ui.Faint;
+        Place(box, why, Ui.Fail);
+    }
+
+    private void Place(ScreenRect box, string? label, Brush dot)
+    {
         _label.Visibility = label is null ? Visibility.Collapsed : Visibility.Visible;
         _text.Text = label ?? "";
-        _dot.Background = Quality(quality);
+        _dot.Background = dot;
         if (!IsVisible)
             Show();
         // Placed in pixels: the outline sits just outside the control, and the label below it.
         var scale = VisualTreeHelper.GetDpi(this);
         var labelHeight = label is null ? 0 : (int)Math.Ceiling(24 * scale.DpiScaleY);
-        SetWindowPos(_hwnd, -1, box.Left - Gap, box.Top - Gap, Math.Max(box.Right - box.Left + 2 * Gap, (int)(260 * scale.DpiScaleX)),
+        // Wide enough for the label's words, at about 7 units a letter in its font, beside the dot.
+        var labelWidth = Math.Max(260, 7 * (label?.Length ?? 0) + 40);
+        SetWindowPos(_hwnd, -1, box.Left - Gap, box.Top - Gap, Math.Max(box.Right - box.Left + 2 * Gap, (int)(labelWidth * scale.DpiScaleX)),
             box.Bottom - box.Top + 2 * Gap + labelHeight, NoActivateFlag);
         _box.Width = (box.Right - box.Left + 2 * Gap) / scale.DpiScaleX;
         _box.HorizontalAlignment = HorizontalAlignment.Left;

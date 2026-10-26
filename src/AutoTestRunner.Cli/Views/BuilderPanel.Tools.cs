@@ -10,46 +10,18 @@ using AutoTestRunner.Scripting;
 namespace AutoTestRunner.Cli.Views;
 
 /// <summary>
-/// The builder panel's forms: a step of any kind from the Step menu, a check of any kind, a step's details folded out
+/// The builder panel's forms: a step of any kind from the toolbar, a check of any kind, a step's details folded out
 /// under it, the kept values to put in a box, and what can be done with steps picked with Shift+click: a macro made of
 /// them, or a repeat or an if put round them.
 /// </summary>
 internal sealed partial class BuilderPanel
 {
-    // The steps the Step menu offers besides recording, under a group each.
-    private static readonly (string Group, string Glyph, (string Kind, string Title, string Tip)[] Kinds)[] NewStepGroups =
-    [
-        ("In the app", Icons.Pointer,
-        [
-            ("key", "Press keys", "Press a key or a shortcut, such as Ctrl+S"),
-            ("menu", "Pick from a menu", "Pick each item of a menu in turn, such as File then Export"),
-            ("expand", "Open tree items", "Open each item on a path in a tree, and select the last"),
-            ("drag", "Drag and drop", "Drag a control and drop it on another"),
-            ("setValue", "Set a value", "Set a slider's, a number box's or a date picker's value in one go"),
-            ("waitEnabled", "Wait until it can be used", "Wait for a control to be there and not greyed out"),
-            ("useWindow", "Use another window", "Drive another of the app's windows from now on, as after a sign-in"),
-            ("tab", "Open a tab", "Open a tab by its header"),
-        ]),
-        ("On this computer", Icons.App,
-        [
-            ("copy", "Copy a file or folder", "Copy a file, or a folder and everything in it"),
-            ("delete", "Delete a file or folder", "Delete it; nothing being there is fine"),
-            ("writeFile", "Write a file", "Write a text to a file, or add it to the end"),
-            ("unzip", "Unzip", "Unzip a .zip file into a folder"),
-            ("setJsonValue", "Change a JSON setting", "Set a setting in a JSON file, such as Orders:Region"),
-            ("setAppSetting", "Change an app setting", "Set an appSettings value in a .config file"),
-            ("startService", "Start a service", "Start a Windows service and wait until it has"),
-            ("stopService", "Stop a service", "Stop a Windows service and wait until it has"),
-            ("run", "Run a program", "Run a program with arguments"),
-        ]),
-    ];
-
     // ===== New steps and checks =====
 
-    // A step of any kind, from its form: it is played, and added when it works.
-    private void NewStep(string kind, string title, string glyph)
+    // A step of any kind, from its form, which starts as given or empty: it is played, and added when it works.
+    private void NewStep(string kind, string title, string glyph, JsonObject? start = null)
     {
-        var start = new JsonObject { [kind] = ScriptVocabulary.Steps[kind].Takes == Takes.List ? new JsonArray() : "" };
+        start ??= new JsonObject { [kind] = ScriptVocabulary.Steps[kind].Takes == Takes.List ? new JsonArray() : "" };
         if (FormWindow.Ask(this, title, glyph, Forms.ForStep(kind), kind, start, _suite.Folder, ValuesNow, PickFor, add: "Do it") is { } step)
             Play?.Invoke(StepMaker.FromJson(step, DraftStepState.Played), true);
     }
@@ -73,9 +45,8 @@ internal sealed partial class BuilderPanel
     // Picks a control in the app for a form: picking starts, and the next control clicked goes to the form.
     private void PickFor(Action<TargetChoice> then)
     {
-        _pickInto = (then, Mode);
-        SetMode(BuildMode.Picking);
-        Note($"Click the control in {_suite.App.Window}. It goes in the form.");
+        _pickInto = then;
+        ShowMode();
     }
 
     private Task<CheckResult> TryCheck(JsonObject check)
@@ -320,7 +291,7 @@ internal sealed partial class BuilderPanel
         _draft.NewMacros[made.Name] = macro;
         MadeMacro?.Invoke(MacroMaker.Read(made.Name, $"macros/{made.Name}.json", macro));
         Replace(steps, call);
-        Note($"Made {made.Name}. It is saved in macros/ with the case, and can be used in other cases from the Step menu.");
+        Note($"Made {made.Name}. It is saved in macros/ with the case, and can be used in other cases from the macro tool.");
     }
 
     private void WrapInRepeat()
@@ -398,38 +369,5 @@ internal sealed partial class BuilderPanel
         _changes++;
         Renumber();
         UpdateCount();
-    }
-
-    // A step that runs one of the suite's macros, or one made here, with its parameters from a form.
-    private void UseMacro()
-    {
-        var macros = _suite.Macros.Values.Select(macro => (macro.Name, Parameters: (IReadOnlyDictionary<string, string?>)macro.Parameters))
-            .Concat(_draft.NewMacros.Select(pair => (Name: pair.Key, Parameters: (IReadOnlyDictionary<string, string?>)MacroMaker.Read(pair.Key, "", pair.Value).Parameters)))
-            .OrderBy(macro => macro.Name, StringComparer.OrdinalIgnoreCase).ToList();
-        var menu = new ContextMenu { PlacementTarget = _addStep, Placement = PlacementMode.Bottom };
-        foreach (var (name, parameters) in macros)
-        {
-            var item = new MenuItem { Header = name, Icon = Ui.Glyph(Icons.Macro, 13, Ui.Accent) };
-            item.Click += (_, _) =>
-            {
-                var fields = parameters.Select(pair => new FormField(pair.Key, pair.Value is { } fallback ? $"{pair.Key} (left empty: {fallback})" : pair.Key, FieldType.Text))
-                    .Append(new FormField("as", "Keep what it hands back as", FieldType.Text)).ToList();
-                if (FormWindow.Ask(this, $"Use {name}", Icons.Macro, fields, "", new JsonObject(), _suite.Folder, ValuesNow, null, add: "Do it") is not { } given)
-                    return;
-                var call = new JsonObject { ["call"] = name };
-                var with = new JsonObject();
-                foreach (var (key, value) in given.Where(pair => pair.Key != "as"))
-                    with[key] = value?.DeepClone();
-                if (with.Count > 0)
-                    call["with"] = with;
-                if (given["as"] is { } keep)
-                    call["as"] = keep.DeepClone();
-                Play?.Invoke(StepMaker.FromJson(call, DraftStepState.Played), true);
-            };
-            menu.Items.Add(item);
-        }
-        if (macros.Count == 0)
-            menu.Items.Add(new MenuItem { Header = "The suite has no macros yet. Pick steps with Shift+click to make one.", IsEnabled = false });
-        menu.IsOpen = true;
     }
 }

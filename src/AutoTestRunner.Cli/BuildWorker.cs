@@ -289,7 +289,7 @@ internal sealed class BuildWorker
         if (_inspector.At(x, y) is not { } hit)
             return;
         var meant = hit.Facts.Meant();
-        _panel.ShowPicked(meant, Name(meant), FlaUiInspector.Describe(hit));
+        _panel.ShowPicked(meant, Name(meant));
         _outlined = true;
     }
 

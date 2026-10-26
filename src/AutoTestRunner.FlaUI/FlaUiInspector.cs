@@ -171,24 +171,6 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
         return found;
     }
 
-    /// <summary>Everything UI Automation says about a control, for the builder's tip when nothing names it well.</summary>
-    public static string Describe(InspectedControl control)
-    {
-        var facts = control.Facts;
-        var lines = new List<string> { $"Type: {facts.Type}" };
-        if (facts.Name.Length > 0)
-            lines.Add($"Name: {facts.Name}");
-        if (!string.IsNullOrEmpty(facts.Id))
-            lines.Add($"AutomationId: {facts.Id}");
-        if (!string.IsNullOrEmpty(facts.HelpText))
-            lines.Add($"HelpText: {facts.HelpText}");
-        if (!string.IsNullOrEmpty(facts.ClassName))
-            lines.Add($"ClassName: {facts.ClassName}");
-        if (facts.Ancestors.Count > 0)
-            lines.Add("Inside: " + string.Join(" › ", facts.Ancestors.Take(4).Select(around => around.Name.Length > 0 ? $"{around.Type} \"{around.Name}\"" : around.Type)));
-        return string.Join("\n", lines);
-    }
-
     // Whether a control is the app's. The app's processes are read again when it seems not to be, as the app may have
     // started again, but not more than once a second.
     private bool IsApp(AutomationElement element)
