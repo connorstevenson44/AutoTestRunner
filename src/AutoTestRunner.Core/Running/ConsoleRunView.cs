@@ -13,6 +13,7 @@ public sealed class ConsoleRunView : IRunView
     public void CommandStarted(string line, string? script) { }
     public void CommandOutput(string line, bool error) { }
     public void CommandFinished(int exitCode, TimeSpan took) { }
+    public void StepFailed(string message) { }
     public void ShowCheckpoint(string title, IReadOnlyList<CheckResult> checks, IReadOnlyList<string> look, IReadOnlyList<ToolButton> tools) { }
     public void ShowCarryingOn(TimeSpan after) { }
     public StuckAnswer AskStuck(string message, string screenshot) => StuckAnswer.Stop;

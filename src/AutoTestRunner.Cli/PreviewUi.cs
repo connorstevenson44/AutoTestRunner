@@ -82,7 +82,7 @@ internal static class PreviewUi
         Pause(900);
         view.ShowStep("Click Open package", ActivityKind.Click);
         Pause(900);
-        view.ShowStep("LauncherChoice Contoso.Orders-1.0.0.zip", ActivityKind.File);
+        view.ShowStep("Pick Contoso.Orders-1.0.0.zip", ActivityKind.File);
         view.ShowWait("Wait for the status text to say \"Opened Contoso.Orders 1.0.0\"");
         Pause(1600);
         Shot("02-waiting");
@@ -116,6 +116,7 @@ internal static class PreviewUi
         Pause(600);
         view.CommandOutput("Get-Content : Cannot find path 'C:\\Apps\\Contoso.Orders\\qa\\heartbeat.txt' because it does not exist.", true);
         view.CommandFinished(1, TimeSpan.FromSeconds(0.8));
+        view.StepFailed("A PowerShell step failed with exit code 1: Get-Content : Cannot find path 'C:\\Apps\\Contoso.Orders\\qa\\heartbeat.txt' because it does not exist.");
         view.ShowStep("Check: qa was deployed from the command line", ActivityKind.Check);
         view.ShowCheckpoint("qa was deployed from the command line",
         [
