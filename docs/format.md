@@ -73,7 +73,7 @@ Each step does one thing, named by its key. Any step can also have:
 | `tick` | target, `checked` | Ticks or clears a tick box |
 | `hover` | target | Points at a control, such as a row whose buttons only show on hover |
 | `tab` | a tab's header | Opens a tab |
-| `key` | `"Tab"`, `"Ctrl+A"` | Presses keys |
+| `key` | `"Tab"`, `"Ctrl+A"`, `"PageDown"`, `"Shift+F10"` | Presses keys: a letter or digit, Enter, Esc, Tab, Space, Backspace, Delete, Insert, Home, End, PageUp, PageDown, Up, Down, Left, Right, F1 to F24 or Win, with Ctrl, Alt or Shift |
 | `find` | target | Waits for a control |
 | `waitGone` | target | Waits for a control to go |
 | `waitText` | target, `startsWith`, `contains`, `equals`, `matches`, `changes`, `new` | Waits for a control's text: what is typed in a text box or editor, or the name of anything else |

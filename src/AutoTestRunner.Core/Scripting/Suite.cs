@@ -264,11 +264,19 @@ public sealed class Suite
             if (call is not null && !Macros.ContainsKey(call))
                 problems.Add($"suite.json: {where} calls {call}, and there is no macro called that.");
         }
+        foreach (var (name, definition) in Elements)
+            CheckTarget(definition, $"elements.json, {name}", problems);
         var ids = Cases.Select(item => item.Id).ToHashSet();
         foreach (var item in Cases)
         {
-            foreach (var need in item.Needs.Where(need => !ids.Contains(need)))
-                problems.Add($"{Path.GetFileName(item.File)}: needs {need}, and there is no case with that id.");
+            foreach (var need in item.Needs)
+            {
+                // Cases run in file order, so the case it carries on from must come before it.
+                if (!ids.Contains(need))
+                    problems.Add($"{Path.GetFileName(item.File)}: needs {need}, and there is no case with that id.");
+                else if (Find(need) is { } needed && needed.Number >= item.Number)
+                    problems.Add($"{Path.GetFileName(item.File)}: needs {need}, which runs after it. Cases run in file order, so give it a lower number.");
+            }
             CheckSteps(item.Steps, Path.GetFileName(item.File), problems);
         }
         foreach (var macro in Macros.Values)
@@ -313,9 +321,15 @@ public sealed class Suite
                     if (!Macros.TryGetValue(name, out var macro))
                         problems.Add($"{at}: there is no macro called {name}.");
                     else
-                        foreach (var (key, _) in step["with"] as JsonObject ?? [])
+                    {
+                        var given = step["with"] as JsonObject ?? [];
+                        foreach (var (key, _) in given)
                             if (!macro.Parameters.ContainsKey(key))
                                 problems.Add($"{at}: {name} has no parameter {key}. It takes: {string.Join(", ", macro.Parameters.Keys)}.");
+                        foreach (var (parameter, fallback) in macro.Parameters)
+                            if (fallback is null && !given.ContainsKey(parameter))
+                                problems.Add($"{at}: {name} needs {parameter}, in with.");
+                    }
                     break;
                 case "repeat":
                     CheckSteps(step["steps"] as JsonArray ?? [], at, problems);
@@ -367,6 +381,10 @@ public sealed class Suite
             case JsonObject selector:
                 foreach (var (key, _) in selector.Where(pair => !Targets.SelectorKeys.Contains(pair.Key)))
                     problems.Add($"{at}: a selector has no \"{key}\".");
+                if (Written(selector["type"]) is { } type && !Targets.ControlTypes.Contains(type))
+                    problems.Add($"{at}: there is no control type {type}. It is one of: {string.Join(", ", Targets.ControlTypes)}.");
+                if (Written(selector["match"]) is { } match && match is not ("exact" or "startsWith" or "contains"))
+                    problems.Add($"{at}: match is exact, startsWith or contains, not {match}.");
                 if (selector["element"] is JsonValue element)
                     CheckTarget(element, at, problems);
                 if (selector["within"] is { } within)
@@ -379,6 +397,10 @@ public sealed class Suite
                 break;
         }
     }
+
+    // A property's text as written, when it has no ${...} to fill in first.
+    private static string? Written(JsonNode? node) =>
+        node is JsonValue value && value.TryGetValue(out string? text) && !text.Contains("${", StringComparison.Ordinal) ? text : null;
 
     private static void CheckItems(JsonArray? items, IReadOnlyDictionary<string, string[]> vocabulary, IReadOnlySet<string> common, string noun, string at, List<string> problems)
     {

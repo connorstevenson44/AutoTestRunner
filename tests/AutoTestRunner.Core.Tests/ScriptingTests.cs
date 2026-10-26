@@ -120,4 +120,42 @@ public class ScriptingTests
             Directory.Delete(folder, recursive: true);
         }
     }
+
+    [Fact]
+    public void Loading_reports_what_would_only_go_wrong_in_the_middle_of_a_run()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "AutoTestRunnerTests", Path.GetRandomFileName());
+        Directory.CreateDirectory(Path.Combine(folder, "cases"));
+        Directory.CreateDirectory(Path.Combine(folder, "macros"));
+        File.WriteAllText(Path.Combine(folder, "suite.json"), """{ "name": "Broken", "app": { "exe": "x.exe", "window": "X" } }""");
+        File.WriteAllText(Path.Combine(folder, "elements.json"), """{ "saveButton": { "type": "Buton", "name": "Save" } }""");
+        File.WriteAllText(Path.Combine(folder, "macros", "addOrder.json"), """{ "params": { "customer": {}, "quantity": { "default": "1" } }, "steps": [] }""");
+        File.WriteAllText(Path.Combine(folder, "cases", "01-one.json"), """
+            {
+              "name": "One",
+              "needs": ["two"],
+              "steps": [
+                { "click": { "type": "splitbutton", "name": "Export" } },
+                { "click": { "type": "${kind}", "name": "Export" } },
+                { "click": { "button": "Save", "match": "begins" } },
+                { "call": "addOrder", "with": { "quantity": "2" } },
+                { "call": "addOrder", "with": { "customer": "Ada" } }
+              ]
+            }
+            """);
+        File.WriteAllText(Path.Combine(folder, "cases", "02-two.json"), """{ "name": "Two", "steps": [] }""");
+        try
+        {
+            var problems = Assert.Throws<SuiteException>(() => Suite.Load(folder)).Problems;
+            Assert.Equal(4, problems.Count);
+            Assert.Contains(problems, problem => problem.Contains("elements.json, saveButton: there is no control type Buton"));
+            Assert.Contains(problems, problem => problem.Contains("needs two, which runs after it"));
+            Assert.Contains(problems, problem => problem.Contains("step 3: match is exact, startsWith or contains, not begins"));
+            Assert.Contains(problems, problem => problem.Contains("step 4: addOrder needs customer"));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
 }

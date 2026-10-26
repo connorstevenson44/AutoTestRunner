@@ -83,7 +83,7 @@ selector_props = {
  "with": {"type":"object","additionalProperties":{"type":["string","number"]},"description":"Values for the element's ${parameters}."},
  "id": text("Its AutomationId, which WPF takes from x:Name when none is set. Inside a template it repeats on every row."),
  "name": text("Its name: a button's text, a box's label."),
- "type": {"enum":["Button","Edit","Text","ComboBox","ListItem","TabItem","CheckBox","RadioButton","List","Window","Document","Pane","Group","Hyperlink","MenuItem","TreeItem","DataItem","Custom"],"description":"Its UI Automation control type."},
+ "type": {"enum":["AppBar","Button","Calendar","CheckBox","ComboBox","Custom","DataGrid","DataItem","Document","Edit","Group","Header","HeaderItem","Hyperlink","Image","List","ListItem","Menu","MenuBar","MenuItem","Pane","ProgressBar","RadioButton","ScrollBar","SemanticZoom","Separator","Slider","Spinner","SplitButton","StatusBar","Tab","TabItem","Table","Text","Thumb","TitleBar","ToolBar","ToolTip","Tree","TreeItem","Window"],"description":"Its UI Automation control type."},
  "helpText": text("Its tooltip."),
  "className": text("Its class name."),
  "match": {"enum":["exact","startsWith","contains"],"description":"How name and helpText are compared. exact when left out."},

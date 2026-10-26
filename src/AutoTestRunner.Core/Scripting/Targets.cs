@@ -23,6 +23,14 @@ public static class Targets
         ["window"] = "Window",
     };
 
+    /// <summary>The UI Automation control types a selector's type can name, compared ignoring case.</summary>
+    public static readonly IReadOnlySet<string> ControlTypes = new HashSet<string>(
+        ["AppBar", "Button", "Calendar", "CheckBox", "ComboBox", "Custom", "DataGrid", "DataItem", "Document", "Edit", "Group", "Header",
+         "HeaderItem", "Hyperlink", "Image", "List", "ListItem", "Menu", "MenuBar", "MenuItem", "Pane", "ProgressBar", "RadioButton",
+         "ScrollBar", "SemanticZoom", "Separator", "Slider", "Spinner", "SplitButton", "StatusBar", "Tab", "TabItem", "Table", "Text",
+         "Thumb", "TitleBar", "ToolBar", "ToolTip", "Tree", "TreeItem", "Window"],
+        StringComparer.OrdinalIgnoreCase);
+
     public static readonly IReadOnlySet<string> SelectorKeys = new HashSet<string>(
         ["element", "with", "id", "name", "type", "helpText", "className", "match", "within", "sameRowAs", "scrollToFind", .. Shorthands.Keys]);
 

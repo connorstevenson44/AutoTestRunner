@@ -597,6 +597,11 @@ public sealed class FlaUiDriver : IDriver
         "TAB" => VirtualKeyShort.TAB,
         "DEL" or "DELETE" => VirtualKeyShort.DELETE,
         "SPACE" => VirtualKeyShort.SPACE,
+        "BACKSPACE" => VirtualKeyShort.BACK,
+        "INS" => VirtualKeyShort.INSERT,
+        "PAGEUP" or "PGUP" => VirtualKeyShort.PRIOR,
+        "PAGEDOWN" or "PGDN" => VirtualKeyShort.NEXT,
+        "WIN" or "WINDOWS" => VirtualKeyShort.LWIN,
         { Length: 1 } letter when char.IsLetterOrDigit(letter[0]) => Enum.Parse<VirtualKeyShort>("KEY_" + letter),
         var other => Enum.TryParse<VirtualKeyShort>(other, out var code) ? code : throw new ScriptException($"There is no key called {key}."),
     };
