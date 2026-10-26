@@ -86,24 +86,30 @@ tried again.
 **New case** in the launcher opens the builder: a panel beside the app, which gets the app to where the case starts
 (a fresh start, or where another case leaves off), then records.
 
-- **Record** (on at the start): use the app. Each click, pick from a drop-down, tick and tab becomes a step, what you
-  type becomes one when you leave the box, and keys such as Enter or Ctrl+S become key steps. A click that changes the
-  status text gets a wait for its new words, so the case waits for the app, not a time. Message boxes and file pickers
-  become `answerDialog`, `pickFile` and `pickFolder`. A right-click and the menu items picked after it become a `menu`
-  step, and a double-click a click with `how: double`.
-- **Pick**, or Ctrl+click while recording: point at a control and it is outlined with how a step would find it; click
-  it and the panel offers Click, Point at, Wait for it, Wait for it to go, Wait for its text, Keep its text, Check it
-  shows, Check its text, **Check it…** (can be used, greyed out, ticked, selected, has the keyboard, says, rows) and
-  Name it. The click doesn't reach the app.
+- **Record** (on at the start), or **F9** in the app or the panel: use the app. Each click, pick from a drop-down, tick
+  and tab becomes a step, what you type becomes one when you leave the box, and keys such as Enter or Ctrl+S become key
+  steps. A click that changes the status text gets a wait for its new words, so the case waits for the app, not a
+  time. Message boxes and file pickers become `answerDialog`, `pickFile` and `pickFolder`. A right-click and the menu
+  items picked after it become a `menu` step, and a double-click a click with `how: double`. F9 was chosen as Windows
+  and WPF's own controls give it no meaning; while the builder is open it is kept from the app.
+- The amber **pick tools** under the toolbar do something with a control: choose the tool, then click the control in
+  the app, and the click doesn't reach the app. As the mouse goes, each control is outlined with how a step would find
+  it, or in grey with why the tool can't be used on it, such as a wait for the text of a control that shows none.
+  **Click**, **Point at**, **Wait for it** › (to show, to go, its text, until it can be used), **Keep its text**,
+  **Check it** › (it shows, its text, can be used, greyed out, ticked, selected, has the keyboard, says, rows),
+  **Name it**, and **More** › (**Set its value…**, **Watch it**, **After clicking it…**). Esc puts a tool down. Once one
+  has been used, Ctrl+click while recording uses it again.
 - Each step shows how it finds its control, with a dot: green for a name in `elements.json` or an AutomationId, amber
   for what it says, red when more than one control matches. **Name it** adds a red or amber one to `elements.json`
   and has the steps use the name. Over a step, ▶ tries it in the app, the arrows move it, and the bin takes it out;
   click its words to change what the panel says.
-- **Step** adds a step that isn't a click: **Run a script…** picks a `.ps1` or `.cs` in the suite and runs it;
-  **New script** › **PowerShell…** or **C#…** writes one in `tools/` from a short template and opens it, in Notepad++
-  when it is installed, else Notepad, and its step plays once you've written it; **Show a message…** and **Wait…**. The page icon on a script step opens its file.
-  **Use a macro…** asks for its parameters. **In the app** and **On this computer** offer every other step, such as
-  a menu, a drag, keys, copying a file or setting a JSON value, each with a form: browse for a file, Pick a control.
+- The toolbar adds steps that aren't about one control: **Press keys**, **Pick from a menu**, **Wait** a number of
+  seconds and **Show a message**, each a button; **Script** › **Run a script…** picks a `.ps1` or `.cs` in the suite
+  and runs it, and **New PowerShell script…** or **New C# script…** writes one in `tools/` from a short template and
+  opens it, in Notepad++ when it is installed, else Notepad, and its step plays once you've written it. The page icon on
+  a script step opens its file. **Use a macro** › asks for a macro's parameters. **In the app** › and **On this
+  computer** › offer every other step, such as opening tree items, a drag, copying a file or setting a JSON value, each
+  with a form: browse for a file, pick a control.
 - The chevron on a step folds out its details, as a form; the circle switches it off, so the case skips it and keeps
   it. **+** by the checkpoint adds any check, from a form whose **Try now** runs it against the app as it is. The `{x}`
   by a box, and over the steps, lists the kept values and suite variables with what each holds now, to put one in.
@@ -111,9 +117,9 @@ tried again.
   the values you tick, such as what is typed, as its parameters, and puts a call to it in their place. **Repeat** runs
   them for each of a list of values or the rows of a data file; **Only if…** runs them when a check passes. The
   arrow on a repeat or an if takes its steps out again.
-- **Watch it** under a picked control has the builder wait for its new words whenever a step changes them, as it
-  does for the status text; **After clicking it…** adds a macro after each click on it, after a delay if need be.
-  Both go in `suite.json`'s `builder` section, for every case built after: see [docs/format.md](docs/format.md).
+- **More** › **Watch it** has the builder wait for a control's new words whenever a step changes them, as it does for
+  the status text; **After clicking it…** adds a macro after each click on it, after a delay if need be. Both go in
+  `suite.json`'s `builder` section, for every case built after: see [docs/format.md](docs/format.md).
 - **Save** writes `cases/NN-name.json`, as a person would write it, then checks the suite. The checkpoint's title,
   checks and the manual checks for the tester are at the bottom of the panel.
 
@@ -130,7 +136,7 @@ carries on from, and its steps are listed, greyed until they have been played. O
   a warning in the launcher, saying why, until they are changed too or the warning is cleared. **Confirm** goes on;
   **Cancel** leaves the case as it was.
 
-Record and Pick wait until the app is at the last step. Saving writes only what changed: the steps before the first
+Record and the pick tools wait until the app is at the last step. Saving writes only what changed: the steps before the first
 one changed, the checkpoint, and everything else in the file stay as they were written.
 
 `autotest record <suite folder>` opens the builder straight away: `--name` names a new case, `--after <case>` starts it

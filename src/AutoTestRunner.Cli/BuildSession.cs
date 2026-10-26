@@ -129,8 +129,8 @@ internal sealed class BuildSession
 
     // ===== The hook, on its own thread: it only notes what happened =====
 
-    // A click in the app is noted while recording; while picking, or with Ctrl held, it picks and doesn't reach the
-    // app. A message box or file picker closes as its OK, Open or Cancel is clicked, so a click on one of its buttons
+    // A click in the app is noted while recording; while picking, or with Ctrl held, it picks for the pick tool and
+    // doesn't reach the app. A message box or file picker closes as its OK, Open or Cancel is clicked, so a click on one of its buttons
     // waits until the builder has read it. Other clicks in it, on a folder or in its name box, are on the way to that:
     // they make no step, so they go straight to it, and a double-click on a folder still opens it.
     private bool OnDown(int x, int y, bool ctrl)
@@ -158,11 +158,27 @@ internal sealed class BuildSession
             _inputs.Add(new BuildInput(BuildInputKind.RightClick, x, y));
     }
 
-    // A key pressed in the app while recording. In a message box, Enter and Esc wait as its clicks do.
+    // A key pressed in the app or the panel. The record key turns recording on and off, and Esc puts a pick tool down,
+    // in either; other keys become steps while recording in the app. In a message box, Enter and Esc wait as its
+    // clicks do.
     private bool OnKeys(string keys)
     {
         var window = Desktop.Foreground();
-        if (_panel.Mode != BuildMode.Recording || _inputs.IsAddingCompleted || !IsApp(window))
+        var inApp = IsApp(window);
+        if (_inputs.IsAddingCompleted || !inApp && window != _panel.Handle)
+            return false;
+        var mode = _panel.Mode;
+        if (keys == BuilderPanel.RecordKey)
+        {
+            _panel.ToggleRecording();
+            return true;
+        }
+        if (keys == "Esc" && mode == BuildMode.Picking)
+        {
+            _panel.CancelPick();
+            return true;
+        }
+        if (mode != BuildMode.Recording || !inApp)
             return false;
         var passOn = keys is "Enter" or "Esc" && Desktop.IsDialog(window);
         _inputs.Add(new BuildInput(BuildInputKind.Key, Keys: keys, PassOn: passOn));

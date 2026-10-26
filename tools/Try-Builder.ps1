@@ -1,12 +1,13 @@
-# Builds a case in Order Desk as a person would, with clicks and keys sent to the screen, then checks that the case
-# saved has the steps a person would write, file picker and all, and that it passes when run. Then it opens case 1 to change it: runs it to
-# a step, rolls back to an earlier one, and edits from a later one, which takes out the step after it and marks case 2,
-# which carries on from it; and checks both still pass. CI runs it against the demo bundle, after the demos; it builds
+# Builds a case in Order Desk as a person would, with clicks and keys sent to the screen, pausing and starting with F9
+# and adding a wait with a pick tool, then checks that the case saved has the steps a person would write, file picker
+# and all, and that it passes when run. Then it opens case 1 to change it: runs it to a step, rolls back to an earlier
+# one, and edits from a later one, which takes out the step after it and marks case 2, which carries on from it; and
+# checks both still pass. CI runs it against the demo bundle, after the demos; it builds
 # in a copy of the Order Desk tests beside it, so the bundle is left as it was.
 #
 #   tools/Try-Builder.ps1 -Bundle <folder with autotestrunner\, OrderDesk\ and the suites> -Results <folder>
 #
-# Then it adds a C# script step from the Step menu, runs to it, and clicks its words and its details, as a person does
+# Then it adds a C# script step from the Script menu, runs to it, and clicks its words and its details, as a person does
 # before changing it; and makes a new suite from the launcher, starting Order Desk to read its window's title and
 # pointing at its status bar. autotest must still be open after each.
 #
@@ -185,6 +186,31 @@ if ($Parts -contains 'record') {
         if ($mouse -ne $away) { throw "The mouse is at $mouse after the builder passed Open on, not at $away where it was put." }
         Start-Sleep -Seconds 2
 
+        # The record key pauses recording from the app, and starts it again.
+        Keys '{F9}'
+        Saying $panel 'Paused.*' 'F9 to pause recording' 10
+        Keys '{F9}'
+        Saying $panel 'Recording.*' 'F9 to start recording again' 10
+
+        # A pick tool first, then the control: Wait for it › Wait for its text, then the bar at the bottom. The click
+        # picks the bar without reaching Order Desk, and recording carries on after the wait is added.
+        $count = (Named $panel '* steps').Current.Name
+        Click (Find $panel $ui::NameProperty 'Wait for it')
+        $item = Wait-For { Find $root $ui::NameProperty 'Wait for its text' } 'the Wait for its text tool in its menu' 10
+        Save-Screen 'builder-pick-menu.png'
+        Click $item
+        Saying $panel 'Click a control in Order Desk to wait for its text*' 'the Wait for its text tool to wait for a control' 10
+        $bar = (Find $app $ui::AutomationIdProperty 'StatusText').Current.BoundingRectangle
+        [Pointer]::SetCursorPos([int]($bar.X + 20), [int]($bar.Y + $bar.Height / 2)) | Out-Null
+        Start-Sleep -Milliseconds 1200
+        Save-Screen 'builder-pick-outline.png'
+        [Pointer]::mouse_event(0x2, 0, 0, 0, [System.IntPtr]::Zero)
+        Start-Sleep -Milliseconds 80
+        [Pointer]::mouse_event(0x4, 0, 0, 0, [System.IntPtr]::Zero)
+        Wait-For { (Named $panel '* steps').Current.Name -ne $count } 'the wait to be added to the steps' 20 | Out-Null
+        Saying $panel 'Recording.*' 'recording to carry on after the wait' 20
+        Save-Screen 'builder-picked.png'
+
         Invoke (Find $panel $ui::NameProperty 'Save')
         Wait-For { $panel.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition) |
             Where-Object { $_.Current.Name -like 'Saved in*' } } 'the case to be saved' 20 | Out-Null
@@ -215,7 +241,7 @@ if ($Parts -contains 'record') {
         '"startApp": {}', '"type": "customer", "text": "Grace Hopper"', '"choose": "product", "option": "Coffee beans"',
         '"type": "quantity", "text": "3"', '"tick": "giftWrap"', '"click": "addOrder"',
         '"call": "waitForStatusBar", "with": { "startsWith": "Added order 1001 for Grace Hopper" }',
-        '"click": "importOrders"', '"pickFile": "Import orders"'
+        '"click": "importOrders"', '"pickFile": "Import orders"', '"waitText": "statusText"'
     )
     $missing = @($expected | Where-Object { -not $text.Contains($_) })
     if ($missing) { throw "The case the builder saved doesn't have:`n$($missing -join "`n")" }
@@ -301,7 +327,7 @@ function Set-Text($box, [string] $text) {
 function Text-Of($box) { $box.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value }
 
 # ===== A C# script step =====
-# Made from the Step menu, as it comes, and played with Run to here; then its words are clicked to change them, and its
+# Made from the Script menu, as it comes, and played with Run to here; then its words are clicked to change them, and its
 # details folded out, as a person does next.
 if ($Parts -contains 'script') {
     $scripter = Start-Process $autotest -ArgumentList @('record', "`"$suite`"", '--name', '"Check the orders file"') -PassThru `
@@ -311,15 +337,11 @@ if ($Parts -contains 'script') {
         $panel = Wait-For { Window 'New case: Check the orders file' } 'the builder panel'
         Saying $panel 'Recording. Use Order Desk*' 'the builder to start Order Desk and record' 90
 
-        Invoke (Find $panel $ui::NameProperty 'Step')
-        # The Step menu is a window of its own, as a WPF menu is.
-        $newScript = Wait-For { $root.FindAll([System.Windows.Automation.TreeScope]::Children,
-            (New-Object System.Windows.Automation.PropertyCondition($ui::ProcessIdProperty, $scripter.Id))) |
-            ForEach-Object { Find $_ $ui::NameProperty 'New script' } | Select-Object -First 1 } 'New script in the Step menu' 10
-        $newScript.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
+        Invoke (Find $panel $ui::NameProperty 'Script')
+        # The Script menu is a window of its own, as a WPF menu is.
         $csharp = Wait-For { $root.FindAll([System.Windows.Automation.TreeScope]::Children,
             (New-Object System.Windows.Automation.PropertyCondition($ui::ProcessIdProperty, $scripter.Id))) |
-            ForEach-Object { Named $_ 'C#*' } | Select-Object -First 1 } 'C# in the New script menu' 10
+            ForEach-Object { Named $_ 'New C# script*' } | Select-Object -First 1 } 'New C# script in the Script menu' 10
         Invoke $csharp
         $prompt = Wait-For { $panel.FindFirst([System.Windows.Automation.TreeScope]::Children,
             (New-Object System.Windows.Automation.PropertyCondition($ui::NameProperty, 'New C# script'))) } 'the window that asks for the script''s name' 20

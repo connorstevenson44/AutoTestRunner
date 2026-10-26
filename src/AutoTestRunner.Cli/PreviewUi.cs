@@ -15,8 +15,8 @@ namespace AutoTestRunner.Cli;
 /// <summary>
 /// autotest preview-ui: the launcher on three made-up suites, then a made-up run in the panel, with no app to drive: steps
 /// of each kind, a command printing as it goes, one that fails, checkpoints, a stuck question and the end; then the
-/// builder, with a case part built, a control picked, and rolled back to a step. With --shots it goes quickly and
-/// saves a picture of each, which is how CI shows what the windows look like.
+/// builder, with a case part built, a pick tool waiting for a control, and rolled back to a step. With --shots it goes
+/// quickly and saves a picture of each, which is how CI shows what the windows look like.
 /// </summary>
 internal static class PreviewUi
 {
@@ -200,7 +200,7 @@ internal static class PreviewUi
         panel.Show();
     }
 
-    /// <summary>Fills the builder as recording would: steps of each kind, finding their controls well and badly, then a pick.</summary>
+    /// <summary>Fills the builder as recording would: steps of each kind, finding their controls well and badly, then a pick tool.</summary>
     private static void PlayBuilder(BuilderPanel panel, CaseDraft draft, string? shots)
     {
         void Shot(string name)
@@ -232,10 +232,13 @@ internal static class PreviewUi
         panel.Add(steps);
         Shot("09-builder-recording");
 
+        // The Wait for its text tool picked up, waiting for a control to be clicked, which is outlined as the mouse goes.
         var row = new ControlFacts("DataItem", "uat") { Ancestors = [new("Table", "History", Id: "HistoryList")], Bounds = new ScreenRect(80, 300, 520, 324) };
-        panel.ShowPicked(row, Found(new JsonObject { ["type"] = "DataItem", ["name"] = "uat", ["within"] = new JsonObject { ["id"] = "HistoryList" } },
-            "DataItem \"uat\" within id HistoryList", TargetQuality.Wording, "Found by what it says, in the list it is in."), "Type: DataItem\nName: uat\nInside: Table \"History\"");
-        Shot("10-builder-picked");
+        panel.Dispatcher.Invoke(() => panel.PickUp(PickTools.WaitText));
+        panel.ShowHover(row, Found(new JsonObject { ["type"] = "DataItem", ["name"] = "uat", ["within"] = new JsonObject { ["id"] = "HistoryList" } },
+            "DataItem \"uat\" within id HistoryList", TargetQuality.Wording, "Found by what it says, in the list it is in."));
+        Shot("10-builder-picking");
+        panel.Dispatcher.Invoke(panel.CancelPick);
 
         // Gone back to step 3, to edit from it: the steps after it wait to be played again.
         foreach (var later in steps.Skip(3))

@@ -25,6 +25,7 @@ internal static class Icons
     public const string NewFolder = "", Ids = "", Controls = "", More = "";
     public const string Setting = "", Service = "", Calendar = "", Log = "", Globe = "", Paste = "";
     public const string Computer = "", Process = "", History = "";
+    public const string Mouse = "", Menu = "", Clock = "", Slider = "";
 
     public static string Of(ActivityKind kind) => kind switch
     {

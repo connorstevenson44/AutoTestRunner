@@ -9,6 +9,9 @@
     <SolidColorBrush x:Key="Surface" Color="#F5F7FA" />
     <SolidColorBrush x:Key="Accent" Color="#0F6CBD" />
     <SolidColorBrush x:Key="AccentSoft" Color="#E3EEF9" />
+    <SolidColorBrush x:Key="Amber" Color="#FF8C00" />
+    <SolidColorBrush x:Key="AmberInk" Color="#B35C00" />
+    <SolidColorBrush x:Key="AmberOn" Color="#FFE2BF" />
 
     <!-- An icon button: a glyph, a hover and a press, no border. -->
     <Style x:Key="IconButton" TargetType="ButtonBase">
@@ -80,6 +83,35 @@
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="Box" Property="Background" Value="{StaticResource AccentSoft}" />
                             <Setter Property="Foreground" Value="{StaticResource Accent}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.35" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- A pick tool in the builder: amber, as the outline round the control it is used on. On while it waits for that
+         control to be clicked, it is filled and edged in amber. -->
+    <Style x:Key="PickTool" TargetType="ToggleButton" BasedOn="{StaticResource IconButton}">
+        <Setter Property="Foreground" Value="{StaticResource AmberInk}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Grid>
+                        <Border x:Name="Box" Background="{TemplateBinding Background}" BorderBrush="Transparent" BorderThickness="1" CornerRadius="6" />
+                        <Border x:Name="Hover" Background="{StaticResource Amber}" Opacity="0" CornerRadius="6" />
+                        <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Hover" Property="Opacity" Value="0.12" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Box" Property="Background" Value="{StaticResource AmberOn}" />
+                            <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource Amber}" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.35" />
