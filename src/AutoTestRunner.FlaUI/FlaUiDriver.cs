@@ -68,6 +68,39 @@ public sealed class FlaUiDriver : IDriver
         Place();
     }
 
+    /// <summary>
+    /// Starts an exe whose window's title isn't known yet, as for a new suite, and drives the first window it shows.
+    /// Returns the window's title.
+    /// </summary>
+    public string Launch(string exe, string? arguments = null)
+    {
+        CloseAll(exe);
+        _processName = Path.GetFileNameWithoutExtension(exe);
+        var start = new ProcessStartInfo(exe) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(exe) };
+        if (arguments is not null)
+            start.Arguments = arguments;
+        Process.Start(start);
+        var end = Environment.TickCount64 + 60_000;
+        while ((_main = AppWindows().FirstOrDefault(hwnd => Native.IsVisible(hwnd) && Native.Title(hwnd).Length > 0)) == 0)
+        {
+            if (Environment.TickCount64 > end)
+                throw new StuckException($"see a window of {Path.GetFileName(exe)} open", exe);
+            Thread.Sleep(250);
+        }
+        _windowTitle = Native.Title(_main);
+        Place();
+        return _windowTitle;
+    }
+
+    /// <summary>Drives an app that is open already, by its exe and its window's title; false when it isn't open.</summary>
+    public bool Attach(string exe, string window)
+    {
+        _processName = Path.GetFileNameWithoutExtension(exe);
+        _windowTitle = window;
+        _main = AppWindows().FirstOrDefault(hwnd => Native.Title(hwnd) == window);
+        return _main != 0;
+    }
+
     public void UseWindow(string title, TimeSpan timeout)
     {
         var end = Environment.TickCount64 + (long)timeout.TotalMilliseconds;

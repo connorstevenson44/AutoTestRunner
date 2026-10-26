@@ -22,6 +22,7 @@ internal sealed class SuitePane : Grid
     private readonly Suite _suite;
     private readonly Options _options;
     private readonly Action<BuildRequest> _build;
+    private readonly Action _reload;
     private readonly List<(Case Case, CheckBox Box, Border Needs)> _rows = [];
     private readonly Border _files, _machine;
     private readonly Button _clean;
@@ -33,9 +34,11 @@ internal sealed class SuitePane : Grid
     /// <param name="suite">The suite to show.</param>
     /// <param name="options">The options it opened with: the cases given are ticked, and where its results go.</param>
     /// <param name="build">Called with a case to build, from New case or a case's pencil.</param>
-    public SuitePane(Suite suite, Options options, Action<BuildRequest> build)
+    /// <param name="reload">Called after the suite's files changed here, to load it again.</param>
+    /// <param name="newSuite">Called by New suite; null where there is none.</param>
+    public SuitePane(Suite suite, Options options, Action<BuildRequest> build, Action? reload = null, Action? newSuite = null)
     {
-        (_suite, _options, _build) = (suite, options, build);
+        (_suite, _options, _build, _reload) = (suite, options, build, reload ?? (() => { }));
         _last = LastResults(ResultsFolder(suite, options));
         for (var row = 0; row < 3; row++)
             RowDefinitions.Add(new RowDefinition { Height = row == 2 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
@@ -73,8 +76,26 @@ internal sealed class SuitePane : Grid
         hide.Margin = new Thickness(0, 2, 22, 0);
         cleaningLog.Children.Add(hide);
         _cleaningBox = new Border { MaxHeight = 170, Margin = new Thickness(0, 4, 0, 6), Child = cleaningLog, Visibility = Visibility.Collapsed };
+        // The suite's tools, as icons beside its name.
+        var titleRow = new DockPanel();
+        var tools = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        void Tool(string glyph, string tip, Action click)
+        {
+            var button = Ui.IconButton(glyph, tip, click, 15);
+            button.Padding = new Thickness(7, 4, 7, 4);
+            tools.Children.Add(button);
+        }
+        Tool(Icons.Controls, "Named controls: where each is used, point it out in the app, rename it everywhere",
+            () => ControlsWindow.Open(Window.GetWindow(this), _suite, _options, _reload, ids: false));
+        Tool(Icons.Ids, "Controls without ids: the controls in the app a test would use that have no AutomationId, with the XAML to add",
+            () => ControlsWindow.Open(Window.GetWindow(this), _suite, _options, _reload, ids: true));
+        if (newSuite is not null)
+            Tool(Icons.NewFolder, "New suite: pick an app, read its window and point at its status bar", newSuite);
+        DockPanel.SetDock(tools, Dock.Right);
+        titleRow.Children.Add(tools);
+        titleRow.Children.Add(title);
         var top = new StackPanel();
-        top.Children.Add(title);
+        top.Children.Add(titleRow);
         top.Children.Add(state);
         top.Children.Add(_cleaningBox);
         Children.Add(top);
@@ -211,9 +232,13 @@ internal sealed class SuitePane : Grid
         needs.MouseLeave += (_, _) => needs.BorderBrush = Brushes.Transparent;
         (needs.BorderBrush, needs.BorderThickness, needs.Cursor) = (Brushes.Transparent, new Thickness(1), System.Windows.Input.Cursors.Hand);
         // The pencil shows while the mouse is over the row, as the app's own row buttons do.
-        var edit = Ui.IconButton(Icons.Edit, "Edit this case in the builder", () => _build(new BuildRequest(_suite, item.Name, Edit: item)), 14);
-        edit.Padding = new Thickness(6, 3, 6, 3);
-        edit.Visibility = Visibility.Hidden;
+        var pencil = Ui.IconButton(Icons.Edit, "Edit this case in the builder", () => _build(new BuildRequest(_suite, item.Name, Edit: item)), 14);
+        pencil.Padding = new Thickness(6, 3, 6, 3);
+        Button? more = null;
+        more = Ui.IconButton(Icons.More, "Copy, rename, move or delete this case", () => CaseMenu(item, more!).IsOpen = true, 14);
+        more.Padding = new Thickness(6, 3, 6, 3);
+        var edit = new StackPanel { Orientation = Orientation.Horizontal, Visibility = Visibility.Hidden, Children = { pencil, more } };
+        row.ContextMenu = CaseMenu(item, row);
         var last = _last.TryGetValue(item.Number, out var status) ? Ui.Glyph(Icons.Of(status), 14, Ui.Of(status)) : new TextBlock();
         last.HorizontalAlignment = HorizontalAlignment.Center;
         last.ToolTip = _last.ContainsKey(item.Number) ? $"Last time: {status.ToString().ToLowerInvariant()}" : null;
@@ -248,6 +273,51 @@ internal sealed class SuitePane : Grid
         };
         _rows.Add((item, box, needs));
         return row;
+    }
+
+    // What can be done to a case's file: a copy, a new name, a place up or down, or deleting it.
+    private ContextMenu CaseMenu(Case item, UIElement under)
+    {
+        var menu = new ContextMenu { PlacementTarget = under, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
+        void Item(string glyph, string text, string? cant, Action act)
+        {
+            var entry = new MenuItem { Header = text, Icon = Ui.Glyph(glyph, 13, Ui.Accent), IsEnabled = cant is null, ToolTip = cant };
+            ToolTipService.SetShowOnDisabled(entry, true);
+            entry.Click += (_, _) => Change(text, act);
+            menu.Items.Add(entry);
+        }
+        Item(Icons.Copy, "Copy", null, () => CaseFiles.Duplicate(_suite, item));
+        Item(Icons.Name, "Rename…", null, () =>
+        {
+            if (Ui.Prompt(Window.GetWindow(this), "Rename", "New name for the case. Its file and the cases that carry on from it stay as they are.", item.Name, "Rename", Icons.Name, tall: false) is { } name
+                && name.Trim().Length > 0 && name.Trim() != item.Name)
+                CaseFiles.Rename(item, name);
+        });
+        Item(Icons.Up, "Move up", CaseFiles.CantMove(_suite, item, -1), () => CaseFiles.Move(_suite, item, -1));
+        Item(Icons.Down, "Move down", CaseFiles.CantMove(_suite, item, 1), () => CaseFiles.Move(_suite, item, 1));
+        menu.Items.Add(new Separator());
+        Item(Icons.Delete, "Delete…", null, () =>
+        {
+            var after = CaseFiles.Dependents(_suite, item);
+            var warning = after.Count == 0 ? "" : $"\n\n{string.Join(", ", after.Select(other => $"{other.Number}. {other.Name}"))} carry on from it. They will carry on from what it carried on from instead, and be marked as needing a look.";
+            if (MessageBox.Show(Window.GetWindow(this), $"Delete case {item.Number}, {item.Name}? Its file is deleted.{warning}", "Delete case", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
+                CaseFiles.Delete(_suite, item);
+        });
+        return menu;
+    }
+
+    // Changes the suite's files, then loads it again; or says why not.
+    private void Change(string what, Action act)
+    {
+        try
+        {
+            act();
+            _reload();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException)
+        {
+            MessageBox.Show(Window.GetWindow(this), ex.Message, what.TrimEnd('…'), MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     // An amber warning on a case that needs looking at, saying why; clicked once it has been looked at, it goes.

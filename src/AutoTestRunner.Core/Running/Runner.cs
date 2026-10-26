@@ -1205,7 +1205,8 @@ public sealed class Runner
 
     private string SuitePath(string path) => SuitePath(_suite, path);
 
-    private static string SuitePath(Suite suite, string path) =>
+    /// <summary>A path in a script, relative to the suite folder when it is one, as the runner reads it.</summary>
+    public static string SuitePath(Suite suite, string path) =>
         Path.IsPathRooted(path) || !(path.Contains('/') || path.Contains('\\')) ? path : Path.GetFullPath(Path.Combine(suite.Folder, path));
 
     // "Click Add" as "click Add", to go on the end of a sentence.

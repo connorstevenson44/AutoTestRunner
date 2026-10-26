@@ -51,6 +51,11 @@ internal static class WatchedRun
             {
                 if (launcher.Picked is { } picked)
                     RunPicked(picked.Suite, picked.Cases, picked.Options);
+                else if (launcher.Opened is { } made)
+                {
+                    found = [.. found, FoundSuite.Load(made)];
+                    ShowLauncher(made, last with { Cases = null, Tags = [] });
+                }
                 else if (launcher.Build is { } request)
                     Build(request, last);
                 else
