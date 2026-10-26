@@ -137,17 +137,14 @@ try {
     Click (Find $app $ui::AutomationIdProperty 'ImportButton')
     $picker = Wait-For { $app.FindFirst([System.Windows.Automation.TreeScope]::Children,
         (New-Object System.Windows.Automation.PropertyCondition($ui::NameProperty, 'Import orders'))) } 'the Import orders picker' 20
-    # The name box is a drop-down, id 1148, with the box typed in inside it.
-    $names = Wait-For { Find $picker $ui::AutomationIdProperty '1148' } 'the picker''s name box' 10
-    $name = $names.FindFirst([System.Windows.Automation.TreeScope]::Descendants,
-        (New-Object System.Windows.Automation.PropertyCondition($ui::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit)))
-    if (-not $name) { $name = $names }
-    Click $name
-    # Set rather than typed, so no list of matching files drops down over Open.
-    $name.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($noOrders)
-    $open = $picker.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.AndCondition(
-        (New-Object System.Windows.Automation.PropertyCondition($ui::AutomationIdProperty, '1')),
-        (New-Object System.Windows.Automation.PropertyCondition($ui::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button))))).Current.BoundingRectangle
+    # The name box is control 1148. Tab after typing closes the list of matching files, so it doesn't cover Open.
+    Click (Wait-For { Find $picker $ui::AutomationIdProperty '1148' } 'the picker''s name box' 10)
+    Keys '^a'
+    Keys ($noOrders -replace '[+^%~(){}\[\]]', '{$0}')
+    Keys '{TAB}'
+    $open = @($picker.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+        (New-Object System.Windows.Automation.PropertyCondition($ui::AutomationIdProperty, '1'))) |
+        Sort-Object { $_.Current.ControlType -ne [System.Windows.Automation.ControlType]::Button })[0].Current.BoundingRectangle
     [Pointer]::SetCursorPos([int]($open.X + $open.Width / 2), [int]($open.Y + $open.Height / 2)) | Out-Null
     Start-Sleep -Milliseconds 500
     [Pointer]::mouse_event(0x2, 0, 0, 0, [System.IntPtr]::Zero)
