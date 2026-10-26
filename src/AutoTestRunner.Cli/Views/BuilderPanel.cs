@@ -479,8 +479,20 @@ internal sealed partial class BuilderPanel : Window
             menu.Items.Add(item);
             return item;
         }
-        Item(Icons.Console, "Run a script…", "Choose a .ps1 file: it runs now, and is added as a step", PickScript);
-        Item(Icons.Document, "New script…", "Create a .ps1 file in the tools folder and open it to write. Its step plays with Run to here.", NewScript);
+        Item(Icons.Console, "Run a script…", "Choose a .ps1 or .cs file: it runs now, and is added as a step", PickScript);
+        // A new script is PowerShell, which every Windows machine has, or C#, for setup that is easier written as code.
+        var newScript = new MenuItem { Header = "New script", Icon = Ui.Glyph(Icons.Document, 14, Ui.Accent) };
+        foreach (var (title, csharp, tip) in new[]
+        {
+            ("PowerShell…", false, "Create a .ps1 file in the tools folder and open it to write. Its step plays with Run to here."),
+            ("C#…", true, "Create a .cs file in the tools folder and open it to write. It runs with dotnet run, which needs the .NET 10 SDK."),
+        })
+        {
+            var item = new MenuItem { Header = title, ToolTip = tip };
+            item.Click += (_, _) => NewScript(csharp);
+            newScript.Items.Add(item);
+        }
+        menu.Items.Add(newScript);
         Item(Icons.Message, "Show a message…", "A step that only shows the tester a message, such as what to notice", SaySomething);
         Item(Icons.Wait, "Wait…", "Wait a number of seconds", WaitAWhile);
         menu.Items.Add(new Separator());
@@ -505,19 +517,19 @@ internal sealed partial class BuilderPanel : Window
         var tools = Path.Combine(_suite.Folder, "tools");
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "Run a script", Filter = "PowerShell scripts (*.ps1)|*.ps1", InitialDirectory = Directory.Exists(tools) ? tools : _suite.Folder,
+            Title = "Run a script", Filter = "Scripts (*.ps1, *.cs)|*.ps1;*.cs|PowerShell (*.ps1)|*.ps1|C# (*.cs)|*.cs", InitialDirectory = Directory.Exists(tools) ? tools : _suite.Folder,
         };
         if (dialog.ShowDialog(this) != true)
             return;
         Play?.Invoke(StepMaker.Script(Path.GetRelativePath(_suite.Folder, dialog.FileName)), true);
     }
 
-    private void NewScript()
+    private void NewScript(bool csharp)
     {
-        if (Ui.Prompt(this, "New script", "Name of the script, such as Check the orders file. It is saved in the tools folder and opened for editing.", "", "Create", Icons.Document, tall: false) is not { } name
+        if (Ui.Prompt(this, csharp ? "New C# script" : "New PowerShell script", "Name of the script, such as Check the orders file. It is saved in the tools folder and opened for editing.", "", "Create", Icons.Document, tall: false) is not { } name
             || name.Trim().Length == 0)
             return;
-        var relative = ScriptEditor.Create(_suite, name, _draft.Name);
+        var relative = ScriptEditor.Create(_suite, name, _draft.Name, csharp);
         ScriptEditor.Open(Path.Combine(_suite.Folder, relative));
         var step = StepMaker.Script(relative);
         step.Text = name.Trim();

@@ -1992,7 +1992,7 @@
       "properties": {
         "script": {
           "type": "string",
-          "description": "Runs a .ps1 file in the suite, relative to its folder, which gets args as $args. It fails when the script exits with a code other than 0; with as, it keeps the code and output."
+          "description": "Runs a .ps1 or .cs file in the suite, relative to its folder. A .ps1 runs with Windows PowerShell and gets args as $args; a .cs runs with dotnet run, which needs the .NET 10 SDK, and gets them as args. It fails when the script exits with a code other than 0; with as, it keeps the code and output."
         },
         "args": {
           "type": "array",

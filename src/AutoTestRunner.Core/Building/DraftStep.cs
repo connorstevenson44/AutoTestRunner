@@ -28,7 +28,7 @@ public sealed class DraftStep(JsonObject json, ActivityKind kind, TargetChoice? 
     /// <summary>Why it didn't work, when it was played and didn't.</summary>
     public string? Problem { get; set; }
 
-    /// <summary>The .ps1 file a script step runs, relative to the suite folder; else null.</summary>
+    /// <summary>The .ps1 or .cs file a script step runs, relative to the suite folder; else null.</summary>
     public string? Script => Verb == "script" ? Json["script"]?.GetValue<string>() : null;
 
     /// <summary>The step's key, such as click or waitText.</summary>

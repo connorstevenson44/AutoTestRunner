@@ -140,7 +140,8 @@ public sealed class Suite
                 app["status"]?.GetValue<string>(),
                 app["arguments"]?.GetValue<string>(),
                 app["startWindow"]?.GetValue<string>()),
-            Reset = new ResetSettings(root["reset"]?["powershell"]?.GetValue<string>(), root["reset"]?["leftovers"]?.GetValue<string>()),
+            // script was called powershell before it could be C# as well.
+            Reset = new ResetSettings((root["reset"]?["script"] ?? root["reset"]?["powershell"])?.GetValue<string>(), root["reset"]?["leftovers"]?.GetValue<string>()),
             Variables = root["variables"] as JsonObject ?? [],
             Requires = (root["requires"] as JsonArray ?? []).Select(path => path!.GetValue<string>()).ToList(),
             Helpers = helpers,
@@ -362,7 +363,9 @@ public sealed class Suite
                     problems.Add($"{at}: how is mouse, right or double, not {how}.");
                     break;
                 case "script" when step["script"]?.GetValue<string>() is { } script && !script.Contains("${", StringComparison.Ordinal):
-                    if (!File.Exists(Path.Combine(Folder, script)))
+                    if (!script.EndsWith(".ps1", StringComparison.OrdinalIgnoreCase) && !script.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                        problems.Add($"{at}: a script is a .ps1 or a .cs file, not {script}.");
+                    else if (!File.Exists(Path.Combine(Folder, script)))
                         problems.Add($"{at}: there is no script {script} in the suite's folder.");
                     break;
                 case "whileShows":

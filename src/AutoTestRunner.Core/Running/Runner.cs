@@ -103,16 +103,22 @@ public sealed class Runner
     {
         if (suite.Reset.Leftovers is not { } script)
             return [];
-        var output = machine.PowerShell(File.ReadAllText(SuitePath(suite, script)), []);
+        var path = SuitePath(suite, script);
+        var output = ScriptFile.IsCSharp(path) ? ScriptFile.Run(machine, path, []) : machine.PowerShell(File.ReadAllText(path), []);
         return output.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }
 
     /// <summary>Closes the app and runs the suite's reset script.</summary>
     public void ResetMachine()
     {
-        if (_suite.Reset.PowerShell is not { } script)
+        if (_suite.Reset.Script is not { } script)
             return;
         _driver.CloseAll(Exe);
+        if (ScriptFile.IsCSharp(script))
+        {
+            ScriptFile.Run(_machine, SuitePath(script), [], TimeSpan.FromMinutes(5));
+            return;
+        }
         // What it prints goes in the log, as OUTPUT. -Command rather than -File, so progress bars stay out of it.
         var path = SuitePath(script).Replace("'", "''");
         _machine.Run("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $"$ProgressPreference = 'SilentlyContinue'; & '{path}'"], timeout: TimeSpan.FromMinutes(5));
@@ -603,16 +609,16 @@ public sealed class Runner
 
             case "script":
             {
-                // A .ps1 file in the suite, run as the reset script is, so it can be opened and changed on its own.
+                // A .ps1 or .cs file in the suite, run as the reset script is, so it can be opened and changed on its own.
                 var file = Path.GetFullPath(Path.Combine(_suite.Folder, Text("script")!));
                 if (!File.Exists(file))
                     throw new ScriptException($"There is no script {file}.");
                 var arguments = (step["args"] as JsonArray ?? []).Select(arg => scope.Expand(arg!.ToString())).ToList();
-                List<string> line = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", file, .. arguments];
-                ShowStep(say ?? $"Run {Path.GetFileName(file)}", ActivityKind.Command, CommandReportingMachine.CommandLine("powershell.exe", line, null));
-                var output = _machine.Run("powershell.exe", line);
+                var (program, line) = ScriptFile.Command(file, arguments);
+                ShowStep(say ?? $"Run {Path.GetFileName(file)}", ActivityKind.Command, CommandReportingMachine.CommandLine(program, line, null));
+                var output = ScriptFile.Run(_machine, file, arguments);
                 if (output.ExitCode != 0)
-                    FailStep($"{Path.GetFileName(file)} failed with exit code {output.ExitCode}: {output.Output}");
+                    FailStep(ScriptFile.Failed(file, output));
                 KeepOutput(step, scope, output);
                 break;
             }

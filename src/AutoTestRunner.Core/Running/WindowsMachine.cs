@@ -108,6 +108,8 @@ public sealed class WindowsMachine : IMachine
         };
         foreach (var argument in arguments)
             start.ArgumentList.Add(argument);
+        // dotnet's welcome banner, the first time it runs, stays out of what a C# script prints.
+        start.Environment["DOTNET_NOLOGO"] = "1";
         foreach (var (key, value) in environment ?? new Dictionary<string, string>())
             start.Environment[key] = value;
 

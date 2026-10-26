@@ -30,7 +30,7 @@ public static class StepMaker
         return new DraftStep(json, KindOf(verb), target) { State = state };
     }
 
-    /// <summary>Runs a .ps1 file in the suite, given relative to its folder.</summary>
+    /// <summary>Runs a .ps1 or .cs file in the suite, given relative to its folder.</summary>
     public static DraftStep Script(string path)
     {
         path = path.Replace('\\', '/');

@@ -95,9 +95,9 @@ tried again.
   for what it says, red when more than one control matches. **Name it** adds a red or amber one to `elements.json`
   and has the steps use the name. Over a step, ▶ tries it in the app, the arrows move it, and the bin takes it out;
   click its words to change what the panel says.
-- **Step** adds a step that isn't a click: **Run a script…** picks a `.ps1` in the suite and runs it; **New script…**
-  writes one in `tools/` from a short template and opens it, in Notepad++ when it is installed, else Notepad, and
-  its step plays once you've written it; **Show a message…** and **Wait…**. The page icon on a script step opens its file.
+- **Step** adds a step that isn't a click: **Run a script…** picks a `.ps1` or `.cs` in the suite and runs it;
+  **New script** › **PowerShell…** or **C#…** writes one in `tools/` from a short template and opens it, in Notepad++
+  when it is installed, else Notepad, and its step plays once you've written it; **Show a message…** and **Wait…**. The page icon on a script step opens its file.
   **Use a macro…** asks for its parameters. **In the app** and **On this computer** offer every other step, such as
   a menu, a drag, keys, copying a file or setting a JSON value, each with a form: browse for a file, Pick a control.
 - The chevron on a step folds out its details, as a form; the circle switches it off, so the case skips it and keeps
@@ -164,6 +164,13 @@ A case reads like the manual test it automates:
   ]
 }
 ```
+
+Setup that is easier written as code can be a C# file instead of PowerShell: `{ "script": "tools/SeedOrders.cs",
+"args": ["${dataDir}"] }` runs it with `dotnet run`, which builds it the first time and after it changes. It gets the
+step's args as `args`, a line such as `#:package Microsoft.Data.SqlClient@7.1.1` at the top brings in a NuGet package,
+and an exit code other than 0, or an exception, fails the step. The suite's `reset.script` and `reset.leftovers` can
+be C# too. It needs the .NET 10 SDK on the test machine, where PowerShell is always there, so `.ps1` stays the simple
+choice for a few commands.
 
 For apps that adopt it: give every control a test touches an `x:Name` or `AutomationProperties.AutomationId`, inside
 templates too (bound, so each row's is different). Selectors can find controls by their text and tooltips, but ids

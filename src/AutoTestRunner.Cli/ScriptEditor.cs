@@ -8,7 +8,7 @@ using Microsoft.Win32;
 namespace AutoTestRunner.Cli;
 
 /// <summary>
-/// The .ps1 files that script steps run: a new one written from a short template in the suite's tools folder, and
+/// The .ps1 and .cs files that script steps run: a new one written from a short template in the suite's tools folder, and
 /// any of them opened to change, in Notepad++ when it is installed, else in Notepad.
 /// </summary>
 internal static partial class ScriptEditor
@@ -38,27 +38,45 @@ internal static partial class ScriptEditor
     }
 
     /// <summary>
-    /// A new script in the suite's tools folder, named for what it does, such as Check-Orders.ps1, for a case to run:
-    /// returns its path relative to the suite folder. A script with that name already there is kept as it is.
+    /// A new script in the suite's tools folder, named for what it does, for a case to run: Check-Orders.ps1, or
+    /// CheckOrders.cs when it is C#. Returns its path relative to the suite folder. A script with that name already
+    /// there is kept as it is.
     /// </summary>
-    public static string Create(Suite suite, string name, string caseName)
+    public static string Create(Suite suite, string name, string caseName, bool csharp = false)
     {
         var words = Words().Matches(name).Select(match => char.ToUpperInvariant(match.Value[0]) + match.Value[1..]).ToList();
-        var file = (words.Count == 0 ? "New-Script" : string.Join('-', words)) + ".ps1";
+        var file = csharp
+            ? (words.Count == 0 ? "NewScript" : string.Concat(words)) + ".cs"
+            : (words.Count == 0 ? "New-Script" : string.Join('-', words)) + ".ps1";
         var relative = "tools/" + file;
         var path = Path.Combine(suite.Folder, "tools", file);
         if (File.Exists(path))
             return relative;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var text = $"""
-            # {name.Trim()}: run by a step of "{caseName}", as {"{"} "script": "{relative}" {"}"}.
-            # It runs from the suite's folder, and gets the step's args as $args. What it prints goes in the run's log,
-            # and a step with "as" keeps it. An exit code other than 0 fails the step.
-            $ErrorActionPreference = 'Stop'
+        // What it prints is the name, quoted as each language quotes a string.
+        var said = name.Trim().Replace("\"", "'", StringComparison.Ordinal);
+        if (csharp)
+            said = said.Replace("\\", "\\\\", StringComparison.Ordinal);
+        var text = csharp
+            ? $"""
+                // {name.Trim()}: run by a step of "{caseName}", as {"{"} "script": "{relative}" {"}"}.
+                // It runs from the suite's folder with dotnet run, which needs the .NET 10 SDK, and gets the step's args as args.
+                // What it prints goes in the run's log, and a step with "as" keeps it. An exit code other than 0, or an
+                // exception, fails the step. A NuGet package is a line at the top, such as #:package Microsoft.Data.SqlClient@7.1.1
 
-            Write-Output "{name.Trim().Replace("\"", "'", StringComparison.Ordinal)}"
+                Console.WriteLine("{said}");
+                return 0;
 
-            """;
+                """
+            : $"""
+                # {name.Trim()}: run by a step of "{caseName}", as {"{"} "script": "{relative}" {"}"}.
+                # It runs from the suite's folder, and gets the step's args as $args. What it prints goes in the run's log,
+                # and a step with "as" keeps it. An exit code other than 0 fails the step.
+                $ErrorActionPreference = 'Stop'
+
+                Write-Output "{said}"
+
+                """;
         // Windows PowerShell reads a file without a byte order mark as the machine's code page.
         File.WriteAllText(path, text.ReplaceLineEndings("\r\n"), new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
         return relative;

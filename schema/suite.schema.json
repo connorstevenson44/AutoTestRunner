@@ -106,13 +106,17 @@
     "reset": {
       "type": "object",
       "properties": {
+        "script": {
+          "type": "string",
+          "description": "A .ps1 or .cs file that removes what the suite leaves on the machine. A .cs runs with dotnet run, which needs the .NET 10 SDK."
+        },
         "powershell": {
           "type": "string",
-          "description": "A script that removes what the suite leaves on the machine."
+          "description": "The older name for script."
         },
         "leftovers": {
           "type": "string",
-          "description": "A script that prints one line for each thing an earlier run left; nothing on a clean machine."
+          "description": "A .ps1 or .cs file that prints one line for each thing an earlier run left; nothing on a clean machine."
         }
       },
       "additionalProperties": false

@@ -37,10 +37,17 @@ internal sealed class FakeMachine : IMachine
     /// <summary>What a PowerShell script prints and its exit code, by its first line.</summary>
     public Dictionary<string, ProcessOutput> Scripts { get; } = [];
 
+    /// <summary>What a program prints and its exit code, by its name, in place of its command line.</summary>
+    public Dictionary<string, ProcessOutput> Programs { get; } = [];
+
+    /// <summary>Programs that aren't installed, so don't start.</summary>
+    public HashSet<string> Missing { get; } = [];
+
     // A program prints its command line.
     public ProcessOutput Run(string program, IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string>? environment = null, TimeSpan? timeout = null,
         Action<string, bool>? output = null) =>
-        Printed(new(0, $"{program} {string.Join(" ", arguments)}"), output);
+        Missing.Contains(program) ? throw new System.ComponentModel.Win32Exception(2, $"{program} isn't installed.")
+        : Printed(Programs.GetValueOrDefault(program, new(0, $"{program} {string.Join(" ", arguments)}")), output);
 
     public ProcessOutput PowerShell(string script, IReadOnlyList<string> arguments, TimeSpan? timeout = null, Action<string, bool>? output = null) =>
         Printed(Scripts.GetValueOrDefault(script.Split('\n')[0].Trim(), new(0, "")), output);
