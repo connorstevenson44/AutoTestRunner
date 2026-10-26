@@ -51,7 +51,8 @@ expected and found; the next checkpoint is red too, and lists it.
 `--mode auto` (the default) shows each checkpoint for a few seconds and carries on; `pause-at-checkpoints` waits at
 each checkpoint; `step-by-step` waits for Enter before every step. The keys belong to the test unless you clicked into a text box
 yourself. Results go in `<suite>\results\<date and time>`: `run.log`, `summary.txt`, `junit.xml`, and a screenshot and
-UI Automation dump of each point it got stuck.
+UI Automation dump of each point it got stuck. Something that goes wrong in autotest itself, rather than in a test, is
+written to `%LOCALAPPDATA%\AutoTestRunner\errors.log` with where it happened, for a bug report.
 
 Exit codes: 0 passed, 1 a case failed, 2 the app or something in `requires` is missing, 3 a script error, 4 the suite
 needs administrator and autotest isn't.
