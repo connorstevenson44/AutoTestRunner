@@ -191,7 +191,8 @@ internal sealed partial class BuilderPanel : Window
         };
         Closing += (_, e) =>
         {
-            if (_saved || _changes == 0)
+            // A new case with nothing recorded, or a case opened and left as it was, has nothing to lose.
+            if (_saved || _changes == 0 || (_draft.Editing is null && !_draft.Steps.Any(step => step.Verb != "startApp")))
                 return;
             var lost = _draft.Editing is null ? $"The {_draft.Steps.Count} steps so far are lost." : "The changes to the case are lost.";
             if (MessageBox.Show(this, $"Close without saving? {lost}", Title, MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
