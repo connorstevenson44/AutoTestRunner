@@ -154,15 +154,15 @@ A case reads like the manual test it automates:
 
 ```json
 {
-  "name": "Try a deploy without changing anything",
+  "name": "Dry run",
   "needs": ["open-package"],
   "steps": [
-    { "type": "newInstallName", "text": "main", "say": "Name the new install main" },
-    { "click": { "button": "Dry run" }, "say": "Click Dry run, to see what a deploy would do without doing it" },
+    { "type": "newInstallName", "text": "main" },
+    { "click": { "button": "Dry run" } },
     { "call": "waitForStatusBar", "with": { "startsWith": "Dry run finished." }, "as": "status" },
-    { "checkpoint": "The dry run changed nothing",
+    { "checkpoint": "Nothing changed",
       "checks": [ { "fileMissing": "${ordersDir}" }, { "service": "Contoso.Orders-main" } ],
-      "look": [ "The bar at the bottom says Dry run finished. Nothing was changed." ],
+      "look": [ "The summary lists the service and task it would add." ],
       "tools": [ { "openFile": "${logFile(status)}", "label": "Open the log" } ] }
   ]
 }

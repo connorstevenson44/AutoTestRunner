@@ -7,7 +7,7 @@
   },
   "steps": [
     { "waitText": "statusText", "startsWith": "${startsWith}", "new": true, "within": "${within}", "as": "status",
-      "what": "the bar at the bottom of Order Desk" }
+      "what": "status bar" }
   ],
   "returns": "status"
 }

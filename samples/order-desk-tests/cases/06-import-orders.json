@@ -8,10 +8,10 @@
     { "click": "importOrders" },
     { "pickFile": "Import orders", "path": "${suiteDir}\\data\\orders-to-import.csv" },
     { "whileShows": "importWindow", "untilText": "statusText", "matches": "^Import finished", "new": true, "within": 60, "as": "finished",
-      "what": "the import finishing",
+      "what": "Import",
       "steps": [
-        { "find": { "id": "Counter", "within": "importWindow" }, "as": "counter", "within": 10, "what": "the order counter" },
-        { "find": { "id": "Summary", "within": "importWindow" }, "as": "summary", "within": 10, "what": "the order" },
+        { "find": { "id": "Counter", "within": "importWindow" }, "as": "counter", "within": 10 },
+        { "find": { "id": "Summary", "within": "importWindow" }, "as": "summary", "within": 10 },
         { "if": { "contains": "${summary}", "text": "(draft)" },
           "steps": [ { "click": { "button": "Skip", "within": "importWindow" } } ],
           "else": [ { "click": { "button": "Import", "within": "importWindow" } } ] },

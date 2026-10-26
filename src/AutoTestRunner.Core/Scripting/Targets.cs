@@ -45,7 +45,7 @@ public static class Targets
         Add(node, scope, elements, selectors, ref described, ref element, 0);
         if (selectors.Count == 0)
             throw new ScriptException("The step doesn't say which control.");
-        return new Target(selectors, what ?? described ?? selectors[0].Describe()) { Element = element };
+        return new Target(selectors, what ?? described ?? selectors[0].Describe()) { Element = element, Called = what };
     }
 
     private static void Add(JsonNode? node, VariableScope scope, IReadOnlyDictionary<string, JsonNode> elements, List<Selector> selectors, ref string? described,

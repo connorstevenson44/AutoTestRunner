@@ -515,7 +515,7 @@
       "properties": {
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -558,7 +558,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -601,7 +601,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -657,7 +657,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -706,7 +706,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -756,7 +756,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -809,7 +809,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -858,7 +858,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -906,7 +906,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -955,7 +955,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -1005,7 +1005,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -1049,7 +1049,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -1089,7 +1089,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -1133,7 +1133,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -1177,7 +1177,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -1221,7 +1221,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -1261,7 +1261,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -1329,7 +1329,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -1382,7 +1382,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -1422,7 +1422,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -1475,7 +1475,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -1520,7 +1520,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -1565,7 +1565,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -1616,7 +1616,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -1681,7 +1681,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -1754,7 +1754,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -1805,7 +1805,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -1852,7 +1852,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -1904,7 +1904,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -1956,7 +1956,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -2002,7 +2002,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -2045,7 +2045,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -2090,7 +2090,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -2130,7 +2130,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -2185,7 +2185,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -2230,7 +2230,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -2270,7 +2270,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -2310,7 +2310,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -2360,7 +2360,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -2410,7 +2410,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",
@@ -2468,7 +2468,7 @@
         },
         "say": {
           "type": "string",
-          "description": "What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
         },
         "note": {
           "type": "string",

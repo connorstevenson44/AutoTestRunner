@@ -272,7 +272,7 @@ public sealed class BuildingTests : IDisposable
         var text = File.ReadAllText(existing.File);
         var reloaded = Suite.Load(suite.Folder).Cases[0];
         Assert.Equal(7, reloaded.Steps.Count);
-        Assert.Equal("""{ "find": "statusText", "as": "ready", "what": "the bar at the bottom", "say": "The bar at the bottom says what the app is doing: ${ready}" }""", JsonLine.Write(reloaded.Steps[1]));
+        Assert.Equal("""{ "find": "statusText", "as": "ready", "what": "status bar", "say": "The bar at the bottom says what the app is doing: ${ready}" }""", JsonLine.Write(reloaded.Steps[1]));
         Assert.Equal("""{ "type": "quantity", "text": "3", "say": "Type 3 in Quantity" }""", JsonLine.Write(reloaded.Steps[5]));
         Assert.Equal("Order 1001 is added and saved", reloaded.Steps[^1]!["checkpoint"]!.GetValue<string>());
         // The first step is as it was written, and so is everything from the checkpoint on.

@@ -6,7 +6,7 @@
   "tags": ["smoke", "orders"],
   "steps": [
     { "startApp": {} },
-    { "find": "statusText", "as": "ready", "what": "the bar at the bottom" },
+    { "find": "statusText", "as": "ready", "what": "status bar" },
     { "type": "customer", "text": "Ada Lovelace" },
     { "find": "formProblem", "as": "problem" },
     { "choose": "product", "option": "Coffee beans" },

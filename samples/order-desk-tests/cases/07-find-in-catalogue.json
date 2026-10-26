@@ -6,7 +6,7 @@
   "tags": ["catalogue"],
   "steps": [
     { "tab": "Catalogue" },
-    { "hover": { "element": "catalogueProduct", "with": { "name": "Product 437" } }, "as": "product", "what": "Product 437 in the catalogue" },
+    { "hover": { "element": "catalogueProduct", "with": { "name": "Product 437" } }, "as": "product", "what": "Product 437" },
     { "tab": "Orders" },
     { "checkpoint": "Product 437 is in the catalogue",
       "checks": [

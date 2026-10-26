@@ -8,7 +8,7 @@
     { "call": "startWithNoOrders" },
     { "call": "addOrder", "with": { "customer": "Grace Hopper", "product": "Green tea" } },
     { "hover": { "element": "orderRow", "with": { "number": "1001" } } },
-    { "click": { "element": "orderRowButton", "with": { "number": "1001", "tip": "Delete this order" } }, "what": "Delete on order 1001" },
+    { "click": { "element": "orderRowButton", "with": { "number": "1001", "tip": "Delete this order" } }, "what": "Delete 1001" },
     { "answerDialog": "Delete order", "button": "No", "expect": "Delete 1 order?" },
     { "call": "waitForStatusBar", "with": { "startsWith": "Kept order 1001." } },
     { "checkpoint": "Order 1001 is kept",
