@@ -38,4 +38,20 @@ internal sealed class FlaUiControl(AutomationElement element) : IControl
     public bool IsSelected => Element.Patterns.SelectionItem.IsSupported && Element.Patterns.SelectionItem.Pattern.IsSelected.ValueOrDefault;
 
     public bool HasFocus => Element.Properties.HasKeyboardFocus.ValueOrDefault;
+
+    public ScreenRect? Bounds
+    {
+        get
+        {
+            try
+            {
+                var box = Element.BoundingRectangle;
+                return box.Width > 0 && box.Height > 0 ? new ScreenRect(box.Left, box.Top, box.Right, box.Bottom) : null;
+            }
+            catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or global::FlaUI.Core.Exceptions.FlaUIException)
+            {
+                return null;
+            }
+        }
+    }
 }

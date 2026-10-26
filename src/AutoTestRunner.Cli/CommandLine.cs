@@ -11,7 +11,7 @@ internal static class CommandLine
 {
     private static readonly Option<string?> Cases = new("--cases") { Description = "The cases to run, by number or id, such as 1-5,8 or open-package. All of them when left out." };
     private static readonly Option<string[]> Tags = new("--tags") { Description = "Only the cases with one of these tags, such as smoke or smoke,nightly.", AllowMultipleArgumentsPerToken = true };
-    private static readonly Option<Speed> Pace = new("--speed") { Description = "How fast the mouse moves and the steps go.", DefaultValueFactory = _ => Speed.Modest };
+    private static readonly Option<Speed> Pace = new("--speed") { Description = "How fast the mouse moves and the steps go; or Manual, where you click and type, and each step waits for you.", DefaultValueFactory = _ => Speed.Modest };
     private static readonly Option<string> Mode = new("--mode")
     {
         Description = "auto carries on by itself, showing each checkpoint for a few seconds; pause-at-checkpoints waits for you at each checkpoint; step-by-step waits for Enter before each step.",

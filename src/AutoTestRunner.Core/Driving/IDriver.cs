@@ -26,8 +26,14 @@ public interface IDriver : IDisposable
 
     void WaitGone(Target target, TimeSpan timeout);
 
-    /// <summary>Scrolls a control into view, moves the mouse to it and outlines it, labelled with what.</summary>
+    /// <summary>
+    /// Scrolls a control into view, moves the mouse to it and outlines it, labelled with what. In a manual run the mouse
+    /// is the person's, so it only scrolls and outlines.
+    /// </summary>
     void Point(IControl control, string what);
+
+    /// <summary>Outlines a control for a second or so, without scrolling or moving the mouse, as a manual run does while it waits.</summary>
+    void Outline(IControl control, string what);
 
     /// <summary>Invokes, toggles or selects a control, or clicks it with the mouse: once, with the right button or twice.</summary>
     void Click(IControl control, ClickHow how);
@@ -38,11 +44,17 @@ public interface IDriver : IDisposable
     /// <summary>Opens each item of a menu in turn and clicks the last: the menu bar's, or a context menu that is open.</summary>
     void Menu(IReadOnlyList<string> path);
 
+    /// <summary>The menu items on screen now: the menu bar's, and those of any menu that is open.</summary>
+    IReadOnlyList<IControl> MenuItems();
+
     /// <summary>Opens a tree item, so the items inside it show.</summary>
     void Expand(IControl control);
 
     /// <summary>Sets a slider's or a number box's value, or a box's text in one go, such as a date picker's.</summary>
     void SetValue(IControl control, string value);
+
+    /// <summary>What a control holds as SetValue sets it: a slider's or a number box's number, or a box's text; null when it holds none.</summary>
+    string? ValueOf(IControl control);
 
     /// <summary>How many rows a list, grid or tree shows.</summary>
     int Rows(IControl control);

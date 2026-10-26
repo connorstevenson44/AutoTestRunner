@@ -10,6 +10,7 @@ public sealed class ConsoleRunView : IRunView
     public void CaseFinished(CaseResult result) { }
     public void ShowStep(Activity step) { }
     public void ShowWait(Activity what) { }
+    public void YourTurn(Activity? what) { }
     public void Waited(Activity what, TimeSpan took) { }
     public void CommandStarted(string line, string? script) { }
     public void CommandOutput(string line, bool error) { }

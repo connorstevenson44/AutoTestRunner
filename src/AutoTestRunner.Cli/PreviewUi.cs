@@ -14,9 +14,9 @@ namespace AutoTestRunner.Cli;
 
 /// <summary>
 /// autotest preview-ui: the launcher on three made-up suites, then a made-up run in the panel, with no app to drive: steps
-/// of each kind, a command printing as it goes, one that fails, checkpoints, a stuck question and the end; then the
-/// builder, with a case part built, a pick tool waiting for a control, and rolled back to a step. With --shots it goes
-/// quickly and saves a picture of each, which is how CI shows what the windows look like.
+/// of each kind, a command printing as it goes, one that fails, checkpoints, a stuck question, a step left to the person
+/// and the end; then the builder, with a case part built, a pick tool waiting for a control, and rolled back to a step.
+/// With --shots it goes quickly and saves a picture of each, which is how CI shows what the windows look like.
 /// </summary>
 internal static class PreviewUi
 {
@@ -167,6 +167,14 @@ internal static class PreviewUi
         view.CaseFinished(Ended(cases[2], CaseStatus.Skipped, 25.0));
 
         view.CaseStarted(4, cases.Count, cases[3]);
+        control.SetSpeed(Speed.Manual);
+        var type = Activity.Of(ActivityKind.Type, Part.Verb("Type"), Part.Value("main"), Part.Word("in"), Badge("confirmName", "Edit\nAutomationId  ConfirmNameBox"));
+        view.ShowStep(type);
+        view.YourTurn(type with { Detail = "Type this in the outlined box. It carries on once the box holds just this, however it got there." });
+        Pause(1600);
+        Shot("07-manual-your-turn");
+        view.YourTurn(null);
+        control.SetSpeed(Speed.Modest);
         view.ShowStep(Activity.Of(ActivityKind.Click, Part.Verb("Click"), Badge("Remove", "Button \"Remove\"")));
         control.PauseOrCarryOn();
         Shot("07-paused");

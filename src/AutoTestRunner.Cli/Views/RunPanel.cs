@@ -51,6 +51,8 @@ internal sealed partial class RunPanel : Window, IRunView
     private Runner? _runner;
     private FlaUiDriver? _driver;
     private volatile bool _asking, _youClicked, _typing, _over;
+    // The step on show, and what a manual run is waiting for the person to do, while it waits.
+    private Activity? _step, _yourTurn;
     private Timer? _typingPoll;
     private nint _hwnd;
     private int _caseIndex;
@@ -143,6 +145,7 @@ internal sealed partial class RunPanel : Window, IRunView
             Ui.Toggle(Icons.SpeedSlow, "Slow", 16),
             Ui.Toggle(Icons.SpeedModest, "Modest speed", 16),
             Ui.Toggle(Icons.SpeedFast, "Fast", 16),
+            Ui.Toggle(Icons.SpeedManual, "Manual: you click and type, and each step waits for you", 16),
         ];
         for (var index = 0; index < _speeds.Length; index++)
         {
@@ -236,7 +239,7 @@ internal sealed partial class RunPanel : Window, IRunView
             Left = area.Right - PanelWidth;
             Top = area.Top;
             Height = area.Height;
-            _hooks = new GlobalKeyHook(OnKey, OnClick);
+            _hooks = new GlobalKeyHook(OnKey, OnClick, _control.Person);
         };
         Closed += (_, _) =>
         {
@@ -303,6 +306,7 @@ internal sealed partial class RunPanel : Window, IRunView
     {
         EndWait();
         HideCountdown();
+        _step = step;
         _nowIcon.Text = Icons.Of(step.Kind);
         StepLine.Fill(_nowText, step, 14.5);
         _nowText.ToolTip = step.Say;
@@ -312,6 +316,25 @@ internal sealed partial class RunPanel : Window, IRunView
     });
 
     public void ShowWait(Activity what) => OnUi(() => StartWait(what));
+
+    // The step's line, with a secret's real words, as the person has to type them; how to do it waits under it.
+    public void YourTurn(Activity? what) => OnUi(() =>
+    {
+        _yourTurn = what;
+        if (what is null)
+        {
+            EndWait();
+            ShowState();
+            // A secret's words go once it is typed.
+            if (_step is not null)
+                StepLine.Fill(_nowText, _step, 14.5);
+            return;
+        }
+        HideCountdown();
+        StepLine.Fill(_nowText, what with { Detail = null }, 14.5);
+        StartWait(Activity.Words(what.Detail ?? "Do it in the app."));
+        ShowState();
+    });
 
     public void Waited(Activity what, TimeSpan took) => OnUi(() =>
     {
@@ -431,7 +454,8 @@ internal sealed partial class RunPanel : Window, IRunView
     // ===== Keys, buttons and state =====
 
     // Space, Enter and Esc belong to the run unless the person is typing: in a text box they clicked into themselves,
-    // or in one of the runner's own windows, such as a note. While the run is stuck, or a question other than whether
+    // or in one of the runner's own windows, such as a note. In a manual run they belong to the app, as the person uses
+    // it, unless the panel has the focus. While the run is stuck, or a question other than whether
     // to stop is showing, they do nothing: the question's buttons answer it. Called on the hook's thread: it only reads,
     // and what a key does happens on the UI thread.
     private bool OnKey(int key)
@@ -439,6 +463,8 @@ internal sealed partial class RunPanel : Window, IRunView
         if (_answer is not null && !_askingToStop)
             return false;
         var foreground = GetForegroundWindow();
+        if (_control.Manual && foreground != _hwnd)
+            return false;
         if (foreground != _hwnd)
         {
             if (_control.Waiting == HoldReason.Stuck || _asking)
@@ -526,12 +552,15 @@ internal sealed partial class RunPanel : Window, IRunView
                 SetState(Icons.Look, "Your turn", _caseFailed ? Ui.Fail : Ui.Pass, _caseFailed ? Ui.FailSoft : Ui.PassSoft, "Check the screen, then press Space to continue");
                 break;
             case HoldReason.Stuck: SetState(Icons.Warning, "Stuck", Ui.Fail, Ui.FailSoft); break;
+            case HoldReason.None when _yourTurn is not null:
+                SetState(Icons.SpeedManual, "Your turn", Ui.Step, Ui.StepSoft, "Do it in the app: the run carries on once it's done");
+                break;
             default:
                 SetState(Icons.Running, _control.StepByStep ? "Doing it" : "Running", Ui.Accent, Ui.AccentSoft);
                 _youClicked = false;
                 break;
         }
-        _nowLabel.Text = _control.Waiting == HoldReason.Step ? "UP NEXT" : "NOW";
+        _nowLabel.Text = _control.Waiting == HoldReason.Step ? "UP NEXT" : _yourTurn is not null ? "YOUR TURN" : "NOW";
         var going = _control.Waiting == HoldReason.None;
         ((TextBlock)_main.Content).Text = going ? Icons.Pause : Icons.Play;
         _main.ToolTip = going ? "Pause (Space)" : _control.StepByStep ? "Run by itself (Space)" : "Carry on (Space)";

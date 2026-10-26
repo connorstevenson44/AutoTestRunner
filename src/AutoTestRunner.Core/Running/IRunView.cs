@@ -20,6 +20,12 @@ public interface IRunView
     /// <summary>What the run is waiting to see in the app, such as a status bar's text. It lasts until the next call.</summary>
     void ShowWait(Activity what);
 
+    /// <summary>
+    /// A manual run is waiting for the person to do a step in the app: what to do, with how in its Detail. Null once it
+    /// is done, or when the run does it after all, as when the speed is changed from manual.
+    /// </summary>
+    void YourTurn(Activity? what);
+
     /// <summary>A wait step is over: what it waited for, what it saw, and how long it took.</summary>
     void Waited(Activity what, TimeSpan took);
 

@@ -15,6 +15,7 @@ internal sealed class FakeControl(string type, string name, string? id = null, s
     public bool? IsChecked { get; set; }
     public bool IsSelected { get; set; }
     public bool HasFocus { get; set; }
+    public ScreenRect? Bounds { get; set; }
 
     /// <summary>How many rows it has, as a list or a grid.</summary>
     public int Rows { get; set; }

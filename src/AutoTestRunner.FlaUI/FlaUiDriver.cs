@@ -19,7 +19,7 @@ namespace AutoTestRunner.FlaUI;
 /// to it, outlines it, then uses it. The workarounds are the AutoHotkey runner's, kept here so scripts never see them:
 /// rows of virtualised lists built by scrolling, buttons that only show while their row is hovered, Win32 message
 /// boxes and file pickers found by window class and control id, and any other window of the app's stopping a wait
-/// straight away, saying what it shows.
+/// straight away, saying what it shows. In a manual run it never moves the mouse or presses a key: it only outlines.
 /// </summary>
 public sealed class FlaUiDriver : IDriver
 {
@@ -196,7 +196,8 @@ public sealed class FlaUiDriver : IDriver
                 _control.Gate();
                 if (TryFindElement(target, scroll: true) is { } found)
                     return new FlaUiControl(found);
-                if (target.Selectors.All(selector => selector.Within is null) && OtherWindow() is { } other)
+                // In a manual run another window may be the person's doing, and they can close it.
+                if (!_control.Manual && target.Selectors.All(selector => selector.Within is null) && OtherWindow() is { } other)
                     throw new StuckException($"find {target.What}", $"{_windowTitle} is showing another window instead: {other}");
                 _control.Wait(200);
             }
@@ -457,6 +458,11 @@ public sealed class FlaUiDriver : IDriver
         BringIntoView(element);
         var box = Rect(element.BoundingRectangle);
         _keepClear(box);
+        if (_control.Manual)
+        {
+            Outline(control, what);
+            return;
+        }
         Mouse.MovePixelsPerMillisecond = _control.MouseSpeed == 0 ? 10_000 : 30.0 / _control.MouseSpeed;
         Mouse.MoveTo(Middle(box));
         if (_control.Unattended)
@@ -470,6 +476,19 @@ public sealed class FlaUiDriver : IDriver
             // The outline is a courtesy; the step goes on without it.
         }
         _control.Wait(_control.Pace);
+    }
+
+    // A little longer than a manual run waits between outlines, so the outline doesn't flicker.
+    public void Outline(IControl control, string what)
+    {
+        try
+        {
+            ((FlaUiControl)control).Element.DrawHighlight(false, Color.DarkOrange, TimeSpan.FromMilliseconds(1500));
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or global::FlaUI.Core.Exceptions.FlaUIException)
+        {
+            // The outline is a courtesy, and the control may have gone as the person used the app.
+        }
     }
 
     // Scrolls the lists a control is in until all of it is in view, or its middle when it is taller than the list.
@@ -574,6 +593,9 @@ public sealed class FlaUiDriver : IDriver
                 }
             }
         }
+        // The mouse is the person's in a manual run.
+        if (_control.Manual)
+            return;
         var spot = new ScreenRect(area.Left + 20, (area.Top + area.Bottom) / 2 - 5, area.Left + 40, (area.Top + area.Bottom) / 2 + 5);
         _keepClear(spot);
         Mouse.MoveTo(Middle(spot));
@@ -659,7 +681,7 @@ public sealed class FlaUiDriver : IDriver
         while (true)
         {
             _control.Gate();
-            var items = MenuItems();
+            var items = MenuElements();
             if (items.FirstOrDefault(item => Name(item) == name) is { } found)
                 return found;
             if (Environment.TickCount64 > end)
@@ -668,8 +690,10 @@ public sealed class FlaUiDriver : IDriver
         }
     }
 
+    public IReadOnlyList<IControl> MenuItems() => [.. MenuElements().Select(item => new FlaUiControl(item))];
+
     // The menu items on screen: in the main window's menu bar, or in a menu open in a popup window of its own.
-    private List<AutomationElement> MenuItems()
+    private List<AutomationElement> MenuElements()
     {
         var ids = ProcessIds();
         var condition = Conditions.ByControlType(ControlType.MenuItem);
@@ -712,6 +736,15 @@ public sealed class FlaUiDriver : IDriver
         if (box is null || !box.Patterns.Value.IsSupported)
             throw new StuckException($"set {Name(element)} to {value}", "It has no value that can be set: it isn't a slider, a number box or a box to type in.");
         box.Patterns.Value.Pattern.SetValue(value);
+    }
+
+    public string? ValueOf(IControl control)
+    {
+        var element = ((FlaUiControl)control).Element;
+        if (element.Patterns.RangeValue.IsSupported)
+            return element.Patterns.RangeValue.Pattern.Value.ValueOrDefault.ToString(CultureInfo.InvariantCulture);
+        var box = element.Patterns.Value.IsSupported ? element : element.FindFirstDescendant(Conditions.ByControlType(ControlType.Edit));
+        return box is not null && box.Patterns.Value.IsSupported ? box.Patterns.Value.Pattern.Value.ValueOrDefault : null;
     }
 
     // A grid's rows, or the items in a list or tree: all of them, including those scrolled out of view.

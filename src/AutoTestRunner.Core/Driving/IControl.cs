@@ -24,4 +24,7 @@ public interface IControl
 
     /// <summary>Whether it has the keyboard.</summary>
     bool HasFocus { get; }
+
+    /// <summary>Where it is on the screen; null when it can't be told or takes no room.</summary>
+    ScreenRect? Bounds { get; }
 }

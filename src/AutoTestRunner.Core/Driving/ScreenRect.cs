@@ -7,4 +7,6 @@ public readonly record struct ScreenRect(int Left, int Top, int Right, int Botto
 
     public bool Overlaps(ScreenRect other) =>
         !(other.Right < Left || other.Left > Right || other.Bottom < Top || other.Top > Bottom);
+
+    public bool Contains(int x, int y) => x >= Left && x < Right && y >= Top && y < Bottom;
 }

@@ -37,6 +37,16 @@ internal sealed class FakeRunView(StuckAnswer answer = StuckAnswer.Stop) : IRunV
     }
 
     public void ShowWait(Activity what) => Waits.Add(what.Text);
+
+    /// <summary>What a manual run asked the person to do, as words.</summary>
+    public List<string> Turns { get; } = [];
+
+    public void YourTurn(Activity? what)
+    {
+        if (what is not null)
+            Turns.Add(what.Text);
+    }
+
     void IRunView.Waited(Activity what, TimeSpan took) => Waited.Add(what);
     public void CommandStarted(string line, string? script) => Commands.Add("start " + line);
     public void CommandOutput(string line, bool error) => Commands.Add((error ? "err " : "out ") + line);
