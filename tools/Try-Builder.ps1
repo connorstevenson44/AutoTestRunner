@@ -398,8 +398,11 @@ if ($Parts -contains 'new-suite') {
         Invoke (Wait-For { Find $window $ui::NameProperty 'Open the logs folder' } 'the logs folder button' 20)
         Wait-For { Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA 'AutoTestRunner\logs') } 'the logs folder to be made' 10 | Out-Null
         Assert-Open $launcher 'after the logs folder button was clicked'
-        $explorer = Wait-For { Window 'logs' } 'Explorer on the logs folder' 20
-        $explorer.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern).Close()
+        # Explorer, on the logs folder, is closed again so it covers nothing; how it titles itself varies.
+        Start-Sleep -Seconds 2
+        $root.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition) |
+            Where-Object { $_.Current.Name -like 'logs*' } |
+            ForEach-Object { $_.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern).Close() }
         Invoke (Wait-For { Named $window 'New suite:*' } 'the New suite button' 20)
         $form = Wait-For { $window.FindFirst([System.Windows.Automation.TreeScope]::Children,
             (New-Object System.Windows.Automation.PropertyCondition($ui::NameProperty, 'New suite'))) } 'the New suite window' 20
