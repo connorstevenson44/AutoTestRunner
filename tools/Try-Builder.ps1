@@ -137,9 +137,11 @@ try {
     Click (Find $app $ui::AutomationIdProperty 'ImportButton')
     $picker = Wait-For { $app.FindFirst([System.Windows.Automation.TreeScope]::Children,
         (New-Object System.Windows.Automation.PropertyCondition($ui::NameProperty, 'Import orders'))) } 'the Import orders picker' 20
-    $name = Wait-For { $picker.FindFirst([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.AndCondition(
-        (New-Object System.Windows.Automation.PropertyCondition($ui::AutomationIdProperty, '1148')),
-        (New-Object System.Windows.Automation.PropertyCondition($ui::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit))))) } 'the picker''s name box' 10
+    # The name box is a drop-down, id 1148, with the box typed in inside it.
+    $names = Wait-For { Find $picker $ui::AutomationIdProperty '1148' } 'the picker''s name box' 10
+    $name = $names.FindFirst([System.Windows.Automation.TreeScope]::Descendants,
+        (New-Object System.Windows.Automation.PropertyCondition($ui::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit)))
+    if (-not $name) { $name = $names }
     Click $name
     # Set rather than typed, so no list of matching files drops down over Open.
     $name.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($noOrders)
