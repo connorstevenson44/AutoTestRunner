@@ -43,7 +43,8 @@ internal sealed class BuildWorker
     private readonly FlaUiInspector _inspector;
     private readonly Recorder _recorder;
 
-    private long _processesRead = long.MinValue, _typingRead = long.MinValue, _watchedRead = long.MinValue;
+    // When each was last read, by Environment.TickCount64: 0 is long enough ago for each to be read straight away.
+    private long _processesRead, _typingRead, _watchedRead;
 
     // When the last click was and where, for a double-click; and when a right-click's menu was last clicked in.
     private (long At, int X, int Y) _lastClick = (long.MinValue, 0, 0);

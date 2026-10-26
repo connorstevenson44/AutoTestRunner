@@ -36,7 +36,7 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
 
     private readonly CacheRequest _facts = FactsRequest(driver);
     private IReadOnlySet<int> _processes = new HashSet<int>();
-    private long _processesRead = long.MinValue;
+    private long _processesRead;
 
     /// <summary>The ids of the processes running the app's exe, whose windows are the app's.</summary>
     public IReadOnlySet<int> Processes()
@@ -289,7 +289,10 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
         var box = file != 0 ? file : Native.Control(hwnd, 1152);
         if (box == 0)
             return new DialogFacts(title, driver.MessageText(hwnd));
+        // The box typed in, inside the file picker's drop-down of names.
         var named = driver.Automation.FromHandle(box);
+        if (!named.Patterns.Value.IsSupported)
+            named = named.FindFirstDescendant(driver.Automation.ConditionFactory.ByControlType(ControlType.Edit)) ?? named;
         var path = named.Patterns.Value.IsSupported ? named.Patterns.Value.Pattern.Value.ValueOrDefault ?? "" : "";
         if (path.Length > 0 && !Path.IsPathRooted(path))
         {
