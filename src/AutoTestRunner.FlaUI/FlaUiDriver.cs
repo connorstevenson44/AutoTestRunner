@@ -106,10 +106,15 @@ public sealed class FlaUiDriver : IDriver
         }
     }
 
-    private IReadOnlySet<int> ProcessIds() =>
+    /// <summary>For the builder's inspector: UI Automation, the app's main window and its processes.</summary>
+    internal UIA3Automation Automation => _automation;
+
+    internal nint Main => _main;
+
+    internal IReadOnlySet<int> ProcessIds() =>
         Process.GetProcessesByName(_processName).Select(process => process.Id).ToHashSet();
 
-    private List<nint> AppWindows() => Native.Windows(ProcessIds());
+    internal List<nint> AppWindows() => Native.Windows(ProcessIds());
 
     private AutomationElement MainWindow()
     {
@@ -173,19 +178,35 @@ public sealed class FlaUiDriver : IDriver
         return null;
     }
 
-    private AutomationElement? TryFindElement(Selector selector)
+    private AutomationElement? TryFindElement(Selector selector) => Shown(selector, element => element.FirstOrDefault());
+
+    /// <summary>
+    /// How many controls on screen a target finds, by the first of its selectors that finds any: 1 means it finds
+    /// just the one meant. The builder asks, to choose how a step finds its control.
+    /// </summary>
+    public int Count(Target target)
+    {
+        foreach (var selector in target.Selectors)
+            if (Shown(selector, found => found.Take(50).Count()) is > 0 and var count)
+                return count;
+        return 0;
+    }
+
+    // The controls on screen a selector matches, given to pick: the first, or how many. When the tree changes while it
+    // is read, as it does while a view is built, it finds nothing, and the next look will see it.
+    private T? Shown<T>(Selector selector, Func<IEnumerable<AutomationElement>, T> pick)
     {
         try
         {
             if (selector.Type == "Window")
-                return AppWindows().Where(hwnd => hwnd != _main && (selector.Name is null || selector.NameMatches(Native.Title(hwnd))))
-                    .Select(hwnd => _automation.FromHandle(hwnd)).FirstOrDefault();
+                return pick(AppWindows().Where(hwnd => hwnd != _main && (selector.Name is null || selector.NameMatches(Native.Title(hwnd))))
+                    .Select(hwnd => _automation.FromHandle(hwnd)));
 
             AutomationElement root;
             if (selector.Within is { } within)
             {
                 if (TryFindElement(within, scroll: false) is not { } scope)
-                    return null;
+                    return default;
                 root = scope;
             }
             else
@@ -195,14 +216,14 @@ public sealed class FlaUiDriver : IDriver
             if (selector.SameRowAs is { } rowOf)
             {
                 if (TryFindElement(rowOf, scroll: false) is not { } anchor)
-                    return null;
+                    return default;
                 var row = anchor.BoundingRectangle;
                 var middle = (row.Top + row.Bottom) / 2;
                 candidates = MainWindow().FindAllDescendants(Condition(selector))
                     .Where(element => Fits(selector, element))
                     .Where(element => IsShown(element) && Math.Abs((element.BoundingRectangle.Top + element.BoundingRectangle.Bottom) / 2 - middle) <= 14);
             }
-            return candidates.FirstOrDefault(IsShown);
+            return pick(candidates.Where(IsShown));
         }
         catch (StuckException)
         {
@@ -210,8 +231,7 @@ public sealed class FlaUiDriver : IDriver
         }
         catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or TimeoutException)
         {
-            // The tree changed while it was read, as it does while a view is built. The next look will see it.
-            return null;
+            return default;
         }
     }
 
@@ -609,7 +629,7 @@ public sealed class FlaUiDriver : IDriver
         return MessageText(hwnd);
     }
 
-    private string MessageText(nint hwnd)
+    internal string MessageText(nint hwnd)
     {
         var texts = _automation.FromHandle(hwnd).FindAllDescendants(Conditions.ByControlType(ControlType.Text)).Select(Name).Where(text => text.Length > 0);
         return Regex.Replace(string.Join(" ", texts), @"\s+", " ").Trim();

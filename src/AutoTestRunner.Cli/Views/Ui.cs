@@ -107,6 +107,39 @@ internal static class Ui
         return row;
     }
 
+    /// <summary>Asks for a few words in a small window of its own, and returns them, or null when it was closed.</summary>
+    public static string? Prompt(Window owner, string title, string message, string initial = "", string button = "Save", string glyph = Icons.Note, bool tall = true)
+    {
+        string? text = null;
+        var window = new Window
+        {
+            Title = title, Owner = owner, Topmost = true, SizeToContent = SizeToContent.Height, Width = 480, ResizeMode = ResizeMode.NoResize,
+            WindowStartupLocation = WindowStartupLocation.CenterScreen, Background = Brushes.White, FontFamily = Text,
+        };
+        window.Resources.MergedDictionaries.Add(Theme);
+        var stack = new StackPanel { Margin = new Thickness(20, 16, 20, 16) };
+        var box = new TextBox { Margin = new Thickness(0, 10, 0, 0), Height = tall ? 60 : double.NaN, TextWrapping = TextWrapping.Wrap, AcceptsReturn = false, Padding = new Thickness(4), Text = initial };
+        var save = LabelledButton(glyph, button, () =>
+        {
+            text = box.Text;
+            window.Close();
+        }, "MainButton");
+        save.IsDefault = true;
+        save.HorizontalAlignment = HorizontalAlignment.Left;
+        save.Margin = new Thickness(0, 12, 0, 0);
+        stack.Children.Add(Words(message, 13, Ink));
+        stack.Children.Add(box);
+        stack.Children.Add(save);
+        window.Content = stack;
+        window.Loaded += (_, _) =>
+        {
+            box.Focus();
+            box.SelectAll();
+        };
+        window.ShowDialog();
+        return text;
+    }
+
     /// <summary>How long something took, as people say it: 0.4 s, 12 s, 2 min 5 s.</summary>
     public static string Took(TimeSpan took) =>
         took.TotalSeconds < 10 ? $"{took.TotalSeconds:0.0} s" : took.TotalMinutes < 1 ? $"{took.TotalSeconds:0} s" : $"{(int)took.TotalMinutes} min {took.Seconds} s";

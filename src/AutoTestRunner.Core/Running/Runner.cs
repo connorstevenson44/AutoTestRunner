@@ -28,6 +28,9 @@ public sealed class Runner
     private readonly VariableScope _globals;
     private CaseResult? _current;
 
+    // What steps played outside a case keep, for the next ones played.
+    private VariableScope? _played;
+
     // The status text before the last click, so a wait for a new status doesn't take the old one.
     private string? _marked;
 
@@ -167,6 +170,16 @@ public sealed class Runner
         var failed = _results.Cases.Count(result => result.Status != CaseStatus.Passed);
         _view.Finished(summary, _results.Folder, failed == 0);
         return failed;
+    }
+
+    /// <summary>
+    /// Plays steps outside a case, as the builder does to get the app ready and to try a step, without their
+    /// checkpoints. What they keep stays for the next steps played. A step that gets stuck asks the view, as in a case.
+    /// </summary>
+    public void Play(JsonArray steps, string where)
+    {
+        _played ??= _globals.Child();
+        Steps(new JsonArray([.. steps.Where(step => step?["checkpoint"] is null).Select(step => step!.DeepClone())]), _played, where);
     }
 
     // ===== Steps =====
