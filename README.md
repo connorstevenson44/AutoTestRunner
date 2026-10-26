@@ -18,7 +18,9 @@ and the cases are JSON files checked against a schema, so an editor completes an
 ```powershell
 dotnet publish src/AutoTestRunner.Cli -c Release -o artifacts/autotest
 
-autotest launch <suite folder>      # opens the launcher: tick cases, pick how it runs, Start
+autotest                            # opens the launcher on every suite near autotest, and in the folder it started in
+autotest launch <suite folder>      # opens the launcher on one suite, with the suites beside it listed too
+autotest record <suite folder> --name "Take an order"     # builds a new case by using the app; see Building a case
 autotest run <suite folder>         # runs while you watch, from the first case
 autotest run <suite folder> --cases 1-5,8 --mode step-by-step --speed Slow
 autotest run <suite folder> --unattended    # no panel and no pauses, as CI runs it
@@ -46,6 +48,35 @@ UI Automation dump of each point it got stuck.
 
 Exit codes: 0 passed, 1 a case failed, 2 the app or something in `requires` is missing, 3 a script error, 4 the suite
 needs administrator and autotest isn't.
+
+The launcher lists every suite it finds near autotest: beside it in a ready-to-run kit, and up to three folders down
+from the folder it is in or was started from, such as `samples/` in a clone. Pick one on the left to see its cases,
+whether its app is there, and how its last run went; a suite with mistakes in its scripts shows them instead. A shield
+on Start means the suite needs administrator, which autotest asks for when it starts.
+
+## Building a case
+
+**New case** in the launcher, or the pencil on a case, opens the builder: a panel beside the app, which gets the app
+to where the case starts (a fresh start, where another case leaves off, or the end of the case being added to), then
+records.
+
+- **Record** (on at the start): use the app. Each click, pick from a drop-down, tick and tab becomes a step, what you
+  type becomes one when you leave the box, and keys such as Enter or Ctrl+S become key steps. A click that changes the
+  status text gets a wait for its new words, so the case waits for the app, not a time. Message boxes and file pickers
+  become `answerDialog`, `pickFile` and `pickFolder`.
+- **Pick**, or Ctrl+click while recording: point at a control and it is outlined with how a step would find it; click
+  it and the panel offers Click, Point at, Wait for it, Wait for it to go, Wait for its text, Keep its text, Check it
+  shows, Check its text, and Name it. The click doesn't reach the app.
+- Each step shows how it finds its control, with a dot: green for a name in `elements.json` or an AutomationId, amber
+  for what it says, red when more than one control matches. **Name it** adds a red or amber one to `elements.json`
+  and has the steps use the name. Over a step, ▶ tries it in the app, the arrows move it, and the bin takes it out;
+  click its words to change what the panel says.
+- **Save** writes `cases/NN-name.json`, as a person would write it, or puts the new steps before the case's
+  checkpoint, then checks the suite. The checkpoint's title, checks and what to look at are at the bottom of the panel.
+
+`autotest record <suite folder>` opens the builder straight away: `--name` names a new case, `--after <case>` starts it
+where that case leaves off, and `--add-to <case>` adds steps to that case. CI builds a case in Order Desk this way, with
+clicks and keys sent to the screen, and runs it: [tools/Try-Builder.ps1](tools/Try-Builder.ps1).
 
 ## Writing a suite
 
@@ -86,14 +117,17 @@ keep working when the wording changes.
 
 | Project | What it is |
 | --- | --- |
-| `AutoTestRunner.Core` | The script format, its loader and checks, and the runner: pace, pausing, checkpoints, stuck, results. Plain .NET, tested on any OS against a fake app. |
-| `AutoTestRunner.FlaUI` | The driver: finding controls, scrolling virtualised lists, buttons that only show on hover, Win32 message boxes and file pickers, screenshots and tree dumps. |
-| `AutoTestRunner.Cli` | `autotest`: the command line, and the panel and keys of a watched run. |
+| `AutoTestRunner.Core` | The script format, its loader and checks, the runner (pace, pausing, checkpoints, stuck, results) and the builder's engine (naming controls, turning what a person does into steps, writing the case). Plain .NET, tested on any OS against a fake app. |
+| `AutoTestRunner.FlaUI` | The driver: finding controls, scrolling virtualised lists, buttons that only show on hover, Win32 message boxes and file pickers, screenshots and tree dumps; and the inspector, which reads the control under the mouse for the builder. |
+| `AutoTestRunner.Cli` | `autotest`: the command line, the launcher, the panel and keys of a watched run, and the builder. |
 | `schema/` | JSON schemas for suite.json, elements.json, macros and cases, written by `python3 tools/schema.py`. A test keeps them in step with the runner. |
 
 Inside `AutoTestRunner.Cli`, `WatchedRun` runs the cases with the panel beside the app, and `GlobalKeyHook` catches
-Space, Enter and Esc wherever the focus is. Its windows are in `Views/`: `LauncherWindow` picks the cases, `RunPanel`
-is the panel, and `ActivityFeed` is the panel's list of everything done so far. In `AutoTestRunner.Core`, whose
+Space, Enter and Esc wherever the focus is. `BuildSession` is the builder: `RecordingHook` notes the person's clicks and
+keys on the UI thread, and `BuildWorker` makes steps of them on a thread of its own, through `Recorder` and
+`TargetSuggester` in `Core/Building`. Its windows are in `Views/`: `LauncherWindow` lists the suites and `SuitePane`
+picks the cases, `RunPanel` is the panel, `ActivityFeed` is the panel's list of everything done so far, and
+`BuilderPanel` and `OutlineWindow` are the builder's. In `AutoTestRunner.Core`, whose
 folders are `Scripting/` (the format), `Running/` (the runner) and `Driving/` (what a driver does), `Runner` plays the steps, `RunControl` holds the pace and pauses,
 `CommandReportingMachine` shows each command and its output as it runs, and `IRunView` is what a run reports to: the
 panel when watched, the console when unattended.
