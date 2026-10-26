@@ -14,9 +14,9 @@ internal sealed class BuilderView(BuilderPanel panel) : IRunView
     /// <summary>Why the last step played didn't work, or null. Read and cleared on the builder's thread.</summary>
     public string? Problem { get; set; }
 
-    public void ShowStep(string text, ActivityKind kind = ActivityKind.Say, string? command = null) => panel.Busy(text);
+    public void ShowStep(Activity step) => panel.Busy(step.Text);
 
-    public void StepFailed(string message) => Problem = message;
+    public void StepFailed(StepFailure failure) => Problem = failure.Message;
 
     public StuckAnswer AskStuck(string message, string screenshot)
     {
@@ -34,7 +34,9 @@ internal sealed class BuilderView(BuilderPanel panel) : IRunView
 
     public void CaseFinished(CaseResult result) { }
 
-    public void ShowWait(string what) { }
+    public void ShowWait(Activity what) { }
+
+    public void Waited(Activity what, TimeSpan took) { }
 
     public void CommandStarted(string line, string? script) { }
 

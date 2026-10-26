@@ -9,6 +9,8 @@ internal sealed class FlaUiControl(AutomationElement element) : IControl
 {
     public AutomationElement Element { get; } = element;
 
+    public string Type => Element.Properties.ControlType.ValueOrDefault.ToString();
+
     public string Name => Element.Properties.Name.ValueOrDefault ?? "";
 
     public string? Value => Element.Patterns.Value.IsSupported ? Element.Patterns.Value.Pattern.Value.ValueOrDefault : null;

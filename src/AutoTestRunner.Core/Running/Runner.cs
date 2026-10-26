@@ -137,7 +137,7 @@ public sealed class Runner
         if (Leftovers() is [_, ..] leftovers)
         {
             _results.Log("RESET", "Cleaning up first: " + string.Join(", ", leftovers));
-            _view.ShowStep("Clean up what an earlier run left behind: " + string.Join(", ", leftovers), ActivityKind.Command);
+            _view.ShowStep(Activity.Of(ActivityKind.Command, [Part.Verb("Clean up"), .. leftovers.Select(Part.Value)]));
             ResetMachine();
         }
     }
@@ -258,13 +258,18 @@ public sealed class Runner
     {
         var kind = ScriptVocabulary.KindOf(step);
         string? Text(string key) => step[key] is { } node ? scope.Expand(node.ToString()) : null;
-        // A wait's say comes after it, so it can tell what the step found: it is filled in then.
-        var after = kind is "find" or "waitGone" or "waitText" or "whileShows" or "waitEnabled" or "useWindow";
-        var say = after ? null : Text("say");
-        void SayAfter()
+        // The panel shows what a step does, with what it acts on; the script's own words for it show when pointing at it.
+        // A wait's are read once it is over, so they can use what it found.
+        var waits = kind is "find" or "waitGone" or "waitText" or "whileShows" or "waitEnabled" or "useWindow";
+        var say = kind == "say" || waits ? null : Text("say");
+        Activity Line(ActivityKind activity, params Part[] parts) => new(activity, parts) { Say = say };
+        var clock = Stopwatch.StartNew();
+        // A wait step, once it is over: what it waited for, what it saw and how long it took.
+        void Waited(Activity line, string? saw = null)
         {
-            if (Text("say") is { } text)
-                Say(text);
+            var done = line with { Say = Text("say"), Detail = string.IsNullOrWhiteSpace(saw) ? null : saw };
+            _results.Log("WAITED", $"{done.Text}{(done.Detail is null ? "" : $": {done.Detail}")} ({clock.Elapsed.TotalSeconds:0.0} s)");
+            _view.Waited(done, clock.Elapsed);
         }
         var what = Text("what");
         TimeSpan Within(TimeSpan normal) => step["within"] is { } seconds ? TimeSpan.FromSeconds(double.Parse(scope.Expand(seconds.ToString()), CultureInfo.InvariantCulture)) : normal;
@@ -278,23 +283,23 @@ public sealed class Runner
         string Required(string key) => Text(key) ?? throw new ScriptException($"{kind} needs {key}.");
         IControl Find(Target target)
         {
-            _view.ShowWait($"Look for {target.What}");
+            _view.ShowWait(Activity.Of(ActivityKind.Wait, Part.Verb("Look for"), Part.Control(target)));
             return _driver.Find(target, Control.Scale(Within(FindTimeout)));
         }
 
         switch (kind)
         {
             case "say":
-                Say(say ?? "");
+                Say(Text("say") ?? "");
                 break;
 
             case "startApp":
-                ShowStep(say ?? $"Start {_suite.App.Window}", ActivityKind.App);
+                ShowStep(Line(ActivityKind.App, Part.Verb("Start"), new Part(PartKind.Window, _suite.App.Window, Exe)));
                 _driver.Start(_suite.App, Exe);
                 break;
 
             case "closeApp":
-                ShowStep(say ?? $"Close {_suite.App.Window}", ActivityKind.App);
+                ShowStep(Line(ActivityKind.App, Part.Verb("Close"), Part.Window(_suite.App.Window)));
                 _driver.Close();
                 break;
 
@@ -308,13 +313,13 @@ public sealed class Runner
                 var target = kind == "tab" ? Target.Of(new Selector(Type: "TabItem", Name: Text("tab"))) : TargetOf("click");
                 var control = Find(target);
                 var how = How(Text("how"));
-                var verb = how switch { ClickHow.Right => "Right-click", ClickHow.Double => "Double-click", _ => "Click" };
-                var text = say ?? (kind == "tab" ? $"Open the {Text("tab")} tab" : $"{verb} {control.Name}");
-                ShowStep(text, ActivityKind.Click);
+                var verb = kind == "tab" ? "Open" : how switch { ClickHow.Right => "Right-click", ClickHow.Double => "Double-click", _ => "Click" };
+                var line = Line(ActivityKind.Click, Part.Verb(verb), Part.Control(target, control));
+                ShowStep(line);
                 Mark();
-                _driver.Point(control, text);
+                _driver.Point(control, line.Text);
                 if (!control.IsEnabled)
-                    throw new StuckException(Lower(text), "It's greyed out, so it can't be used yet.");
+                    throw new StuckException(Lower(line.Text), "It's greyed out, so it can't be used yet.");
                 _driver.Click(control, how);
                 Control.Wait(Control.Pace / 2);
                 Keep(step, scope, control);
@@ -323,12 +328,13 @@ public sealed class Runner
 
             case "drag":
             {
-                var control = Find(TargetOf("drag"));
-                var onto = Find(TargetOf("to"));
-                var text = say ?? $"Drag {control.Name} onto {onto.Name}";
-                ShowStep(text, ActivityKind.Point);
+                var (from, to) = (TargetOf("drag"), TargetOf("to"));
+                var control = Find(from);
+                var onto = Find(to);
+                var line = Line(ActivityKind.Point, Part.Verb("Drag"), Part.Control(from, control), Part.Word("onto"), Part.Control(to, onto));
+                ShowStep(line);
                 Mark();
-                _driver.Point(control, text);
+                _driver.Point(control, line.Text);
                 _driver.Drag(control, onto);
                 Control.Wait(Control.Pace / 2);
                 Keep(step, scope, control);
@@ -338,20 +344,21 @@ public sealed class Runner
             case "menu":
             {
                 var path = ListOf("menu");
-                var shown = string.Join(" > ", path);
+                var items = path.SelectMany((item, index) => index == 0 ? [Part.Value(item)] : new[] { Part.Word("›"), Part.Value(item) });
                 if (step["on"] is not null)
                 {
-                    var on = Find(TargetOf("on"));
-                    var text = say ?? $"Right-click {on.Name}, then pick {shown}";
-                    ShowStep(text, ActivityKind.Click);
+                    var target = TargetOf("on");
+                    var on = Find(target);
+                    var line = Line(ActivityKind.Click, [Part.Verb("Right-click"), Part.Control(target, on), Part.Word("›"), .. items]);
+                    ShowStep(line);
                     Mark();
-                    _driver.Point(on, text);
+                    _driver.Point(on, line.Text);
                     _driver.Click(on, ClickHow.Right);
                     Control.Wait(300);
                 }
                 else
                 {
-                    ShowStep(say ?? $"Pick {shown} from the menu", ActivityKind.Click);
+                    ShowStep(Line(ActivityKind.Click, [Part.Verb("Menu"), .. items]));
                     Mark();
                 }
                 _driver.Menu(path);
@@ -362,7 +369,7 @@ public sealed class Runner
             case "expand":
             {
                 var path = ListOf("expand");
-                ShowStep(say ?? $"Open {string.Join(" > ", path)}", ActivityKind.Choose);
+                ShowStep(Line(ActivityKind.Choose, Part.Verb("Expand"), Part.Value(string.Join(" › ", path))));
                 var parent = step["in"] is null ? null : TargetOf("in");
                 IControl? item = null;
                 for (var index = 0; index < path.Count; index++)
@@ -384,11 +391,12 @@ public sealed class Runner
 
             case "setValue":
             {
-                var control = Find(TargetOf("setValue"));
+                var target = TargetOf("setValue");
+                var control = Find(target);
                 var value = Required("to");
-                var text = say ?? $"Set {control.Name} to {value}";
-                ShowStep(text, ActivityKind.Type);
-                _driver.Point(control, text);
+                var line = Line(ActivityKind.Type, Part.Verb("Set"), Part.Control(target, control), Part.Word("to"), Part.Value(value));
+                ShowStep(line);
+                _driver.Point(control, line.Text);
                 _driver.SetValue(control, value);
                 Control.Wait(Control.Pace / 2);
                 Keep(step, scope, control);
@@ -397,12 +405,13 @@ public sealed class Runner
 
             case "type":
             {
-                var control = Find(TargetOf("type"));
+                var target = TargetOf("type");
+                var control = Find(target);
                 var value = Text("text") ?? "";
                 var secret = step["secret"]?.GetValue<bool>() ?? false;
-                var text = say ?? (secret ? "Type the secret" : $"Type {value}");
-                ShowStep(text, ActivityKind.Type);
-                _driver.Point(control, text);
+                var line = Line(ActivityKind.Type, Part.Verb("Type"), Part.Value(secret ? "••••••" : value), Part.Word("in"), Part.Control(target, control));
+                ShowStep(line);
+                _driver.Point(control, line.Text);
                 _driver.Type(control, value, secret);
                 Control.Wait(Control.Pace / 2);
                 Keep(step, scope, control);
@@ -411,11 +420,12 @@ public sealed class Runner
 
             case "choose":
             {
-                var control = Find(TargetOf("choose"));
+                var target = TargetOf("choose");
+                var control = Find(target);
                 var option = Text("option") ?? throw new ScriptException("choose needs the option to pick.");
-                var text = say ?? $"Pick {option}";
-                ShowStep(text, ActivityKind.Choose);
-                _driver.Point(control, text);
+                var line = Line(ActivityKind.Choose, Part.Verb("Pick"), Part.Value(option), Part.Word("in"), Part.Control(target, control));
+                ShowStep(line);
+                _driver.Point(control, line.Text);
                 _driver.Choose(control, option);
                 Control.Wait(Control.Pace / 2);
                 Keep(step, scope, control);
@@ -424,11 +434,12 @@ public sealed class Runner
 
             case "tick":
             {
-                var control = Find(TargetOf("tick"));
+                var target = TargetOf("tick");
+                var control = Find(target);
                 var isChecked = step["checked"]?.GetValue<bool>() ?? true;
-                var text = say ?? $"{(isChecked ? "Tick" : "Clear")} {control.Name}";
-                ShowStep(text, ActivityKind.Choose);
-                _driver.Point(control, text);
+                var line = Line(ActivityKind.Choose, Part.Verb(isChecked ? "Tick" : "Clear"), Part.Control(target, control));
+                ShowStep(line);
+                _driver.Point(control, line.Text);
                 _driver.SetChecked(control, isChecked);
                 Control.Wait(Control.Pace / 2);
                 Keep(step, scope, control);
@@ -437,10 +448,11 @@ public sealed class Runner
 
             case "hover":
             {
-                var control = Find(TargetOf("hover"));
-                var text = say ?? $"Point at {control.Name}";
-                ShowStep(text, ActivityKind.Point);
-                _driver.Point(control, text);
+                var target = TargetOf("hover");
+                var control = Find(target);
+                var line = Line(ActivityKind.Point, Part.Verb("Point at"), Part.Control(target, control));
+                ShowStep(line);
+                _driver.Point(control, line.Text);
                 Control.Wait(300);
                 Keep(step, scope, control);
                 break;
@@ -448,58 +460,68 @@ public sealed class Runner
 
             case "find":
             {
-                var control = Find(TargetOf("find"));
+                var target = TargetOf("find");
+                var control = Find(target);
                 Keep(step, scope, control);
-                SayAfter();
+                // What it found is shown when the case keeps it.
+                Waited(Line(ActivityKind.Wait, Part.Verb("Find"), Part.Control(target, control)), step["as"] is null ? null : TextOf(control));
                 break;
             }
 
             case "waitGone":
             {
                 var target = TargetOf("waitGone");
-                _view.ShowWait($"Wait for {target.What} to go");
+                var line = Line(ActivityKind.Wait, Part.Verb("Wait"), Part.Control(target), Part.Word("gone"));
+                _view.ShowWait(line);
                 _driver.WaitGone(target, Control.Scale(Within(GoneTimeout)));
-                SayAfter();
+                Waited(line);
                 break;
             }
 
             case "waitText":
-                WaitText(step, scope, TargetOf("waitText"), Within(FindTimeout));
-                SayAfter();
+            {
+                var target = TargetOf("waitText");
+                var (line, found) = WaitText(step, scope, target, Within(FindTimeout));
+                Waited(line, found);
                 break;
+            }
 
             case "waitEnabled":
             {
-                var control = WaitEnabled(TargetOf("waitEnabled"), Within(FindTimeout));
+                var target = TargetOf("waitEnabled");
+                var control = WaitEnabled(target, Within(FindTimeout));
                 Keep(step, scope, control);
-                SayAfter();
+                Waited(Line(ActivityKind.Wait, Part.Verb("Wait"), Part.Control(target, control), Part.Word("usable")));
                 break;
             }
 
             case "useWindow":
             {
                 var title = Required("useWindow");
-                _view.ShowWait($"Wait for the {title} window");
+                var line = Line(ActivityKind.Wait, Part.Verb("Switch to"), Part.Window(title));
+                _view.ShowWait(line);
                 _driver.UseWindow(title, Control.Scale(Within(TimeSpan.FromSeconds(60))));
-                SayAfter();
+                Waited(line);
                 break;
             }
 
             case "replaceText":
             {
-                var control = Find(TargetOf("replaceText"));
+                var target = TargetOf("replaceText");
+                var control = Find(target);
                 var pattern = Text("regex") ?? throw new ScriptException("replaceText needs a regex.");
-                var text = say ?? $"Change {pattern}";
-                ShowStep(text, ActivityKind.Type);
-                _driver.Point(control, text);
-                if (!_driver.ReplaceText(control, pattern, Text("replacement") ?? ""))
-                    FailStep($"The text has nothing matching {pattern}, so I couldn't {Lower(text)}");
+                var replacement = Text("replacement") ?? "";
+                var line = Line(ActivityKind.Type, Part.Verb("Replace"), Part.Value(pattern), Part.Word("with"), Part.Value(replacement), Part.Word("in"), Part.Control(target, control));
+                ShowStep(line);
+                _driver.Point(control, line.Text);
+                if (!_driver.ReplaceText(control, pattern, replacement))
+                    FailStep(new StepFailure($"The text has nothing matching {pattern}, so I couldn't {Lower(line.Text)}", $"matches {pattern}", "no match"));
                 Control.Wait(Control.Pace);
                 break;
             }
 
             case "key":
-                ShowStep(say ?? $"Press {Text("key")}", ActivityKind.Key);
+                ShowStep(Line(ActivityKind.Key, Part.Verb("Press"), Part.Key(Text("key")!)));
                 _driver.Key(Text("key")!);
                 Control.Wait(Control.Pace / 2);
                 break;
@@ -508,11 +530,11 @@ public sealed class Runner
             {
                 var title = Text("answerDialog")!;
                 var button = Enum.Parse<DialogButton>(Text("button") ?? "OK", ignoreCase: true);
-                _view.ShowWait($"Wait for the \"{title}\" message");
+                _view.ShowWait(Activity.Of(ActivityKind.Wait, Part.Verb("Wait for"), Part.Window(title)));
                 var message = _driver.WaitDialog(title, Control.Scale(Within(DialogTimeout)));
-                ShowStep($"{say ?? $"Click {button}"}  ({title}: \"{message}\")", ActivityKind.Dialog);
+                ShowStep(Line(ActivityKind.Dialog, Part.Verb("Answer"), Part.Window(title), Part.Word("with"), Part.Key(button.ToString())) with { Detail = message });
                 if (Text("expect") is { } expect && !message.Contains(expect, StringComparison.Ordinal))
-                    FailStep($"The \"{title}\" message was \"{message}\", expected \"{expect}\"");
+                    FailStep(new StepFailure($"The \"{title}\" message was \"{message}\", expected \"{expect}\"", $"contains \"{expect}\"", message));
                 Mark();
                 _driver.PressDialogButton(title, button);
                 Control.Wait(Control.Pace / 2);
@@ -525,7 +547,7 @@ public sealed class Runner
             case "pickFolder":
             {
                 var path = Text("path") ?? throw new ScriptException($"{kind} needs the path to pick.");
-                ShowStep(say ?? $"Pick {Path.GetFileName(path)}", ActivityKind.File);
+                ShowStep(Line(ActivityKind.File, Part.Verb("Pick"), Part.File(path), Part.Word("in"), Part.Window(Text(kind)!)));
                 Mark();
                 _driver.PickFile(Text(kind)!, path, kind == "pickFolder");
                 Control.Wait(Control.Pace / 2);
@@ -555,24 +577,18 @@ public sealed class Runner
             }
 
             case "whileShows":
-                WhileShows(step, scope, TargetOf("whileShows"), Within(TimeSpan.FromMinutes(5)));
-                SayAfter();
+            {
+                var (line, found) = WhileShows(step, scope, TargetOf("whileShows"), Within(TimeSpan.FromMinutes(5)));
+                Waited(line, found);
                 break;
+            }
 
             case "if":
             {
                 var check = Checks.Build(step["if"]!.AsObject(), scope, Context(scope));
-                string? detail;
-                try
-                {
-                    detail = check.Test();
-                }
-                catch (Exception ex) when (ex is not StopRunException)
-                {
-                    detail = "Error: " + ex.Message;
-                }
-                _results.Log("IF", $"{check.Label}: {(detail is null ? "yes" : "no, " + detail)}");
-                Steps((detail is null ? step["steps"] : step["else"]) as JsonArray ?? [], scope, detail is null ? "if" : "else");
+                var seen = check.Try();
+                _results.Log("IF", $"{check.Label}: {(seen.Passed ? "yes" : "no")}, found {seen.Actual}");
+                Steps((seen.Passed ? step["steps"] : step["else"]) as JsonArray ?? [], scope, seen.Passed ? "if" : "else");
                 break;
             }
 
@@ -587,7 +603,7 @@ public sealed class Runner
                 var arguments = (step["args"] as JsonArray ?? []).Select(arg => scope.Expand(arg!.ToString())).ToList();
                 var environment = (step["env"] as JsonObject ?? []).ToDictionary(pair => pair.Key, pair => scope.Expand(pair.Value?.ToString() ?? ""));
                 var line = CommandReportingMachine.CommandLine(program, arguments, environment);
-                ShowStep(say ?? $"Run {Path.GetFileName(program)}", ActivityKind.Command, line);
+                ShowStep(Line(ActivityKind.Command, Part.Verb("Run"), Part.File(program)) with { Command = line });
                 // What it prints goes in the log as it prints it, as the case may need to show it.
                 var output = _machine.Run(program, arguments, environment);
                 KeepOutput(step, scope, output);
@@ -599,10 +615,10 @@ public sealed class Runner
                 // The script isn't expanded: PowerShell has ${...} of its own. It gets the step's args as $args.
                 var script = step["powershell"] is JsonArray lines ? string.Join("\r\n", lines.Select(line => line!.ToString())) : step["powershell"]!.ToString();
                 var arguments = (step["args"] as JsonArray ?? []).Select(arg => scope.Expand(arg!.ToString())).ToList();
-                ShowStep(say ?? "Run a PowerShell script", ActivityKind.Command, CommandReportingMachine.CommandLine("powershell", arguments, null) + "\n" + script);
+                ShowStep(Line(ActivityKind.Command, Part.Verb("Run"), Part.Word("PowerShell")) with { Command = CommandReportingMachine.CommandLine("powershell", arguments, null) + "\n" + script });
                 var output = _machine.PowerShell(script, arguments);
                 if (output.ExitCode != 0)
-                    FailStep($"A PowerShell step failed with exit code {output.ExitCode}: {output.Output}");
+                    FailStep(new StepFailure($"A PowerShell step failed with exit code {output.ExitCode}: {output.Output}", "exit 0", $"exit {output.ExitCode}"));
                 KeepOutput(step, scope, output);
                 break;
             }
@@ -615,10 +631,10 @@ public sealed class Runner
                     throw new ScriptException($"There is no script {file}.");
                 var arguments = (step["args"] as JsonArray ?? []).Select(arg => scope.Expand(arg!.ToString())).ToList();
                 var (program, line) = ScriptFile.Command(file, arguments);
-                ShowStep(say ?? $"Run {Path.GetFileName(file)}", ActivityKind.Command, CommandReportingMachine.CommandLine(program, line, null));
+                ShowStep(Line(ActivityKind.Command, Part.Verb("Run"), Part.File(file)) with { Command = CommandReportingMachine.CommandLine(program, line, null) });
                 var output = ScriptFile.Run(_machine, file, arguments);
                 if (output.ExitCode != 0)
-                    FailStep(ScriptFile.Failed(file, output));
+                    FailStep(new StepFailure(ScriptFile.Failed(file, output), "exit 0", $"exit {output.ExitCode}"));
                 KeepOutput(step, scope, output);
                 break;
             }
@@ -626,9 +642,9 @@ public sealed class Runner
             case "wait":
             {
                 var seconds = double.Parse(Text("wait")!, CultureInfo.InvariantCulture);
-                if (say is not null)
-                    ShowStep(say);
-                _view.ShowWait($"Wait {seconds.ToString(CultureInfo.InvariantCulture)} seconds");
+                var line = Line(ActivityKind.Wait, Part.Verb("Wait"), Part.Value($"{seconds.ToString(CultureInfo.InvariantCulture)} s"));
+                ShowStep(line);
+                _view.ShowWait(line);
                 Control.Wait((int)(seconds * 1000));
                 break;
             }
@@ -636,7 +652,7 @@ public sealed class Runner
             case "copy":
             {
                 var (from, to) = (SuitePath(Required("copy")), SuitePath(Required("to")));
-                ShowStep(say ?? $"Copy {Path.GetFileName(from.TrimEnd('\\', '/'))} to {to}", ActivityKind.File);
+                ShowStep(Line(ActivityKind.File, Part.Verb("Copy"), Part.File(from), Part.Word("to"), Part.File(to)));
                 Files(() => Copy(from, to));
                 break;
             }
@@ -644,7 +660,7 @@ public sealed class Runner
             case "delete":
             {
                 var path = SuitePath(Required("delete"));
-                ShowStep(say ?? $"Delete {Path.GetFileName(path.TrimEnd('\\', '/'))}", ActivityKind.File);
+                ShowStep(Line(ActivityKind.File, Part.Verb("Delete"), Part.File(path)));
                 Files(() =>
                 {
                     if (Directory.Exists(path))
@@ -660,7 +676,7 @@ public sealed class Runner
                 var path = SuitePath(Required("writeFile"));
                 var text = step["text"] is JsonArray lines ? string.Join("\r\n", lines.Select(line => scope.Expand(line!.ToString()))) + "\r\n" : Text("text") ?? "";
                 var append = step["append"]?.GetValue<bool>() ?? false;
-                ShowStep(say ?? $"{(append ? "Add to" : "Write")} {Path.GetFileName(path)}", ActivityKind.File);
+                ShowStep(Line(ActivityKind.File, Part.Verb(append ? "Add to" : "Write"), Part.File(path)));
                 Files(() =>
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -675,7 +691,7 @@ public sealed class Runner
             case "unzip":
             {
                 var (zip, to) = (SuitePath(Required("unzip")), SuitePath(Required("to")));
-                ShowStep(say ?? $"Unzip {Path.GetFileName(zip)} into {to}", ActivityKind.File);
+                ShowStep(Line(ActivityKind.File, Part.Verb("Unzip"), Part.File(zip), Part.Word("to"), Part.File(to)));
                 Files(() =>
                 {
                     if (Directory.Exists(to))
@@ -690,14 +706,14 @@ public sealed class Runner
             {
                 var name = Required(kind);
                 var start = kind == "startService";
-                ShowStep(say ?? $"{(start ? "Start" : "Stop")} the service {name}", ActivityKind.Command);
+                ShowStep(Line(ActivityKind.Command, Part.Verb(start ? "Start" : "Stop"), Part.Service(name)));
                 try
                 {
                     _machine.SetServiceRunning(name, start);
                 }
                 catch (Exception ex) when (ex is not StopRunException)
                 {
-                    FailStep($"The service {name} didn't {(start ? "start" : "stop")}: {ex.Message}");
+                    FailStep(new StepFailure($"The service {name} didn't {(start ? "start" : "stop")}: {ex.Message}", start ? "Running" : "Stopped", ex.Message));
                 }
                 break;
             }
@@ -705,7 +721,7 @@ public sealed class Runner
             case "setJsonValue":
             {
                 var (file, path, value) = (SuitePath(Required("setJsonValue")), Required("path"), Required("to"));
-                ShowStep(say ?? $"Set {path} to {value} in {Path.GetFileName(file)}", ActivityKind.File);
+                ShowStep(Line(ActivityKind.File, Part.Verb("Set"), Part.File(file), Part.Word(path), Part.Word("="), Part.Value(value)));
                 Files(() => SetJsonValue(file, path, value));
                 break;
             }
@@ -713,7 +729,7 @@ public sealed class Runner
             case "setAppSetting":
             {
                 var (file, key, value) = (SuitePath(Required("setAppSetting")), Required("key"), Required("to"));
-                ShowStep(say ?? $"Set {key} to {value} in {Path.GetFileName(file)}", ActivityKind.File);
+                ShowStep(Line(ActivityKind.File, Part.Verb("Set"), Part.File(file), Part.Word(key), Part.Word("="), Part.Value(value)));
                 Files(() => SetAppSetting(file, key, value));
                 break;
             }
@@ -745,10 +761,12 @@ public sealed class Runner
             scope.Set(keep.GetValue<string>(), inner.Resolve(returns));
     }
 
-    private void WaitText(JsonObject step, VariableScope scope, Target target, TimeSpan within)
+    // Waits for a control's text, and gives the wait's line and the text it saw.
+    private (Activity Line, string Found) WaitText(JsonObject step, VariableScope scope, Target target, TimeSpan within)
     {
         var wanted = WantedText(step, scope, _driver.TryFind(target) is { } before ? TextOf(before) : null);
-        _view.ShowWait(WaitingFor(target, wanted));
+        var line = WaitingFor(target, wanted);
+        _view.ShowWait(line);
         var end = Environment.TickCount64 + (long)Control.Scale(within).TotalMilliseconds;
         while (true)
         {
@@ -757,9 +775,8 @@ public sealed class Runner
             var found = control is null ? null : TextOf(control);
             if (found is not null && wanted.Test(found))
             {
-                _results.Log("TEXT", found);
                 Keep(step, scope, control!);
-                return;
+                return (line with { Parts = [.. line.Parts.Select(part => part.Kind == PartKind.Control ? Part.Control(target, control) : part)] }, found);
             }
             if (_driver.OtherWindow() is { } other)
                 throw new StuckException($"see \"{wanted.Expected}\" in {target.What}", $"The app is showing another window instead: {other}");
@@ -773,12 +790,14 @@ public sealed class Runner
     /// Runs steps each time a control shows, such as a window that asks about each step of a removal, until another
     /// control's text says it is done. Another window showing up instead, or nothing happening for within, is stuck.
     /// </summary>
-    private void WhileShows(JsonObject step, VariableScope scope, Target each, TimeSpan within)
+    // Goes round, and gives the wait's line and the text that said it was done.
+    private (Activity Line, string Found) WhileShows(JsonObject step, VariableScope scope, Target each, TimeSpan within)
     {
         var until = Targets.Resolve(step["untilText"] ?? throw new ScriptException("whileShows needs untilText: the control that says when it is done."),
             scope, _suite.Elements);
         var wanted = WantedText(step, scope, first: null);
-        _view.ShowWait(WaitingFor(until, wanted));
+        var line = WaitingFor(until, wanted);
+        _view.ShowWait(line);
         var end = Environment.TickCount64 + (long)Control.Scale(within).TotalMilliseconds;
         for (var rounds = 0; ;)
         {
@@ -786,10 +805,9 @@ public sealed class Runner
             var found = _driver.TryFind(until) is { } control ? TextOf(control) : null;
             if (found is not null && wanted.Test(found))
             {
-                _results.Log("TEXT", found);
                 if (step["as"] is { } name)
                     scope.Set(name.GetValue<string>(), found);
-                return;
+                return (line with { Parts = [Part.Verb("Repeat while"), Part.Control(each), Part.Word("shows, until"), .. line.Parts.Skip(1)] }, rounds == 0 ? found : $"{found}  ·  {rounds} ×");
             }
             if (_driver.TryFind(each) is not null)
             {
@@ -797,7 +815,7 @@ public sealed class Runner
                 if (++rounds > MaxRounds)
                     throw new StuckException($"see \"{wanted.Expected}\" in {until.What}", $"{each.What} was still showing after {MaxRounds} rounds.");
                 Steps(step["steps"] as JsonArray ?? [], scope, "whileShows");
-                _view.ShowWait(WaitingFor(until, wanted));
+                _view.ShowWait(line);
                 end = Environment.TickCount64 + (long)Control.Scale(within).TotalMilliseconds;
                 continue;
             }
@@ -822,7 +840,8 @@ public sealed class Runner
         var changes = step["changes"]?.GetValue<bool>() ?? false;
         var isNew = step["new"]?.GetValue<bool>() ?? false;
         var marked = _marked;
-        return new Wanted(startsWith ?? contains ?? equals ?? pattern?.ToString() ?? "new text", found =>
+        var how = startsWith is not null ? "starts with" : contains is not null ? "contains" : equals is not null ? "=" : pattern is not null ? "matches" : "changes";
+        return new Wanted(how, startsWith ?? contains ?? equals ?? pattern?.ToString() ?? "", found =>
             (startsWith is null || found.StartsWith(startsWith, StringComparison.Ordinal))
             && (contains is null || found.Contains(contains, StringComparison.Ordinal))
             && (equals is null || found == equals)
@@ -831,15 +850,17 @@ public sealed class Runner
             && (!isNew || found != marked));
     }
 
-    private sealed record Wanted(string Expected, Func<string, bool> Test);
+    // How a wait compares a control's text, such as starts with, and what with; changes has nothing to compare with.
+    private sealed record Wanted(string How, string Expected, Func<string, bool> Test);
 
-    private static string WaitingFor(Target target, Wanted wanted) =>
-        wanted.Expected == "new text" ? $"Wait for {target.What} to change" : $"Wait for {target.What} to say \"{wanted.Expected}\"";
+    private static Activity WaitingFor(Target target, Wanted wanted) => wanted.Expected.Length == 0
+        ? Activity.Of(ActivityKind.Wait, Part.Verb("Wait"), Part.Control(target), Part.Word(wanted.How))
+        : Activity.Of(ActivityKind.Wait, Part.Verb("Wait"), Part.Control(target), Part.Word(wanted.How), Part.Value(wanted.Expected));
 
     // Waits until a control is there and can be used, such as a button greyed out while the app works.
     private IControl WaitEnabled(Target target, TimeSpan within)
     {
-        _view.ShowWait($"Wait for {target.What} to be usable");
+        _view.ShowWait(Activity.Of(ActivityKind.Wait, Part.Verb("Wait"), Part.Control(target), Part.Word("usable")));
         var end = Environment.TickCount64 + (long)Control.Scale(within).TotalMilliseconds;
         while (true)
         {
@@ -873,7 +894,7 @@ public sealed class Runner
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or JsonException or System.Xml.XmlException)
         {
-            FailStep(ex.Message);
+            FailStep(new StepFailure(ex.Message));
         }
     }
 
@@ -948,10 +969,10 @@ public sealed class Runner
         {
             if (clicks == 50)
                 throw new StuckException($"get past {target.What}", "It was still there after 50 clicks.");
-            var text = say ?? $"Click {control.Name}";
-            ShowStep(text, ActivityKind.Click);
+            var line = new Activity(ActivityKind.Click, [Part.Verb("Click"), Part.Control(target, control)]) { Say = say };
+            ShowStep(line);
             Mark();
-            _driver.Point(control, text);
+            _driver.Point(control, line.Text);
             _driver.Click(control, how);
             Control.Wait(Math.Max(Control.Pace / 2, 300));
         }
@@ -964,7 +985,7 @@ public sealed class Runner
     private CheckContext Context(VariableScope scope) => new(_quiet, () => Leftovers(_suite, _quiet), node =>
     {
         var target = Targets.Resolve(node, scope, _suite.Elements);
-        return new ControlProbe(target.What, () => _driver.TryFind(target), _driver.Rows);
+        return new ControlProbe(target, () => _driver.TryFind(target), _driver.Rows);
     }, _since);
 
     /// <summary>
@@ -975,35 +996,27 @@ public sealed class Runner
     {
         var scope = _played ?? _globals.Child();
         var check = Checks.Build(node, scope, Context(scope));
-        string? detail;
-        try
-        {
-            detail = check.Test();
-        }
-        catch (Exception ex) when (ex is not StopRunException)
-        {
-            detail = "Error: " + ex.Message;
-        }
-        return new CheckResult(check.Label, detail is null, detail);
+        return check.Result(check.Try());
     }
 
     private void Checkpoint(JsonObject step, VariableScope scope)
     {
         var title = scope.Expand(step["checkpoint"]!.ToString());
-        _results.Log("STEP", "Check: " + title);
-        _view.ShowStep("Check: " + title, ActivityKind.Check);
+        var line = Activity.Of(ActivityKind.Check, Part.Verb("Check"), Part.Word(title));
+        _results.Log("STEP", line.Text);
+        _view.ShowStep(line);
         Control.Gate();
 
         var results = new List<CheckResult>();
         foreach (var node in step["checks"] as JsonArray ?? [])
         {
             var check = Checks.Build(node!.AsObject(), scope, Context(scope));
-            var detail = Evaluate(check);
-            results.Add(new CheckResult(check.Label, detail is null, detail));
-            if (detail is null)
-                _results.Log("PASS", check.Label);
+            var result = check.Result(Evaluate(check));
+            results.Add(result);
+            if (result.Passed)
+                _results.Log("PASS", $"{check.Label} ({result.Actual})");
             else
-                Fail($"{check.Label}: {detail}");
+                Fail($"{check.Label}: {result.Detail}");
         }
         var look = (step["look"] as JsonArray ?? []).Select(item => scope.Expand(item!.ToString())).ToList();
         var tools = (step["tools"] as JsonArray ?? []).Select(item => Tool(item!.AsObject(), scope)).ToList();
@@ -1022,22 +1035,14 @@ public sealed class Runner
     }
 
     // Waits for a check to pass, for things that take a moment, such as a service's next heartbeat.
-    private string? Evaluate(Check check)
+    private Seen Evaluate(Check check)
     {
         var end = Environment.TickCount64 + (long)Control.Scale(check.Within).TotalMilliseconds;
         while (true)
         {
-            string? detail;
-            try
-            {
-                detail = check.Test();
-            }
-            catch (Exception ex) when (ex is not StopRunException)
-            {
-                detail = "Error: " + ex.Message;
-            }
-            if (detail is null || Environment.TickCount64 >= end)
-                return detail;
+            var seen = check.Try();
+            if (seen.Passed || Environment.TickCount64 >= end)
+                return seen;
             Control.Wait(500);
         }
     }
@@ -1070,10 +1075,10 @@ public sealed class Runner
     // ===== Showing the person what is happening =====
 
     /// <summary>Shows what is about to happen. Step by step, it then waits for Enter; paused, until the run carries on.</summary>
-    private void ShowStep(string text, ActivityKind kind = ActivityKind.Say, string? command = null)
+    private void ShowStep(Activity step)
     {
-        _results.Log("STEP", text);
-        _view.ShowStep(text, kind, command);
+        _results.Log("STEP", step.Text);
+        _view.ShowStep(step);
         if (Control.StepByStep && !Control.Unattended)
             Control.Hold(HoldReason.Step);
         Control.Gate();
@@ -1082,7 +1087,7 @@ public sealed class Runner
     /// <summary>Explains what is on screen, and gives time to read it.</summary>
     private void Say(string text)
     {
-        ShowStep(text);
+        ShowStep(Activity.Words(text));
         if (!Control.Unattended && !Control.StepByStep)
             Control.Wait(Math.Max(Control.Pace * 2, text.Length * 40));
     }
@@ -1147,10 +1152,10 @@ public sealed class Runner
     }
 
     /// <summary>Records a failure of the step just shown, which the panel marks on it. The case carries on.</summary>
-    private void FailStep(string text)
+    private void FailStep(StepFailure failure)
     {
-        Fail(text);
-        _view.StepFailed(text);
+        Fail(failure.Message);
+        _view.StepFailed(failure);
     }
 
     /// <summary>

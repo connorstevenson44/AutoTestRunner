@@ -328,7 +328,7 @@ internal sealed class BuildWorker
     {
         CheckResult? result = null;
         var problem = Played(() => result = _runner.TryCheck(InlineCheck(check)));
-        answer?.Invoke(result ?? new CheckResult("The check", false, problem));
+        answer?.Invoke(result ?? CheckResult.Unmade(problem ?? ""));
     }
 
     private void Locate(DraftStep? step)

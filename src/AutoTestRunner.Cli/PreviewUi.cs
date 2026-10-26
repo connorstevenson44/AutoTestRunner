@@ -77,23 +77,31 @@ internal static class PreviewUi
 
         var cases = suite.Cases;
         view.CaseStarted(1, cases.Count, cases[0]);
-        view.ShowStep("Start NetDeploy", ActivityKind.App);
+        view.ShowStep(Activity.Of(ActivityKind.App, Part.Verb("Start"), new Part(PartKind.Window, "NetDeploy", @"C:\Tests\netdeploy\NetDeploy.exe")));
         Pause(900);
-        view.ShowStep("Click Open package", ActivityKind.Click);
+        view.ShowStep(Activity.Of(ActivityKind.Click, Part.Verb("Click"), Badge("Open package", "Button \"Open package\"\nAutomationId  OpenButton\nelements.json  openPackage\nFound by  id OpenButton")));
         Pause(900);
-        view.ShowStep("Pick Contoso.Orders-1.0.0.zip", ActivityKind.File);
-        view.ShowWait("Wait for the status text to say \"Opened Contoso.Orders 1.0.0\"");
+        view.ShowStep(Activity.Of(ActivityKind.File, Part.Verb("Pick"), Part.File(@"C:\Tests\packages\Contoso.Orders-1.0.0.zip"), Part.Word("in"), Part.Window("Open package")));
+        var opened = Activity.Of(ActivityKind.Wait, Part.Verb("Wait"), Status, Part.Word("starts with"), Part.Value("Opened Contoso.Orders 1.0.0"));
+        view.ShowWait(opened);
         Pause(1600);
         Shot("02-waiting");
-        view.ShowStep("Check: The package is open", ActivityKind.Check);
-        view.ShowCheckpoint("The package is open", [new("The window says Contoso.Orders 1.0.0", true, null)], ["The folder list shows C:\\Apps"], []);
+        view.Waited(opened with { Detail = @"Opened Contoso.Orders 1.0.0 from C:\Tests\packages" }, TimeSpan.FromSeconds(1.6));
+        view.ShowStep(Activity.Of(ActivityKind.Click, Part.Verb("Open"), Badge("Steps", "TabItem \"Steps\"\nFound by  TabItem \"Steps\"")));
+        view.ShowStep(Activity.Of(ActivityKind.Check, Part.Verb("Check"), Part.Word("The package is open")));
+        view.ShowCheckpoint("The package is open",
+        [
+            Checked(SubjectKind.Control, "header", null, "=", "Contoso.Orders 1.0.0", "Contoso.Orders 1.0.0", true),
+            Checked(SubjectKind.Folder, "Contoso.Orders", null, "is", "missing", "missing", true),
+            Checked(SubjectKind.Control, "Steps list", "rows", "=", "11", "11", true),
+        ], ["Lock down production shows what it does in either environment, indented under it."], []);
         view.ShowCarryingOn(TimeSpan.FromSeconds(4));
         Pause(2000);
         view.CaseFinished(Ended(cases[0], CaseStatus.Passed, 14.2));
 
         view.CaseStarted(2, cases.Count, cases[1]);
         var line = "NETDEPLOY_PaymentsApiKey=••• NetDeploy.exe deploy C:\\AutoTestRunner\\packages\\Contoso.Orders-1.1.0.zip --install qa --yes";
-        view.ShowStep("Deploy 1.1.0 to qa again from the command line, with the payments API key in an environment variable", ActivityKind.Command, line);
+        view.ShowStep(Activity.Of(ActivityKind.Command, Part.Verb("Run"), Part.File("NetDeploy.exe")) with { Command = line });
         Pause(700);
         view.CommandStarted(line, null);
         string[] printed =
@@ -110,20 +118,23 @@ internal static class PreviewUi
         Shot("03-command-running");
         view.CommandOutput("Deploy finished. Log: C:\\ProgramData\\NetDeploy\\logs\\deploy-qa.log", false);
         view.CommandFinished(0, TimeSpan.FromSeconds(6.4));
-        view.ShowStep("Run a PowerShell script", ActivityKind.Command, "powershell C:\\Apps\\Contoso.Orders\\qa\n$folder = $args[0]\nGet-Content \"$folder\\heartbeat.txt\" -Tail 1");
-        view.CommandStarted("powershell C:\\Apps\\Contoso.Orders\\qa", "$folder = $args[0]\nGet-Content \"$folder\\heartbeat.txt\" -Tail 1");
+        var heartbeat = "$folder = $args[0]\nGet-Content \"$folder\\heartbeat.txt\" -Tail 1";
+        view.ShowStep(Activity.Of(ActivityKind.Command, Part.Verb("Run"), Part.Word("PowerShell")) with { Command = "powershell C:\\Apps\\Contoso.Orders\\qa\n" + heartbeat });
+        view.CommandStarted("powershell C:\\Apps\\Contoso.Orders\\qa", heartbeat);
         Pause(600);
         view.CommandOutput("Get-Content : Cannot find path 'C:\\Apps\\Contoso.Orders\\qa\\heartbeat.txt' because it does not exist.", true);
         view.CommandFinished(1, TimeSpan.FromSeconds(0.8));
-        view.StepFailed("A PowerShell step failed with exit code 1: Get-Content : Cannot find path 'C:\\Apps\\Contoso.Orders\\qa\\heartbeat.txt' because it does not exist.");
-        view.ShowStep("Check: qa was deployed from the command line", ActivityKind.Check);
+        view.StepFailed(new StepFailure("A PowerShell step failed with exit code 1: Get-Content : Cannot find path 'C:\\Apps\\Contoso.Orders\\qa\\heartbeat.txt' because it does not exist.",
+            "exit 0", "exit 1"));
+        view.ShowStep(Activity.Of(ActivityKind.Check, Part.Verb("Check"), Part.Word("qa was deployed from the command line")));
         view.ShowCheckpoint("qa was deployed from the command line",
         [
-            new("The deploy ended with exit code 0", true, null),
-                new("and said Deploy finished.", true, null),
-                new("The API key never showed in what it printed", true, null),
-                new("Service Contoso.Orders-qa is Running", false, "it is Stopped"),
-            ],
+            Checked(SubjectKind.Value, "deploy.code", null, "=", "0", "0", true),
+            Checked(SubjectKind.Value, "deploy.output", null, "contains", "Deploy finished.", @"Deploy finished. Log: C:\ProgramData\NetDeploy\logs\deploy-qa.log", true),
+            Checked(SubjectKind.Value, "deploy.output", null, "lacks", "pk-test-123", "not in it", true),
+            Checked(SubjectKind.Service, "Contoso.Orders-qa", null, "is", "Running", "Stopped", false),
+            Checked(SubjectKind.Setting, "appsettings.json", "Payments:ApiKey", "=", "pk-test-123", "pk-test-123", true),
+        ],
         ["The newest deploy under HISTORY is by you, a minute ago."],
         [new("Open qa", () => { }, "openFolder"), new("Open the log", () => { }, "openFile"), new("Services", () => { }, "console")]);
         control.Hold(HoldReason.Checkpoint);
@@ -132,12 +143,16 @@ internal static class PreviewUi
         view.CaseFinished(Ended(cases[1], CaseStatus.Failed, 41.7));
 
         view.CaseStarted(3, cases.Count, cases[2]);
+        view.ShowStep(Activity.Of(ActivityKind.Point, Part.Verb("Point at"), Badge("installRow main", "Button \"main\"\nelements.json  installRow main\nFound by  Button tooltip \"C:\\Apps\\Contoso.Orders\\main\"")));
+        view.ShowStep(Activity.Of(ActivityKind.Click, Part.Verb("Click"), Badge("Remove", "Button \"Remove\"\nFound by  Button \"Remove\" beside Button \"main\"")));
+        view.ShowStep(Activity.Of(ActivityKind.Dialog, Part.Verb("Answer"), Part.Window("Remove main?"), Part.Word("with"), Part.Key("Yes")) with { Detail = "Remove main? Its service, scheduled task and folder are removed." });
+        view.ShowStep(Activity.Of(ActivityKind.Type, Part.Verb("Type"), Part.Value("main"), Part.Word("in"), Badge("confirmName", "Edit\nAutomationId  ConfirmNameBox\nelements.json  confirmName\nFound by  id ConfirmNameBox")));
         control.NextStep();
         control.Hold(HoldReason.Step);
-        view.ShowStep("Click Stop removing, while the removal waits at its second step", ActivityKind.Click);
+        view.ShowStep(Activity.Of(ActivityKind.Click, Part.Verb("Click"), Badge("Stop removing", "Button \"Stop removing\"\nFound by  Button \"Stop removing\" in Window \"Remove install\"")));
         Shot("05-step-by-step");
         control.PauseOrCarryOn();
-        view.ShowWait("Look for the Stop removing button");
+        view.ShowWait(Activity.Of(ActivityKind.Wait, Part.Verb("Look for"), Badge("Stop removing", "")));
         Pause(1500);
         var screenshot = Path.Combine(Path.GetTempPath(), "AutoTestRunner", "preview", "stuck.png");
         panel.Dispatcher.Invoke(() => Save(panel, screenshot));
@@ -151,7 +166,7 @@ internal static class PreviewUi
         view.CaseFinished(Ended(cases[2], CaseStatus.Skipped, 25.0));
 
         view.CaseStarted(4, cases.Count, cases[3]);
-        view.ShowStep("Click Remove", ActivityKind.Click);
+        view.ShowStep(Activity.Of(ActivityKind.Click, Part.Verb("Click"), Badge("Remove", "Button \"Remove\"")));
         control.PauseOrCarryOn();
         Shot("07-paused");
         control.PauseOrCarryOn();
@@ -161,6 +176,17 @@ internal static class PreviewUi
         Shot("08-finished");
         if (shots is not null)
             panel.Dispatcher.Invoke(panel.Close);
+    }
+
+    // NetDeploy's status bar, as a step that waits on it shows it.
+    private static readonly Part Status = Badge("statusText", "Text\nAutomationId  StatusText\nelements.json  statusText\nFound by  id StatusText");
+
+    private static Part Badge(string label, string tip) => new(PartKind.Control, label, tip.Length == 0 ? null : tip);
+
+    private static CheckResult Checked(SubjectKind kind, string name, string? detail, string how, string expected, string actual, bool passed)
+    {
+        var subject = new Subject(kind, name, detail);
+        return new CheckResult(Checks.Label(subject, how, expected), subject, how, expected, actual, passed);
     }
 
     private static void Build(Application app, Suite suite, string? shots)

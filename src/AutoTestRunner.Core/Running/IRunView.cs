@@ -14,14 +14,14 @@ public interface IRunView
     /// <summary>A case is over: passed, failed, skipped or stopped, and why.</summary>
     void CaseFinished(CaseResult result);
 
-    /// <summary>
-    /// What is happening now, or with step by step, what is up next. command is the command line a run or PowerShell
-    /// step is about to start.
-    /// </summary>
-    void ShowStep(string text, ActivityKind kind = ActivityKind.Say, string? command = null);
+    /// <summary>What is happening now, or with step by step, what is up next: an action, or narration.</summary>
+    void ShowStep(Activity step);
 
     /// <summary>What the run is waiting to see in the app, such as a status bar's text. It lasts until the next call.</summary>
-    void ShowWait(string what);
+    void ShowWait(Activity what);
+
+    /// <summary>A wait step is over: what it waited for, what it saw, and how long it took.</summary>
+    void Waited(Activity what, TimeSpan took);
 
     /// <summary>
     /// The run started a program or script: its command line, and a script's text. What it prints follows as
@@ -34,10 +34,10 @@ public interface IRunView
     void CommandFinished(int exitCode, TimeSpan took);
 
     /// <summary>
-    /// The step just shown failed, and the case carries on: a message box said something else, say. message says why.
-    /// A checkpoint's own checks show with it instead.
+    /// The step just shown failed, and the case carries on: a message box said something else, say. A checkpoint's own
+    /// checks show with it instead.
     /// </summary>
-    void StepFailed(string message);
+    void StepFailed(StepFailure failure);
 
     void ShowCheckpoint(string title, IReadOnlyList<CheckResult> checks, IReadOnlyList<string> look, IReadOnlyList<ToolButton> tools);
 

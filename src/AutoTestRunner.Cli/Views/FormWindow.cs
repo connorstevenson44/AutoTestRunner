@@ -56,7 +56,7 @@ internal sealed class FormWindow : Window
                 tryNow.IsEnabled = true;
                 var shown = Ui.IconText(answer.Passed ? Icons.Passed : Icons.Failed, answer.Passed ? "Passes now" : "Doesn't pass now", answer.Passed ? Ui.Pass : Ui.Fail);
                 shown.ToolTip = answer.Detail is { } why ? $"{answer.Label}: {why}" : answer.Label;
-                result.Content = answer.Passed ? shown : new StackPanel { Children = { shown, Ui.Words(answer.Detail ?? "", 11.5, Ui.Muted) } };
+                result.Content = new StackPanel { Children = { shown, Ui.Words(answer.Actual, 11.5, Ui.Muted) } };
             });
             tryNow.ToolTip = "Run the check against the app as it is now";
             tryNow.Margin = new Thickness(0);

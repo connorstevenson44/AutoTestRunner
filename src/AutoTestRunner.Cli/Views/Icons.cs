@@ -23,6 +23,8 @@ internal static class Icons
     public const string Admin = "", Suites = "", Name = "", Tag = "";
     public const string Values = "", Repeat = "", Branch = "", Macro = "", Repair = "", Blocked = "";
     public const string NewFolder = "", Ids = "", Controls = "", More = "";
+    public const string Setting = "", Service = "", Calendar = "", Log = "", Globe = "", Paste = "";
+    public const string Computer = "", Process = "", History = "";
 
     public static string Of(ActivityKind kind) => kind switch
     {
@@ -35,8 +37,27 @@ internal static class Icons
         ActivityKind.Dialog => Message,
         ActivityKind.File => Folder,
         ActivityKind.Command => Console,
+        ActivityKind.Wait => Wait,
         ActivityKind.Check => CheckList,
         _ => Info,
+    };
+
+    public static string Of(SubjectKind kind) => kind switch
+    {
+        SubjectKind.File => Document,
+        SubjectKind.Folder => Folder,
+        SubjectKind.Setting or SubjectKind.Registry => Setting,
+        SubjectKind.Log => Log,
+        SubjectKind.Service => Service,
+        SubjectKind.Task => Calendar,
+        SubjectKind.Process => Process,
+        SubjectKind.Program => Console,
+        SubjectKind.Control => Pointer,
+        SubjectKind.EventLog => History,
+        SubjectKind.Web => Globe,
+        SubjectKind.Clipboard => Paste,
+        SubjectKind.Machine => Computer,
+        _ => Values,
     };
 
     public static string Of(CaseStatus status) => status switch

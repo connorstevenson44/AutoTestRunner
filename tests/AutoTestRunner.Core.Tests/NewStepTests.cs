@@ -112,7 +112,7 @@ public sealed class NewStepTests : IDisposable
             """));
 
         Assert.Equal(CaseStatus.Passed, result.Status);
-        Assert.Contains("Stop the service Contoso.Orders-main", view.Shown);
+        Assert.Contains("Stop Contoso.Orders-main", view.Shown);
     }
 
     [Fact]
@@ -142,9 +142,11 @@ public sealed class NewStepTests : IDisposable
             """), app);
 
         Assert.Equal([true, false, true, true, true, true, true, false, true, false], view.Checks.Select(check => check.Passed));
-        Assert.Equal("The Add order button can be used: it is greyed out", result.Failures[0]);
-        Assert.Equal("The Quantity box starts with \"3\": it says: 2", result.Failures[1]);
-        Assert.EndsWith("it isn't there", result.Failures[2]);
+        Assert.Equal(("Add order", "enabled", "greyed out"), (view.Checks[1].Subject.Name, view.Checks[1].Expected, view.Checks[1].Actual));
+        Assert.Equal(("starts with", "3", "2"), (view.Checks[7].How, view.Checks[7].Expected, view.Checks[7].Actual));
+        Assert.Equal(("orders", "rows", "3"), (view.Checks[8].Subject.Name, view.Checks[8].Subject.Detail, view.Checks[8].Actual));
+        Assert.Equal("Add order is enabled: found greyed out", result.Failures[0]);
+        Assert.EndsWith("found missing", result.Failures[2]);
     }
 
     [Fact]
@@ -169,7 +171,7 @@ public sealed class NewStepTests : IDisposable
             """));
 
         Assert.Equal([true, true, true, true, true, true, false, true], view.Checks.Select(check => check.Passed));
-        Assert.Equal("it answered 404", view.Checks[6].Detail);
+        Assert.Equal(("200", "404"), (view.Checks[6].Expected, view.Checks[6].Actual));
     }
 
     [Fact]
@@ -188,8 +190,9 @@ public sealed class NewStepTests : IDisposable
             """), app);
 
         Assert.Equal([true, false, false], view.Checks.Select(check => check.Passed));
-        Assert.Equal("it is 12", view.Checks[1].Detail);
-        Assert.Equal("lots isn't a number", view.Checks[2].Detail);
+        Assert.Equal(("deploy.seconds", "≤", "60"), (view.Checks[0].Subject.Name, view.Checks[0].How, view.Checks[0].Expected));
+        Assert.Equal(("count", "12"), (view.Checks[1].Subject.Name, view.Checks[1].Actual));
+        Assert.Equal("lots (not a number)", view.Checks[2].Actual);
     }
 
     [Fact]
@@ -207,7 +210,8 @@ public sealed class NewStepTests : IDisposable
 
         Assert.Equal(CaseStatus.Passed, result.Status);
         Assert.Equal(["type Ada Lovelace", "type Hopper, Grace"], app.Done.Where(done => done.StartsWith("type", StringComparison.Ordinal)));
-        Assert.Contains("Hopper, Grace: 1 of Tea, \"green\"", view.Shown);
+        Assert.Contains("Type \"Hopper, Grace\" in Customer", view.Shown);
+        Assert.Contains("Hopper, Grace: 1 of Tea, \"green\"", view.Steps.Select(step => step.Say));
     }
 
     [Fact]

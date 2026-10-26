@@ -12,7 +12,7 @@ namespace AutoTestRunner.Cli.Views;
 internal static class Ui
 {
     public static readonly Brush Ink = Brush("#1A2633"), Muted = Brush("#5B6B7C"), Faint = Brush("#8A97A5"), Line = Brush("#E1E6EC");
-    public static readonly Brush Surface = Brush("#F5F7FA"), Accent = Brush("#0F6CBD"), AccentSoft = Brush("#E3EEF9");
+    public static readonly Brush Surface = Brush("#F5F7FA"), Accent = Brush("#0F6CBD"), AccentSoft = Brush("#E3EEF9"), AccentEdge = Brush("#C3DAF2");
     public static readonly Brush Pass = Brush("#107C10"), PassSoft = Brush("#E6F4E6"), Fail = Brush("#C42B1C"), FailSoft = Brush("#FBE9E7");
     public static readonly Brush Hold = Brush("#9A5B00"), HoldSoft = Brush("#FFF4E0"), Step = Brush("#6A3D9A"), StepSoft = Brush("#F1EAF8");
     public static readonly Brush Pending = Brush("#D5DCE4"), Skip = Brush("#A0AAB4");

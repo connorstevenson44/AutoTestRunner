@@ -3,6 +3,9 @@ namespace AutoTestRunner.Driving;
 /// <summary>A control that was found. What it says is read when asked, so it is up to date.</summary>
 public interface IControl
 {
+    /// <summary>The UI Automation control type, such as Button or Edit.</summary>
+    string Type { get; }
+
     string Name { get; }
     string? Value { get; }
     string? HelpText { get; }

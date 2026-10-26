@@ -160,7 +160,9 @@ public sealed class ControlFlowTests : IDisposable
         var (result, view) = Run(OneCase("""{ "find": { "id": "Counter" }, "as": "counter", "say": "${counter}: Delete the service" }"""), app);
 
         Assert.Equal(CaseStatus.Passed, result.Status);
-        Assert.Contains("Removing the install · step 1 of 3: Delete the service", view.Shown);
+        var found = Assert.Single(view.Waited);
+        Assert.Equal("Removing the install · step 1 of 3", found.Detail);
+        Assert.Equal("Removing the install · step 1 of 3: Delete the service", found.Say);
     }
 
     [Fact]
@@ -213,7 +215,7 @@ public sealed class ControlFlowTests : IDisposable
             """), app);
 
         Assert.Equal([true, false, true, false], view.Checks.Select(check => check.Passed));
-        Assert.Equal("It shows the heartbeat.2.log, 2 matches button: it isn't there", result.Failures[1]);
+        Assert.Equal("heartbeat.2.log, 2 matches is shown: found missing", result.Failures[1]);
     }
 
     [Fact]
