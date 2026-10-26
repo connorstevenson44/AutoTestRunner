@@ -96,18 +96,22 @@ internal sealed class ControlsWindow : Window
 
     private string Exe() => Runner.SuitePath(_suite, Globals().Expand(_suite.App.Exe));
 
-    // Uses the app when it is open already.
-    private void Attach() =>
-        _app.Do((driver, _) => driver.Attach(Exe(), _suite.App.Window), open => _appState.Text = open ? $"{_suite.App.Window} is open." : $"{_suite.App.Window} isn't open.", Say);
+    // Uses the app when it is open already. What the app's thread needs is read here, as a rename can change the suite.
+    private void Attach()
+    {
+        var (exe, window) = (Exe(), _suite.App.Window);
+        _app.Do((driver, _) => driver.Attach(exe, window), open => _appState.Text = open ? $"{window} is open." : $"{window} isn't open.", Say);
+    }
 
     private void OpenApp()
     {
-        _appState.Text = $"Starting {_suite.App.Window}…";
+        var (exe, app) = (Exe(), _suite.App);
+        _appState.Text = $"Starting {app.Window}…";
         _app.Do((driver, _) =>
         {
-            driver.Start(_suite.App, Exe());
+            driver.Start(app, exe);
             return true;
-        }, _ => _appState.Text = $"{_suite.App.Window} is open.", Say);
+        }, _ => _appState.Text = $"{app.Window} is open.", Say);
     }
 
     private void Say(string text) => _appState.Text = text;
@@ -201,7 +205,8 @@ internal sealed class ControlsWindow : Window
     {
         _gaps.Children.Clear();
         _gaps.Children.Add(Ui.Spinner(16, Ui.Accent));
-        _app.Do((driver, inspector) => driver.Attach(Exe(), _suite.App.Window) ? IdReport.Gaps(inspector.Survey()) : null, ShowGaps, why =>
+        var (exe, window) = (Exe(), _suite.App.Window);
+        _app.Do((driver, inspector) => driver.Attach(exe, window) ? IdReport.Gaps(inspector.Survey()) : null, ShowGaps, why =>
         {
             _gaps.Children.Clear();
             Say(why);

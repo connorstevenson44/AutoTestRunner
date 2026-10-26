@@ -101,8 +101,11 @@ function Save-Screen([string] $name) {
 # clicks the button whose tip starts so.
 function Step-Button($panel, [string] $step, [string] $button) {
     $row = Wait-For { Named $panel $step } "the step $step" 10
-    $list = $panel.FindFirst([System.Windows.Automation.TreeScope]::Descendants,
-        (New-Object System.Windows.Automation.PropertyCondition($ui::IsScrollPatternAvailableProperty, $true)))
+    # The list of steps, not a box that scrolls, such as a new case's name.
+    $list = $panel.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+        (New-Object System.Windows.Automation.PropertyCondition($ui::IsScrollPatternAvailableProperty, $true))) |
+        Where-Object { $_.Current.ControlType -ne [System.Windows.Automation.ControlType]::Edit } | Select-Object -First 1
+    if ($list -and -not $list.GetCurrentPattern([System.Windows.Automation.ScrollPattern]::Pattern).Current.VerticallyScrollable) { $list = $null }
     for ($turn = 0; $list -and $turn -lt 40; $turn++) {
         $box = $row.Current.BoundingRectangle; $view = $list.Current.BoundingRectangle
         $scroll = $list.GetCurrentPattern([System.Windows.Automation.ScrollPattern]::Pattern)
@@ -347,6 +350,11 @@ if ($Parts -contains 'script') {
         Assert-Open $scripter 'after the script step''s details were folded out'
         Invoke (Wait-For { Find $panel $ui::NameProperty 'Apply' } 'Apply in the details' 10)
         Assert-Open $scripter 'after the script step''s details were applied'
+
+        # Edit from the script step, the last one: nothing is taken out, and recording starts after it.
+        Step-Button $panel 'Read the orders file' 'Edit from here'
+        Saying $panel 'Recording. Use Order Desk*' 'recording to start after the script step' 60
+        Assert-Open $scripter 'after Edit from here on the script step'
 
         Invoke (Find $panel $ui::NameProperty 'Save')
         Saying $panel 'Saved in*' 'the case with the script step to be saved' 20
