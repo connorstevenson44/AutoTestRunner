@@ -15,12 +15,24 @@ internal static partial class ScriptEditor
 {
     private const string AppPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\notepad++.exe";
 
-    /// <summary>Opens a script in Notepad++, or Notepad when there is no Notepad++.</summary>
-    public static void Open(string path)
+    /// <summary>Opens a script in Notepad++, or Notepad when there is no Notepad++. False when neither would start.</summary>
+    public static bool Open(string path)
     {
-        var start = new ProcessStartInfo(NotepadPlusPlus() ?? "notepad.exe") { UseShellExecute = false };
-        start.ArgumentList.Add(path);
-        Process.Start(start)?.Dispose();
+        foreach (var editor in new[] { NotepadPlusPlus(), "notepad.exe" }.OfType<string>())
+        {
+            var start = new ProcessStartInfo(editor) { UseShellExecute = false };
+            start.ArgumentList.Add(path);
+            try
+            {
+                Process.Start(start)?.Dispose();
+                return true;
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                // Not there, or not allowed to start: try the next one.
+            }
+        }
+        return false;
     }
 
     /// <summary>Where Notepad++ is installed, from its App Paths entry or Program Files; null when it isn't.</summary>

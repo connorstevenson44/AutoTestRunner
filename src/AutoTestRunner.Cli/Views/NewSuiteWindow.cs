@@ -20,6 +20,7 @@ internal static partial class NewSuiteWindow
     {
         string? made = null;
         JsonNode? status = null;
+        var started = false;
         var window = new Window
         {
             Title = "New suite", Owner = owner, SizeToContent = SizeToContent.Height, Width = 540, ResizeMode = ResizeMode.NoResize,
@@ -34,6 +35,7 @@ internal static partial class NewSuiteWindow
         {
             stack.Children.Add(Ui.Heading(heading, top));
             var box = new TextBox { FontSize = 13, Padding = new Thickness(5, 4, 5, 4), ToolTip = tip };
+            System.Windows.Automation.AutomationProperties.SetName(box, heading);
             stack.Children.Add(box);
             return box;
         }
@@ -67,14 +69,17 @@ internal static partial class NewSuiteWindow
         var said = Ui.Words("", 11.5, Ui.Muted);
         Row(title, Icons.Play, "Start the app and read its window's title", () =>
         {
-            if (!File.Exists(exe.Text.Trim()))
+            // Read here: the app's thread can't touch the box, which belongs to this one.
+            var path = exe.Text.Trim();
+            if (!File.Exists(path))
             {
                 said.Text = "Pick the app's .exe first.";
                 return;
             }
             said.Text = "Starting it…";
-            app.Do((driver, _) => driver.Launch(exe.Text.Trim()), read =>
+            app.Do((driver, _) => driver.Launch(path), read =>
             {
+                started = true;
                 title.Text = read;
                 said.Text = "Read from the window. Now point at its status bar.";
             }, why => said.Text = why);
@@ -85,6 +90,12 @@ internal static partial class NewSuiteWindow
         var statusShown = Ui.Words("Not picked: the cases can still wait for other controls.", 12, Ui.Muted);
         var point = Ui.LabelledButton(Icons.Pick, "Point at it", () =>
         {
+            // Only a click in the app started here is taken, so with no app there would be nothing to click.
+            if (!started)
+            {
+                statusShown.Text = "Start the app first, with the button beside its window's title.";
+                return;
+            }
             statusShown.Text = "Click the status bar in the app. Esc goes back.";
             app.Pick(new Dictionary<string, JsonNode>(), new VariableScope(), (facts, choice) =>
             {

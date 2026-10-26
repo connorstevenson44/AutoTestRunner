@@ -49,9 +49,12 @@ internal sealed class AppSession : IDisposable
                 var result = work(_driver!, _inspector!);
                 _ui.BeginInvoke(() => then(result));
             }
-            catch (Exception ex) when (ex is StuckException or ScriptException or COMException or InvalidOperationException or TimeoutException
-                or System.ComponentModel.Win32Exception or System.IO.IOException)
+            catch (Exception ex)
             {
+                // Anything else would end the thread, and with it autotest: the window says what went wrong instead.
+                if (ex is not (StuckException or ScriptException or COMException or InvalidOperationException or TimeoutException
+                    or System.ComponentModel.Win32Exception or System.IO.IOException))
+                    Crashes.Log(ex);
                 _ui.BeginInvoke(() => failed(ex.Message));
             }
         });
@@ -68,7 +71,10 @@ internal sealed class AppSession : IDisposable
             RecordingHook? hook = null;
             void Done((int X, int Y)? at)
             {
-                hook?.Dispose();
+                // A second click, or Esc, can come before the hook has gone: only the first counts.
+                if (hook is null)
+                    return;
+                hook.Dispose();
                 hook = null;
                 if (at is not { } point)
                 {

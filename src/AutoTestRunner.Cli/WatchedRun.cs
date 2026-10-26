@@ -20,6 +20,7 @@ internal static class WatchedRun
     public static int Run(Suite suite, IReadOnlyList<Case> cases, Options options)
     {
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        Crashes.Watch(app);
         var code = ExitCode.Passed;
         app.Startup += (_, _) => Watch(suite, cases, options, canRunAgain: false, result => code = result, _ => app.Shutdown());
         app.Run();
@@ -35,6 +36,7 @@ internal static class WatchedRun
     public static int Launch(IReadOnlyList<FoundSuite> suites, FoundSuite chosen, Options options, BuildRequest? build = null)
     {
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        Crashes.Watch(app);
         var code = ExitCode.Passed;
         var found = suites;
 
