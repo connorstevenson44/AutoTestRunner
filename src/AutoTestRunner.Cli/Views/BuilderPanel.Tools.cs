@@ -213,6 +213,18 @@ internal sealed partial class BuilderPanel
             Refresh(step, row);
     }
 
+    /// <summary>Folds out a step's details and picks steps, as clicking them does: for the preview's pictures.</summary>
+    internal void Show(DraftStep? folded, IReadOnlyList<DraftStep> picked)
+    {
+        if (folded is not null && !_open.Contains(folded))
+            Fold(folded);
+        _selected.Clear();
+        _selected.AddRange(picked);
+        foreach (var (each, row) in _rows)
+            Refresh(each, row);
+        ShowSelection();
+    }
+
     // ===== Steps picked with Shift+click =====
 
     private void Select(DraftStep step, bool range)

@@ -216,6 +216,10 @@ internal static class PreviewUi
         panel.Refresh();
         panel.Ready();
         Shot("11-builder-rolled-back");
+
+        // A step's details folded out, and two steps picked to make a macro of or repeat.
+        panel.Dispatcher.Invoke(() => panel.Show(steps[3], [steps[4], steps[5]]));
+        Shot("12-builder-details-and-picked");
         if (shots is null)
             return;
         // The made-up steps aren't kept, so closing asks nothing.
@@ -249,7 +253,7 @@ internal static class PreviewUi
         string Id(int index) => names[index].ToLowerInvariant().Replace(' ', '-');
         for (var index = 0; index < names.Length; index++)
             File.WriteAllText(Path.Combine(folder, "cases", $"{index + 1:00}-{Id(index)}.json"),
-                $$"""{ "name": "{{names[index]}}", "covers": "What case {{index + 1}} tries"{{(index > 0 ? $", \"needs\": [\"{Id(index - 1)}\"]" : "")}}{{(index == 2 ? ", \"review\": \"Case 2, Deploy from the command line, was changed from step 4: check this case still starts where it should.\"" : "")}}, "steps": [ { "say": "Hello" } ] }""");
+                $$"""{ "name": "{{names[index]}}", "covers": "What case {{index + 1}} tries", "tags": ["{{(index < 2 ? "smoke" : "remove")}}"]{{(index > 0 ? $", \"needs\": [\"{Id(index - 1)}\"]" : "")}}{{(index == 2 ? ", \"review\": \"Case 2, Deploy from the command line, was changed from step 4: check this case still starts where it should.\"" : "")}}, "steps": [ { "say": "Hello" } ] }""");
         var last = Path.Combine(folder, "results", "2026-10-25 120000");
         Directory.CreateDirectory(last);
         File.WriteAllText(Path.Combine(last, "junit.xml"), """

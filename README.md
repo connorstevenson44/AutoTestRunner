@@ -62,6 +62,21 @@ A case that runs after others shows their numbers in a small pill with an arrow,
 them isn't ticked. Click the pill to tick the case with every case it needs. **Clean up** runs the suite's reset
 script and shows its log, which folds away, or hides with ✕.
 
+A chip for each tag picks the cases tagged with it. The **⋯** on a case copies, renames, moves or deletes it: moving
+keeps every case after the cases it carries on from, and deleting one that others carry on from has them carry on
+from what it did, marked as needing a look. The icons beside the suite's name open:
+
+- **Named controls**: each name in `elements.json`, how it finds its control and where it is used. The eye points it
+  out in the app, the tag renames it everywhere it is used, and **Used nowhere** shows the ones nothing uses.
+- **Without ids**: the controls on the app's screen a test would use that have no AutomationId, red with nothing to
+  find them by and amber with only their words, each with the XAML that gives it one, to copy.
+- **New suite**: pick an app's `.exe`, start it to read its window's title, and point at its status bar. It writes
+  `suite.json`, `elements.json` and the `waitForStatusBar` macro, ready for New case.
+
+When a watched run is stuck on a step that uses a control, **Pick it** lets you click the control the step should
+use. It is saved in `elements.json` when the step names an element, else in the step's own file, and the step is
+tried again.
+
 ## Building a case
 
 **New case** in the launcher opens the builder: a panel beside the app, which gets the app to where the case starts
@@ -70,10 +85,12 @@ script and shows its log, which folds away, or hides with ✕.
 - **Record** (on at the start): use the app. Each click, pick from a drop-down, tick and tab becomes a step, what you
   type becomes one when you leave the box, and keys such as Enter or Ctrl+S become key steps. A click that changes the
   status text gets a wait for its new words, so the case waits for the app, not a time. Message boxes and file pickers
-  become `answerDialog`, `pickFile` and `pickFolder`.
+  become `answerDialog`, `pickFile` and `pickFolder`. A right-click and the menu items picked after it become a `menu`
+  step, and a double-click a click with `how: double`.
 - **Pick**, or Ctrl+click while recording: point at a control and it is outlined with how a step would find it; click
   it and the panel offers Click, Point at, Wait for it, Wait for it to go, Wait for its text, Keep its text, Check it
-  shows, Check its text, and Name it. The click doesn't reach the app.
+  shows, Check its text, **Check it…** (can be used, greyed out, ticked, selected, has the keyboard, says, rows) and
+  Name it. The click doesn't reach the app.
 - Each step shows how it finds its control, with a dot: green for a name in `elements.json` or an AutomationId, amber
   for what it says, red when more than one control matches. **Name it** adds a red or amber one to `elements.json`
   and has the steps use the name. Over a step, ▶ tries it in the app, the arrows move it, and the bin takes it out;
@@ -81,6 +98,15 @@ script and shows its log, which folds away, or hides with ✕.
 - **Step** adds a step that isn't a click: **Run a script…** picks a `.ps1` in the suite and runs it; **New script…**
   writes one in `tools/` from a short template and opens it, in Notepad++ when it is installed, else Notepad, and
   its step plays once you've written it; **Show a message…** and **Wait…**. The page icon on a script step opens its file.
+  **Use a macro…** asks for its parameters. **In the app** and **On this computer** offer every other step, such as
+  a menu, a drag, keys, copying a file or setting a JSON value, each with a form: browse for a file, Pick a control.
+- The chevron on a step folds out its details, as a form; the circle switches it off, so the case skips it and keeps
+  it. **+** by the checkpoint adds any check, from a form whose **Try now** runs it against the app as it is. The `{x}`
+  by a box, and over the steps, lists the kept values and suite variables with what each holds now, to put one in.
+- Shift+click picks a run of steps, Ctrl+click one more. **Make a macro** writes them to `macros/` when you save, with
+  the values you tick, such as what is typed, as its parameters, and puts a call to it in their place. **Repeat** runs
+  them for each of a list of values or the rows of a data file; **Only if…** runs them when a check passes. The
+  arrow on a repeat or an if takes its steps out again.
 - **Watch it** under a picked control has the builder wait for its new words whenever a step changes them, as it
   does for the status text; **After clicking it…** adds a macro after each click on it, after a delay if need be.
   Both go in `suite.json`'s `builder` section, for every case built after: see [docs/format.md](docs/format.md).
