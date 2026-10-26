@@ -112,6 +112,28 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
     /// <inheritdoc cref="Pass(int, int)"/>
     public void Pass(string keys) => driver.Key(keys);
 
+    /// <summary>
+    /// Every control in the app's windows, as UI Automation's control view has them, each with the window it is in as
+    /// its one ancestor: for the ids report.
+    /// </summary>
+    public IReadOnlyList<ControlFacts> Survey()
+    {
+        var found = new List<ControlFacts>();
+        foreach (var hwnd in driver.AppWindows().Where(Native.IsVisible))
+        {
+            try
+            {
+                var window = new ControlFacts("Window", Native.Title(hwnd));
+                found.AddRange(driver.Automation.FromHandle(hwnd).FindAllDescendants().Select(element => Own(element) with { Ancestors = [window] }));
+            }
+            catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or TimeoutException)
+            {
+                // The window closed while it was read.
+            }
+        }
+        return found;
+    }
+
     /// <summary>Everything UI Automation says about a control, for the builder's tip when nothing names it well.</summary>
     public static string Describe(InspectedControl control)
     {

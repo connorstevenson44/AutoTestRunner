@@ -25,7 +25,7 @@ internal sealed class LauncherWindow : Window
         ("step-by-step", Icons.Next, "Step by step", "Waits for you to press Enter before each step."),
     ];
 
-    private readonly IReadOnlyList<FoundSuite> _suites;
+    private IReadOnlyList<FoundSuite> _suites;
     private readonly Options _options;
     // The suite the launcher opened on, which the cases given on the command line are for.
     private readonly FoundSuite _first;
@@ -172,11 +172,12 @@ internal sealed class LauncherWindow : Window
         };
         row.MouseEnter += (_, _) =>
         {
-            if (!ReferenceEquals(_pane.Tag, found))
+            if (!IsOpen(found))
                 row.Background = Ui.Line;
         };
-        row.MouseLeave += (_, _) => row.Background = ReferenceEquals(_pane.Tag, found) ? Ui.AccentSoft : Brushes.Transparent;
-        row.MouseLeftButtonUp += (_, _) => Choose(found);
+        row.MouseLeave += (_, _) => row.Background = IsOpen(found) ? Ui.AccentSoft : Brushes.Transparent;
+        // The suite as it is now, as it may have been loaded again since.
+        row.MouseLeftButtonUp += (_, _) => Choose(_suites.FirstOrDefault(each => Same(each, found)) ?? found);
         _railRows.Add((found, row));
         return row;
     }
@@ -193,14 +194,45 @@ internal sealed class LauncherWindow : Window
         return passed == last.Count ? ($"{cases} · all passed last time", Ui.Pass) : ($"{cases} · {passed} of {last.Count} passed last time", Ui.Hold);
     }
 
-    private void Choose(FoundSuite found)
+    private bool IsOpen(FoundSuite found) => _pane.Tag is FoundSuite open && Same(open, found);
+
+    private static bool Same(FoundSuite one, FoundSuite other) => string.Equals(one.Folder, other.Folder, StringComparison.OrdinalIgnoreCase);
+
+    // Loads the open suite again after its files changed, and shows it as it is now, with the same cases ticked.
+    private void Reload()
+    {
+        if (_pane.Tag is not FoundSuite open)
+            return;
+        var ticked = _suite?.Ticked.Select(item => item.Id).ToHashSet() ?? [];
+        _suites = Reload(_suites, open.Folder);
+        Choose(_suites.First(each => Same(each, open)), ticked);
+    }
+
+    // Asks for a new suite, and opens the launcher on it.
+    private void NewSuite()
+    {
+        var near = _pane.Tag is FoundSuite open ? System.IO.Path.GetDirectoryName(open.Folder) ?? open.Folder : Environment.CurrentDirectory;
+        if (NewSuiteWindow.Ask(this, near) is { } folder)
+        {
+            Opened = folder;
+            Close();
+        }
+    }
+
+    /// <summary>A suite made with New suite, to open the launcher on.</summary>
+    public string? Opened { get; private set; }
+
+    private void Choose(FoundSuite found, IReadOnlySet<string>? ticked = null)
     {
         _pane.Tag = found;
         foreach (var (each, row) in _railRows)
-            row.Background = each == found ? Ui.AccentSoft : Brushes.Transparent;
+            row.Background = Same(each, found) ? Ui.AccentSoft : Brushes.Transparent;
         if (found.Suite is { } suite)
         {
-            _suite = new SuitePane(suite, found == _first ? _options : _options with { Cases = null }, Building);
+            var options = Same(found, _first) ? _options : _options with { Cases = null };
+            if (ticked is not null)
+                options = options with { Cases = string.Join(",", suite.Cases.Where(item => ticked.Contains(item.Id)).Select(item => item.Number)), Tags = [] };
+            _suite = new SuitePane(suite, options, Building, Reload, NewSuite);
             _suite.Changed += Changed;
             _pane.Content = _suite;
         }

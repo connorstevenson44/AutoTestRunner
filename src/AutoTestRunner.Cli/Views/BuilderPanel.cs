@@ -48,12 +48,23 @@ internal sealed partial class BuilderPanel : Window
     private readonly Dictionary<DraftStep, Border> _rows = [];
     private readonly HashSet<JsonObject> _shownChecks = [];
     private readonly Dictionary<JsonObject, string> _labels = [];
+    private readonly List<DraftStep> _selected = [];
+    private readonly HashSet<DraftStep> _open = [];
+    private readonly ContentControl _selection = new();
 
     private volatile int _mode = (int)BuildMode.Paused;
     private bool _ready, _saved;
     private int _changes;
     private (ControlFacts Facts, TargetChoice Choice)? _current;
     private nint _hwnd;
+
+    // A form waiting for a control to be picked in the app, and the mode to go back to after.
+    private (Action<TargetChoice> Then, BuildMode Before)? _pickInto;
+
+    // The step a Shift+click picks steps from, and the panel's box last typed in, for a kept value to go into.
+    private DraftStep? _anchor;
+    private TextBox? _lastBox;
+    private volatile IReadOnlyList<(string Name, string Text)> _values = [];
 
     public BuilderPanel(BuildRequest request, CaseDraft draft)
     {
@@ -146,9 +157,17 @@ internal sealed partial class BuilderPanel : Window
         _count.VerticalAlignment = VerticalAlignment.Center;
         DockPanel.SetDock(_count, Dock.Right);
         stepsHeading.Children.Add(_count);
+        var values = Ui.IconButton(Icons.Values, "Kept values and suite variables, with what each holds now. Click one to put it in the box you were typing in.", ShowValues, 12);
+        values.Padding = new Thickness(5, 2, 5, 2);
+        values.Margin = new Thickness(0, 0, 6, 2);
+        DockPanel.SetDock(values, Dock.Right);
+        stepsHeading.Children.Add(values);
         stepsHeading.Children.Add(Ui.Heading("Steps"));
-        Grid.SetRow(stepsHeading, 4);
-        root.Children.Add(stepsHeading);
+        var stepsTop = new StackPanel();
+        stepsTop.Children.Add(stepsHeading);
+        stepsTop.Children.Add(_selection);
+        Grid.SetRow(stepsTop, 4);
+        root.Children.Add(stepsTop);
         _stepsScroll = new ScrollViewer { Content = _steps, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
         var stepsBox = new Border { BorderBrush = Ui.Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Child = _stepsScroll, Margin = new Thickness(0, 0, 4, 0), Padding = new Thickness(2) };
         Grid.SetRow(stepsBox, 5);
@@ -157,7 +176,15 @@ internal sealed partial class BuilderPanel : Window
         // ===== The checkpoint =====
         var checkpoint = new StackPanel { Margin = new Thickness(0, 10, 4, 0) };
         var existingCheckpoint = request.Edit?.Steps.LastOrDefault()?["checkpoint"]?.GetValue<string>();
-        checkpoint.Children.Add(Ui.Heading(existingCheckpoint is null ? "Checkpoint" : "Checkpoint: checks added to the existing ones"));
+        var checkpointHeading = new DockPanel();
+        Button? addCheck = null;
+        addCheck = Ui.IconButton(Icons.Add, "Add a check: a file, a setting, a service, a value, or a control in the app", () => CheckMenu.Open(addCheck!, kind => NewCheck(kind)), 12);
+        addCheck.Padding = new Thickness(5, 2, 5, 2);
+        addCheck.Margin = new Thickness(0, 0, 0, 2);
+        DockPanel.SetDock(addCheck, Dock.Right);
+        checkpointHeading.Children.Add(addCheck);
+        checkpointHeading.Children.Add(Ui.Heading(existingCheckpoint is null ? "Checkpoint" : "Checkpoint: checks added to the existing ones"));
+        checkpoint.Children.Add(checkpointHeading);
         (var titleField, _checkpointTitle) = Field(existingCheckpoint ?? "Checkpoint title, such as: The order is in the list", single: true);
         if (existingCheckpoint is not null)
             titleField.Visibility = Visibility.Collapsed;
@@ -199,6 +226,12 @@ internal sealed partial class BuilderPanel : Window
                 e.Cancel = true;
         };
         Closed += (_, _) => _outline.Close();
+        // The box typed in last, for a kept value to go into from the list of them.
+        AddHandler(Keyboard.GotKeyboardFocusEvent, new KeyboardFocusChangedEventHandler((_, e) =>
+        {
+            if (e.NewFocus is TextBox box)
+                _lastBox = box;
+        }));
         foreach (var step in _draft.Steps)
             _steps.Children.Add(StepRow(step));
         Busy($"Getting {_suite.App.Window} ready");
@@ -222,6 +255,19 @@ internal sealed partial class BuilderPanel : Window
 
     /// <summary>Asks for a step to go on the end of the case without being played, such as a script still to write.</summary>
     public event Action<DraftStep>? AddStep;
+
+    /// <summary>Asks for a check to be run against the app as it is, for a form's Try now; the answer comes on the builder's thread.</summary>
+    public event Action<JsonObject, Action<CheckResult>>? Try;
+
+    /// <summary>A macro was made of steps, for the runner to play them by it from now on.</summary>
+    public event Action<Macro>? MadeMacro;
+
+    /// <summary>The kept values and suite variables, with what each holds now. Set by the builder after each step it plays.</summary>
+    public IReadOnlyList<(string Name, string Text)> Values
+    {
+        get => _values;
+        set => _values = value;
+    }
 
     /// <summary>Asks for the steps not played yet to be played, up to and including this one.</summary>
     public event Action<DraftStep>? RunTo;
@@ -352,6 +398,13 @@ internal sealed partial class BuilderPanel : Window
     /// <summary>A control was picked: it stays outlined, and the panel offers what to do with it.</summary>
     public void ShowPicked(ControlFacts facts, TargetChoice choice, string details) => OnUi(() =>
     {
+        if (_pickInto is { } waiting)
+        {
+            _pickInto = null;
+            SetMode(waiting.Before);
+            waiting.Then(choice);
+            return;
+        }
         _current = (facts, choice);
         _outline.Show(facts.Bounds, choice.Shown, choice.Quality);
         _picked.Content = PickedCard(facts, choice, details);
@@ -426,10 +479,35 @@ internal sealed partial class BuilderPanel : Window
             menu.Items.Add(item);
             return item;
         }
-        Item(Icons.Console, "Run a script…", "Choose a .ps1 file: it runs now, and is added as a step", PickScript);
-        Item(Icons.Document, "New script…", "Create a .ps1 file in the tools folder and open it to write. Its step plays with Run to here.", NewScript);
+        Item(Icons.Console, "Run a script…", "Choose a .ps1 or .cs file: it runs now, and is added as a step", PickScript);
+        // A new script is PowerShell, which every Windows machine has, or C#, for setup that is easier written as code.
+        var newScript = new MenuItem { Header = "New script", Icon = Ui.Glyph(Icons.Document, 14, Ui.Accent) };
+        foreach (var (title, csharp, tip) in new[]
+        {
+            ("PowerShell…", false, "Create a .ps1 file in the tools folder and open it to write. Its step plays with Run to here."),
+            ("C#…", true, "Create a .cs file in the tools folder and open it to write. It runs with dotnet run, which needs the .NET 10 SDK."),
+        })
+        {
+            var item = new MenuItem { Header = title, ToolTip = tip };
+            item.Click += (_, _) => NewScript(csharp);
+            newScript.Items.Add(item);
+        }
+        menu.Items.Add(newScript);
         Item(Icons.Message, "Show a message…", "A step that only shows the tester a message, such as what to notice", SaySomething);
         Item(Icons.Wait, "Wait…", "Wait a number of seconds", WaitAWhile);
+        menu.Items.Add(new Separator());
+        Item(Icons.Macro, "Use a macro…", "Add a step that runs one of the suite's macros, with its parameters", UseMacro);
+        foreach (var (group, glyph, kinds) in NewStepGroups)
+        {
+            var groupItem = new MenuItem { Header = group, Icon = Ui.Glyph(glyph, 14, Ui.Accent) };
+            foreach (var (kind, title, tip) in kinds)
+            {
+                var item = new MenuItem { Header = title + "…", ToolTip = tip };
+                item.Click += (_, _) => NewStep(kind, title, glyph);
+                groupItem.Items.Add(item);
+            }
+            menu.Items.Add(groupItem);
+        }
         tile.Click += (_, _) => menu.IsOpen = true;
         return tile;
     }
@@ -439,19 +517,19 @@ internal sealed partial class BuilderPanel : Window
         var tools = Path.Combine(_suite.Folder, "tools");
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "Run a script", Filter = "PowerShell scripts (*.ps1)|*.ps1", InitialDirectory = Directory.Exists(tools) ? tools : _suite.Folder,
+            Title = "Run a script", Filter = "Scripts (*.ps1, *.cs)|*.ps1;*.cs|PowerShell (*.ps1)|*.ps1|C# (*.cs)|*.cs", InitialDirectory = Directory.Exists(tools) ? tools : _suite.Folder,
         };
         if (dialog.ShowDialog(this) != true)
             return;
         Play?.Invoke(StepMaker.Script(Path.GetRelativePath(_suite.Folder, dialog.FileName)), true);
     }
 
-    private void NewScript()
+    private void NewScript(bool csharp)
     {
-        if (Ui.Prompt(this, "New script", "Name of the script, such as Check the orders file. It is saved in the tools folder and opened for editing.", "", "Create", Icons.Document, tall: false) is not { } name
+        if (Ui.Prompt(this, csharp ? "New C# script" : "New PowerShell script", "Name of the script, such as Check the orders file. It is saved in the tools folder and opened for editing.", "", "Create", Icons.Document, tall: false) is not { } name
             || name.Trim().Length == 0)
             return;
-        var relative = ScriptEditor.Create(_suite, name, _draft.Name);
+        var relative = ScriptEditor.Create(_suite, name, _draft.Name, csharp);
         ScriptEditor.Open(Path.Combine(_suite.Folder, relative));
         var step = StepMaker.Script(relative);
         step.Text = name.Trim();
@@ -507,6 +585,11 @@ internal sealed partial class BuilderPanel : Window
         Action(Icons.Wait, "Wait for its text", PickAction.WaitText, $"Wait until it says \"{StepMaker.StartOf(text)}\"", text.Length > 0);
         Action(Icons.Note, "Keep its text", PickAction.Keep, "Save its text in a variable, for a check or a later step", text.Length > 0);
         Action(Icons.CheckList, "Check it shows", PickAction.CheckShows, "Check at the checkpoint that it is there");
+        Button? more = null;
+        more = Ui.LabelledButton(Icons.CheckList, "Check it…", () => CheckMenu.Open(more!, kind => NewCheck(kind, choice.Json), ScriptVocabulary.ControlChecks));
+        more.ToolTip = "Check at the checkpoint that it can be used, is ticked, is selected, says something, or how many rows it has";
+        more.Padding = new Thickness(8, 4, 9, 4);
+        actions.Children.Add(more);
         Action(Icons.CheckList, "Check its text", PickAction.CheckText, $"Check at the checkpoint that it says \"{text}\"", text.Length > 0);
         Action(Icons.Name, "Name it", PickAction.Name, "Give it a name in elements.json, which the steps then use",
             choice.Json is JsonObject selector && !selector.ContainsKey("element"));
@@ -715,13 +798,13 @@ internal sealed partial class BuilderPanel : Window
 
     private Border StepRow(DraftStep step)
     {
-        var row = new Border { CornerRadius = new CornerRadius(5), Padding = new Thickness(6, 5, 4, 5), Margin = new Thickness(0, 0, 0, 1), Background = Brushes.Transparent, Tag = step };
+        var row = new Border { CornerRadius = new CornerRadius(5), Padding = new Thickness(2, 5, 4, 5), Margin = new Thickness(0, 0, 0, 1), Background = Brushes.Transparent, Tag = step };
         _rows[step] = row;
         Refresh(step, row);
         row.MouseEnter += (_, _) =>
         {
-            if (row.Child is Grid grid)
-                grid.Children[^1].Visibility = Visibility.Visible;
+            if (Buttons(row) is { } buttons)
+                buttons.Visibility = Visibility.Visible;
             if (row.Background == Brushes.Transparent)
                 row.Background = Ui.Surface;
             if (step.Target is not null && Mode != BuildMode.Picking)
@@ -729,25 +812,43 @@ internal sealed partial class BuilderPanel : Window
         };
         row.MouseLeave += (_, _) =>
         {
-            if (row.Child is Grid grid)
-                grid.Children[^1].Visibility = Visibility.Hidden;
+            if (Buttons(row) is { } buttons)
+                buttons.Visibility = Visibility.Hidden;
             if (row.Background == Ui.Surface)
                 row.Background = Brushes.Transparent;
             if (Mode != BuildMode.Picking)
                 Locate?.Invoke(null);
         };
+        // Shift+click picks the steps from the last one picked to this one, Ctrl+click picks one more or one fewer.
+        row.PreviewMouseLeftButtonUp += (_, e) =>
+        {
+            if ((Keyboard.Modifiers & (ModifierKeys.Shift | ModifierKeys.Control)) == 0)
+                return;
+            Select(step, range: (Keyboard.Modifiers & ModifierKeys.Shift) != 0);
+            e.Handled = true;
+        };
         return row;
     }
 
-    // Draws a step's row: its number and icon, what it says (click to change it), how it finds its control, and
-    // its buttons, which show while the mouse is over it. A step not played yet is greyed; one that didn't work is red.
+    // The row's line: its fold-out chevron, number, icon, words and buttons.
+    private static Grid? Line(Border row) => row.Child is StackPanel { Children: [Grid line, ..] } ? line : null;
+
+    private static StackPanel? Buttons(Border row) => Line(row)?.Children.OfType<StackPanel>().LastOrDefault(panel => panel.Orientation == Orientation.Horizontal);
+
+    // Draws a step's row: a chevron that folds out its details, its number and icon, what it says (click to change
+    // it), how it finds its control, and its buttons, which show while the mouse is over it. A step not played yet is
+    // greyed; one that didn't work is red; one picked is tinted; one switched off is struck through.
     private void Refresh(DraftStep step, Border row)
     {
         var played = step.State != DraftStepState.NotPlayed;
+        var off = step.Json["disabled"]?.GetValue<bool>() == true;
         Mark(row, step.State == DraftStepState.Failed ? step.Problem ?? "It didn't work." : null);
+        if (_selected.Contains(step))
+            (row.Background, row.BorderBrush, row.BorderThickness) = (Ui.AccentSoft, Ui.Accent, new Thickness(3, 0, 0, 0));
         if (!played)
             row.ToolTip = "Not played yet";
         var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(20) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(22) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
         grid.ColumnDefinitions.Add(new ColumnDefinition());
@@ -755,14 +856,24 @@ internal sealed partial class BuilderPanel : Window
         var number = Ui.Words($"{_draft.Steps.IndexOf(step) + 1}", 11, Ui.Faint, wrap: false);
         number.VerticalAlignment = VerticalAlignment.Top;
         number.Margin = new Thickness(0, 2, 0, 0);
-        var icon = Ui.Glyph(step.Waits ? Icons.Wait : Icons.Of(step.Kind), 14, played ? Ui.Accent : Ui.Faint);
+        var open = _open.Contains(step);
+        var chevron = Ui.IconButton(open ? Icons.Expand : Icons.Collapse, open ? "Fold the details away" : "Change this step's details", () => Fold(step), 9);
+        chevron.Padding = new Thickness(3);
+        chevron.VerticalAlignment = VerticalAlignment.Top;
+        var icon = Ui.Glyph(off ? Icons.Blocked : step.Waits ? Icons.Wait : step.Verb == "repeat" ? Icons.Repeat : step.Verb == "if" ? Icons.Branch : Icons.Of(step.Kind), 14, played && !off ? Ui.Accent : Ui.Faint);
         icon.VerticalAlignment = VerticalAlignment.Top;
         icon.Margin = new Thickness(0, 2, 0, 0);
         var words = new StackPanel();
-        var say = Ui.Words(step.Text, 13, played ? Ui.Ink : Ui.Muted);
+        var say = Ui.Words(step.Text, 13, played && !off ? Ui.Ink : Ui.Muted);
+        if (off)
+            say.TextDecorations = TextDecorations.Strikethrough;
         say.Cursor = Cursors.IBeam;
-        say.ToolTip = "Click to edit the description";
-        say.MouseLeftButtonUp += (_, _) => EditSay(step, words, say);
+        say.ToolTip = off ? "Switched off: the step is skipped when the case runs. Click to edit the description" : "Click to edit the description";
+        say.MouseLeftButtonUp += (_, e) =>
+        {
+            if ((Keyboard.Modifiers & (ModifierKeys.Shift | ModifierKeys.Control)) == 0)
+                EditSay(step, words, say);
+        };
         words.Children.Add(say);
         if (step.Target is { } target)
         {
@@ -785,6 +896,9 @@ internal sealed partial class BuilderPanel : Window
         actions.Add((Icons.Edit, "Edit from here\nPlays up to this step, removes the steps after it, and starts recording.", () => EditFromHere(step)));
         if (step.Script is { } script)
             actions.Add((Icons.Document, "Open the script in Notepad++ or Notepad", () => ScriptEditor.Open(Path.Combine(_suite.Folder, script))));
+        if (step.Verb is "repeat" or "if")
+            actions.Add((Icons.Back, "Take the steps out of it", () => Unwrap(step)));
+        actions.Add((Icons.Blocked, off ? "Switch this step back on" : "Switch this step off: it is skipped when the case runs, and kept in the file", () => SwitchOff(step, !off)));
         actions.Add((Icons.Up, "Move up", () => Move(step, -1)));
         actions.Add((Icons.Down, "Move down", () => Move(step, 1)));
         actions.Add((Icons.Delete, "Delete this step", () => Remove(step)));
@@ -794,14 +908,20 @@ internal sealed partial class BuilderPanel : Window
             button.Padding = new Thickness(5, 3, 5, 3);
             buttons.Children.Add(button);
         }
-        Grid.SetColumn(icon, 1);
-        Grid.SetColumn(words, 2);
-        Grid.SetColumn(buttons, 3);
+        Grid.SetColumn(number, 1);
+        Grid.SetColumn(icon, 2);
+        Grid.SetColumn(words, 3);
+        Grid.SetColumn(buttons, 4);
         grid.Children.Add(number);
+        grid.Children.Add(chevron);
         grid.Children.Add(icon);
         grid.Children.Add(words);
         grid.Children.Add(buttons);
-        row.Child = grid;
+        var stack = new StackPanel();
+        stack.Children.Add(grid);
+        if (open)
+            stack.Children.Add(Details(step));
+        row.Child = stack;
     }
 
     // What a step without a control shows under it: the message box it answers, the file it picks, the wait.
@@ -811,6 +931,7 @@ internal sealed partial class BuilderPanel : Window
         "answerDialog" => $"{step.Json["answerDialog"]}",
         "pickFile" or "pickFolder" => $"{step.Json["path"]}",
         "call" => $"{step.Json["call"]}, a macro",
+        "repeat" or "if" => StepWrapper.Inside(step.Json).Count is var count && count == 1 ? "1 step inside" : $"{count} steps inside",
         "script" => step.Script,
         _ => null,
     };
@@ -856,6 +977,7 @@ internal sealed partial class BuilderPanel : Window
                 _draft.Steps.RemoveRange(index + 1, later.Count);
             foreach (var gone in later)
             {
+                Deselect(gone);
                 _steps.Children.Remove(_rows[gone]);
                 _rows.Remove(gone);
             }
@@ -914,6 +1036,7 @@ internal sealed partial class BuilderPanel : Window
 
     private void Remove(DraftStep step)
     {
+        Deselect(step);
         lock (_draft.Steps)
             _draft.Steps.Remove(step);
         _changes++;
@@ -927,7 +1050,7 @@ internal sealed partial class BuilderPanel : Window
     private void Renumber()
     {
         foreach (var (step, row) in _rows)
-            if (row.Child is Grid grid && grid.Children[0] is TextBlock number)
+            if (Line(row)?.Children[0] is TextBlock number)
                 number.Text = $"{_draft.Steps.IndexOf(step) + 1}";
     }
 

@@ -4,14 +4,26 @@ namespace AutoTestRunner.Running;
 
 /// <summary>
 /// The machine as a run uses it: every program and script it starts is shown as it runs, with its command line, what
-/// it prints as it prints it, and how it ended, and goes in the log. Looking at services and scheduled tasks isn't
-/// shown, as checks do that often.
+/// it prints as it prints it, and how it ended, and goes in the log. Looking at services, scheduled tasks and the like
+/// isn't shown, as checks do that often.
 /// </summary>
 public sealed class CommandReportingMachine(IMachine machine, IRunView view, Results results) : IMachine
 {
     public string? ServiceState(string name) => machine.ServiceState(name);
 
     public bool TaskExists(string path) => machine.TaskExists(path);
+
+    public void SetServiceRunning(string name, bool running) => machine.SetServiceRunning(name, running);
+
+    public string? RegistryValue(string key, string name) => machine.RegistryValue(key, name);
+
+    public bool ProcessRunning(string name) => machine.ProcessRunning(name);
+
+    public bool EventLogged(string log, string? source, string text, DateTime since) => machine.EventLogged(log, source, text, since);
+
+    public string Clipboard() => machine.Clipboard();
+
+    public (int Status, string Body) Get(string url) => machine.Get(url);
 
     public ProcessOutput Run(string program, IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string>? environment = null, TimeSpan? timeout = null,
         Action<string, bool>? output = null) =>

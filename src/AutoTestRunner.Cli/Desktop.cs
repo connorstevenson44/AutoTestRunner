@@ -18,6 +18,9 @@ internal static class Desktop
     /// <summary>The window that has the keyboard.</summary>
     public static nint Foreground() => GetForegroundWindow();
 
+    /// <summary>How quickly a second click makes a double-click, in milliseconds, as set in Windows.</summary>
+    public static long DoubleClickTime => GetDoubleClickTime();
+
     /// <summary>The id of the process a window belongs to, or 0 when there is no window.</summary>
     public static int ProcessOf(nint hwnd)
     {
@@ -60,4 +63,7 @@ internal static class Desktop
 
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out Point point);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDoubleClickTime();
 }

@@ -29,6 +29,9 @@ public sealed class Recorder(Suite suite, CaseDraft draft, Func<ControlFacts, Ta
     private string _before = "";
     private bool _mayChangeStatus;
 
+    // A control right-clicked, and the items of its menu clicked since, which make one menu step.
+    private (ControlFacts Control, List<string> Items)? _menu;
+
     /// <summary>The box being typed in, if any.</summary>
     public ControlFacts? Box => _box;
 
@@ -38,6 +41,12 @@ public sealed class Recorder(Suite suite, CaseDraft draft, Func<ControlFacts, Ta
     /// </summary>
     public IReadOnlyList<DraftStep> Clicked(ControlFacts hit)
     {
+        // An item of the menu a right-click opened is a step of the menu, not a click of its own.
+        if (_menu is { } menu && Actionable(hit) is { Type: "MenuItem" } item)
+        {
+            menu.Items.Add(item.Name);
+            return [];
+        }
         if (hit.Dialog is { } dialog)
             return AddIf(Answer(hit, dialog));
         if (Actionable(hit) is not { } control)
@@ -52,6 +61,50 @@ public sealed class Recorder(Suite suite, CaseDraft draft, Func<ControlFacts, Ta
             "TabItem" when control.Name.Length > 0 => Add(StepMaker.Tab(control.Name), changesStatus: false),
             _ => Add(StepMaker.Click(name(control), control), changesStatus: true),
         };
+    }
+
+    /// <summary>
+    /// A right-click on a control: the items of its menu clicked next make a menu step on it, once something else
+    /// happens or MenuDone is called; with no item clicked, it is a right-click.
+    /// </summary>
+    public IReadOnlyList<DraftStep> RightClicked(ControlFacts hit)
+    {
+        var pending = MenuDone();
+        if (hit.Dialog is null && Actionable(hit) is { } control)
+            _menu = (control, []);
+        return pending;
+    }
+
+    /// <summary>Whether a right-click's menu step is still to be made.</summary>
+    public bool MenuOpen => _menu is not null;
+
+    /// <summary>Makes the step of a right-click and the menu items clicked since, if there was one.</summary>
+    public IReadOnlyList<DraftStep> MenuDone()
+    {
+        if (_menu is not { } menu)
+            return [];
+        _menu = null;
+        return Add(StepMaker.ContextMenu(name(menu.Control), menu.Control, menu.Items), changesStatus: true);
+    }
+
+    /// <summary>
+    /// A second click on the control just clicked, quickly enough to be a double-click: the click step becomes a
+    /// double-click. Returns the step changed, or null when the last step isn't a click on it.
+    /// </summary>
+    public DraftStep? Doubled(ControlFacts hit)
+    {
+        if (Actionable(hit) is not { } control)
+            return null;
+        lock (draft.Steps)
+        {
+            if (draft.Steps is not [.., { Verb: "click", Control: { } clicked } last] || clicked.Type != control.Type || clicked.Name != control.Name || clicked.Bounds != control.Bounds
+                || last.Json.ContainsKey("how"))
+                return null;
+            last.Json["how"] = "double";
+            if (last.Json["say"]?.GetValue<string>() is { } say && say.StartsWith("Click ", StringComparison.Ordinal))
+                last.Json["say"] = "Double-click " + say["Click ".Length..];
+            return last;
+        }
     }
 
     /// <summary>The keyboard went into a box that can be typed in, holding what it holds now.</summary>
@@ -132,7 +185,8 @@ public sealed class Recorder(Suite suite, CaseDraft draft, Func<ControlFacts, Ta
     /// </summary>
     public IReadOnlyList<DraftStep> Add(DraftStep step, bool changesStatus)
     {
-        List<DraftStep> steps = [step];
+        // A right-click's menu step goes before whatever happens next.
+        List<DraftStep> steps = _menu is not null && step.Verb != "menu" && !(step.Verb == "click" && step.Json["how"]?.GetValue<string>() == "right") ? [.. MenuDone(), step] : [step];
         if (step.Verb is "click" or "tick" or "choose" && ElementOf(step.Target?.Json) is { } element && AfterClick(element) is { } hook)
         {
             if (hook.Delay > 0)

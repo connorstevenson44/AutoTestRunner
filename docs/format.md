@@ -27,6 +27,7 @@ the scripts never turn into a programming language that a person can't read as a
 | --- | --- |
 | `app.exe`, `app.arguments` | The program to start, relative to the suite folder |
 | `app.window` | Its main window's title |
+| `app.startWindow` | The title of the window it opens first, when that isn't its main window, such as a sign-in window. `startApp` waits for it; a `useWindow` step moves on to the main window. |
 | `app.runAsAdmin` | autotest restarts itself as administrator; unattended, it exits with 4 instead |
 | `app.status` | An element whose text says what the app is doing. Its text before every click is kept, so `waitText` with `new` doesn't take the old text. |
 | `variables` | Text, or `{ "firstExisting": [paths] }`: the first that exists, else the last. `autotest run --var name=value` overrides one. Built in: `suiteDir`, `resultsDir`, `temp`. |
@@ -47,6 +48,7 @@ the scripts never turn into a programming language that a person can't read as a
 | `needs` | The ids of the cases it carries on from |
 | `needsNote` | What it needs, in words, when that isn't another case ("A clean computer") |
 | `covers` | What it tries |
+| `tags` | Words to pick it by, such as `["smoke"]`. The launcher filters by them; `autotest run --tags smoke` runs only those cases. |
 | `review` | Why it needs looking at again, such as a change to a case it carries on from. The builder writes it; the launcher shows a warning until the case is changed, or the warning is clicked away. |
 | `steps` | The steps |
 
@@ -57,7 +59,7 @@ Each step does one thing, named by its key. Any step can also have:
 | Property | What it is |
 | --- | --- |
 | `say` | What the panel says. On an action it is shown before the action; on `find`, `waitText` and `waitGone` after it, with time to read it. Alone, it is narration. |
-| `as` | Keeps what the step found in a variable: `${name}` is a control's text, `${name.value}`, `${name.helpText}`, `${name.id}`, `${name.selection}` its other parts. After `run`, `powershell` and `script`: `${name.code}`, `${name.output}`, `${name.first}`. |
+| `as` | Keeps what the step found in a variable: `${name}` is a control's text, `${name.value}`, `${name.helpText}`, `${name.id}`, `${name.selection}` its other parts. After `run`, `powershell` and `script`: `${name.code}`, `${name.output}`, `${name.first}`. Any step's `${name.seconds}` is how long it took, for an `atMost` check. |
 | `within` | Seconds to wait before it counts as stuck. Unattended runs triple it. |
 | `what` | What to call the control in a message: "I couldn't find *the start screen*." |
 | `note` | For whoever maintains the script |
@@ -67,21 +69,27 @@ Each step does one thing, named by its key. Any step can also have:
 | --- | --- | --- |
 | `startApp` | | Closes any copy of the app, starts it and puts it beside the panel |
 | `closeApp` | | Closes it |
-| `click` | target, `how: "mouse"`, `whileEnabled` | Invokes, toggles or selects a control; with `how`, clicks it with the mouse. With `whileEnabled`, clicks it again and again while it is there and can be used, such as Up until the top folder. |
+| `click` | target, `how`, `whileEnabled` | Invokes, toggles or selects a control. `how: "mouse"` clicks it with the mouse, `"right"` right-clicks it and `"double"` double-clicks it. With `whileEnabled`, clicks it again and again while it is there and can be used, such as Up until the top folder. |
+| `drag` | target, `to` | Drags a control with the mouse and drops it on another |
+| `menu` | a list of items, `on` | Picks from a menu, each item in turn: `{ "menu": ["File", "Export…"] }`. With `on`, right-clicks that control first and picks from its menu. |
 | `type` | target, `text`, `secret` | Types a key at a time, then Tab. A secret stays out of the log. |
 | `choose` | target, `option` | Picks from a drop-down |
 | `tick` | target, `checked` | Ticks or clears a tick box |
+| `setValue` | target, `to` | Sets a slider's or a number box's value, or a box's text in one go, such as a date picker's |
+| `expand` | a tree item's path, `in` | Opens each tree item on the path and selects the last: `{ "expand": ["Contoso", "Orders"] }`. `in` is the tree, when there is more than one. |
 | `hover` | target | Points at a control, such as a row whose buttons only show on hover |
 | `tab` | a tab's header | Opens a tab |
-| `key` | `"Tab"`, `"Ctrl+A"` | Presses keys |
+| `key` | `"Tab"`, `"Ctrl+A"`, `"PageDown"`, `"Shift+F10"` | Presses keys: a letter or digit, Enter, Esc, Tab, Space, Backspace, Delete, Insert, Home, End, PageUp, PageDown, Up, Down, Left, Right, F1 to F24 or Win, with Ctrl, Alt or Shift |
 | `find` | target | Waits for a control |
 | `waitGone` | target | Waits for a control to go |
+| `waitEnabled` | target | Waits for a control to be there and usable, not greyed out |
+| `useWindow` | a window's title | Waits for another window of the app's and drives that one from now on, as after a sign-in window |
 | `waitText` | target, `startsWith`, `contains`, `equals`, `matches`, `changes`, `new` | Waits for a control's text: what is typed in a text box or editor, or the name of anything else |
 | `replaceText` | target, `regex`, `replacement` | Replaces the first match in a text box, in one go as a paste would. The case fails if nothing matches. |
 | `answerDialog` | a message box's title, `button`, `expect` | Presses Yes, No, OK or Cancel. The case fails if the message doesn't have `expect` in it. |
 | `pickFile`, `pickFolder` | the picker's title, `path` | Types a path into a Windows file or folder picker |
 | `call` | a macro, `with` | Runs a macro |
-| `repeat` | a list, `steps`, `item` | Runs steps for each item, in `${item}` |
+| `repeat` | a list, or `{ "rows": file }`, `steps`, `item` | Runs steps for each item, in `${item}`, or each row of a data file: see below |
 | `whileShows` | target, `steps`, `untilText` with `startsWith`, `contains`, `equals`, `matches`, `new` | Runs steps each time a control shows, until `untilText`'s text says it is done: see below |
 | `if` | a check, `steps`, `else` | Runs `steps` when the check passes, `else` when it doesn't |
 | `set` | `{ name: value }` | Sets variables |
@@ -89,6 +97,13 @@ Each step does one thing, named by its key. Any step can also have:
 | `powershell` | a script, or a list of lines, `args` | Runs PowerShell with `args` as `$args`. `${...}` in the script is PowerShell's. |
 | `script` | a `.ps1` file in the suite, `args` | Runs it with Windows PowerShell, from the suite folder, with `args` as `$args`. It fails when it exits with a code other than 0. |
 | `wait` | seconds | Waits, for an app that shows nothing to wait for. A wait for what the app shows is sturdier. |
+| `copy` | a file or folder, `to` | Copies a file, into a folder or onto a file, or a folder and everything in it, replacing what is there |
+| `delete` | a file or folder | Deletes it, and everything in a folder. Nothing being there is fine. |
+| `writeFile` | a file, `text`, `append` | Writes a text, or a list of lines, making the folder if need be; with `append`, adds to the end |
+| `unzip` | a .zip file, `to` | Unzips it into a folder, replacing the folder when it is there |
+| `startService`, `stopService` | a service's name | Starts or stops a Windows service, and waits until it has |
+| `setJsonValue` | a JSON file, `path`, `to` | Sets a setting such as `Orders:Region`, making the objects on the way. A number or true and false stays one. Comments in the file are dropped. |
+| `setAppSetting` | a .config file, `key`, `to` | Sets an appSettings value, adding it when it isn't there |
 | `checkpoint` | a title, `checks`, `look`, `tools` | Ends a case: see below |
 
 ## Targets
@@ -106,7 +121,8 @@ A target is the name of an element in `elements.json`, a selector, or a list of 
 | `within` | Only inside another control; with `type: Window`, another window of the app's, such as a dialog |
 | `sameRowAs` | Only on the same row as another control, such as the buttons beside a file's name |
 | `scrollToFind` | Scrolls the window's long lists until it is built, for lists that only build the rows in view |
-| `button`, `text`, `edit`, `tabItem`, `comboBox`, `checkBox`, `radioButton`, `listItem`, `list`, `window` | Shorthand: `{ "button": "Add" }` is `{ "type": "Button", "name": "Add" }` |
+| `cell` | A grid's cell: `{ "cell": { "row": "ORD-1001", "column": "Quantity" } }` is the Quantity of the row one of whose cells says ORD-1001. With `within`, only in that grid. |
+| `button`, `text`, `edit`, `tabItem`, `comboBox`, `checkBox`, `radioButton`, `listItem`, `list`, `window`, `treeItem`, `menuItem`, `dataItem`, `hyperlink` | Shorthand: `{ "button": "Add" }` is `{ "type": "Button", "name": "Add" }` |
 
 An element can have `${parameters}`, given where it is used:
 
@@ -122,7 +138,16 @@ for buttons that only show while the mouse is over their row.
 
 The scripts are straight lists of steps, apart from three things.
 
-`repeat` runs steps once for each item of a list. `if` runs steps when a check passes, and its `else` when it
+`repeat` runs steps once for each item of a list, or each row of a data file in the suite's folder: a CSV file whose
+first line names its columns, or a JSON list of objects. Each row is `${item}` (its first column), and each column a
+part of it:
+
+```json
+{ "repeat": { "rows": "data/orders.csv" }, "item": "order",
+  "steps": [ { "call": "addOrder", "with": { "customer": "${order.Customer}", "quantity": "${order.Quantity}" } } ] }
+```
+
+ `if` runs steps when a check passes, and its `else` when it
 doesn't; its check is any of the checkpoint checks below, so there is no expression language to learn:
 
 ```json
@@ -185,7 +210,20 @@ Each check says what should be true and, when it isn't, what was found instead. 
 | `lastLine` | a file being written, `contains`; waits 30 seconds for it |
 | `equals`, `matches`, `contains`, `lacks` | a value, usually `${kept}`, and `to`, `regex` or `text` |
 | `shows` | a target that should be in the app now |
+| `enabled`, `disabled` | a target that should be usable, or greyed out |
+| `ticked`, `notTicked` | a tick box |
+| `selected` | an item, tab or option that should be the one picked |
+| `focused` | a target that should have the keyboard |
+| `says` | a target, and `equals`, `startsWith`, `contains` or `matches`: its text, or what is typed in it |
+| `rows` | a list, grid or tree, `equals`: how many rows or items it has |
 | `nothingLeft` | the suite's leftovers script finds nothing |
+| `fileMatches` | a file, `regex`; `^` and `$` match at each line |
+| `registry` | a key such as `HKLM\SOFTWARE\Contoso`, `value`, `equals` (or `<absent>`) |
+| `process` | a program's name, `running` (`false`: it shouldn't be) |
+| `eventLog` | a log such as `Application`, `source`, `contains`; entries since the case started count |
+| `web` | an address, `status` (200 when left out), `contains` |
+| `clipboard` | text the clipboard should have |
+| `atMost`, `atLeast` | a number, usually `${kept}` such as `${deploy.seconds}`, and `to` |
 
 | Tool | Opens |
 | --- | --- |

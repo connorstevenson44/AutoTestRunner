@@ -17,5 +17,5 @@
     "exportedFile": { "regex": "File: (.+)$" }
   },
   "requires": ["${exe}"],
-  "reset": { "powershell": "tools/Reset-OrderDesk.ps1", "leftovers": "tools/Find-Leftovers.ps1" }
+  "reset": { "script": "tools/Reset-OrderDesk.ps1", "leftovers": "tools/Find-Leftovers.ps1" }
 }

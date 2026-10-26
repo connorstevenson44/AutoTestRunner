@@ -22,6 +22,9 @@ internal sealed class BuildWorker
     // How long a watched control's text keeps still before a wait is made for it, in milliseconds.
     private const int StatusSettles = 700;
 
+    // How long a right-click's menu waits for another click before its step is made, in milliseconds.
+    private const int MenuSettles = 4000;
+
     // How often the app's process ids are read again, in milliseconds: an app can start helpers and windows.
     private const int ProcessesEvery = 1000;
 
@@ -37,6 +40,10 @@ internal sealed class BuildWorker
     private readonly Recorder _recorder;
 
     private long _processesRead = long.MinValue;
+
+    // When the last click was and where, for a double-click; and when a right-click's menu was last clicked in.
+    private (long At, int X, int Y) _lastClick = (long.MinValue, 0, 0);
+    private long _menuSince;
 
     // The box being typed in, and what it last held, for when it has gone by the time it is left.
     private InspectedControl? _typing;
@@ -84,6 +91,9 @@ internal sealed class BuildWorker
                 case BuildInputKind.Click:
                     Clicked(input);
                     break;
+                case BuildInputKind.RightClick:
+                    RightClicked(input);
+                    break;
                 case BuildInputKind.Pick:
                     Picked(input.X, input.Y);
                     break;
@@ -109,6 +119,12 @@ internal sealed class BuildWorker
                     break;
                 case BuildInputKind.EditFrom when input.Step is { } step:
                     GoTo(step, input.Rewind, record: true);
+                    break;
+                case BuildInputKind.Try when input.Check is { } check:
+                    Try(check, input.Answer);
+                    break;
+                case BuildInputKind.Use when input.Macro is { } macro:
+                    _runner.Use(macro);
                     break;
             }
         }
@@ -216,8 +232,18 @@ internal sealed class BuildWorker
         _under = null;
         if (_typing is { } box && !box.Is(hit))
             LeaveBox();
-        if (hit is not null)
+        // A second click where the last one was, quickly enough, makes that click a double-click.
+        var now = Environment.TickCount64;
+        var doubled = hit is not null && now - _lastClick.At <= Desktop.DoubleClickTime && Math.Abs(click.X - _lastClick.X) <= 4 && Math.Abs(click.Y - _lastClick.Y) <= 4
+            && _recorder.Doubled(hit.Facts) is { } step ? step : null;
+        _lastClick = doubled is null ? (now, click.X, click.Y) : (long.MinValue, 0, 0);
+        if (doubled is not null)
+            _panel.Refresh(doubled);
+        else if (hit is not null)
+        {
             _panel.Add(_recorder.Clicked(Ticked(hit)));
+            _menuSince = Environment.TickCount64;
+        }
         if (click.PassOn)
             Quietly(() => FlaUiInspector.Pass(click.X, click.Y));
     }
@@ -239,6 +265,16 @@ internal sealed class BuildWorker
             Ancestors = [.. before.Ancestors.Select((around, index) =>
                 index < after.Ancestors.Count && after.Ancestors[index].Type == around.Type ? around with { Checked = after.Ancestors[index].Checked } : around)],
         };
+    }
+
+    private void RightClicked(BuildInput click)
+    {
+        var hit = _under is not null && _pointer == (click.X, click.Y) ? _under : _inspector.At(click.X, click.Y);
+        _under = null;
+        LeaveBox();
+        if (hit is not null)
+            _panel.Add(_recorder.RightClicked(hit.Facts));
+        _menuSince = Environment.TickCount64;
     }
 
     private void Picked(int x, int y)
@@ -280,6 +316,14 @@ internal sealed class BuildWorker
         _panel.Ready(add && problem is not null ? $"That didn't work, so it isn't a step: {problem}" : null);
     }
 
+    // Runs a check from a form against the app as it is, and says how it went.
+    private void Try(JsonObject check, Action<CheckResult>? answer)
+    {
+        CheckResult? result = null;
+        var problem = Played(() => result = _runner.TryCheck(InlineCheck(check)));
+        answer?.Invoke(result ?? new CheckResult("The check", false, problem));
+    }
+
     private void Locate(DraftStep? step)
     {
         if (step?.Target is not { } target)
@@ -307,6 +351,9 @@ internal sealed class BuildWorker
         if (Environment.TickCount64 - _processesRead >= ProcessesEvery)
             ReadProcesses();
         var mode = _panel.Mode;
+        // A right-click's menu that has had no click for a while is done with: its step is made.
+        if (_recorder.MenuOpen && Environment.TickCount64 - _menuSince > MenuSettles)
+            _panel.Add(_recorder.MenuDone());
         if (mode == BuildMode.Recording)
         {
             FollowTyping();
@@ -444,6 +491,7 @@ internal sealed class BuildWorker
         finally
         {
             _under = null;
+            _panel.Values = _runner.Values();
         }
     }
 
@@ -483,11 +531,29 @@ internal sealed class BuildWorker
 
     // A step for the runner, which knows only the suite's elements: a control named while building is given by how
     // it is found instead.
-    private JsonObject Inline(DraftStep step)
+    private JsonObject Inline(DraftStep step) => Inline(step.Json);
+
+    // The same for a step in a repeat or an if, and an if's check.
+    private JsonObject Inline(JsonObject step)
     {
-        var copy = step.Json.DeepClone().AsObject();
-        if (copy[step.Verb] is { } target)
-            copy[step.Verb] = Inline(target);
+        var copy = step.DeepClone().AsObject();
+        var verb = ScriptVocabulary.KindOf(copy);
+        if (ScriptVocabulary.Steps.TryGetValue(verb, out var kind) && kind.Takes == Takes.Target && copy[verb] is { } target)
+            copy[verb] = Inline(target);
+        if (verb == "if" && copy["if"] is JsonObject condition)
+            copy["if"] = InlineCheck(condition);
+        foreach (var key in new[] { "steps", "else" })
+            if (copy[key] is JsonArray inner)
+                copy[key] = new JsonArray([.. inner.OfType<JsonObject>().Select(Inline)]);
+        return copy;
+    }
+
+    // A check of a control named while building, with the control given by how it is found.
+    private JsonObject InlineCheck(JsonObject check)
+    {
+        var copy = check.DeepClone().AsObject();
+        if (Kinds.Of(copy, ScriptVocabulary.Checks) is { } kind && ScriptVocabulary.ControlChecks.Contains(kind) && copy[kind] is { } target)
+            copy[kind] = Inline(target);
         return copy;
     }
 

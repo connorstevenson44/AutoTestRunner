@@ -13,14 +13,24 @@ public static class StepMaker
     /// <summary>A step of a case opened to change it, at this place in its file, not played yet.</summary>
     public static DraftStep Written(JsonObject json, int source)
     {
-        var verb = json.Select(pair => pair.Key).FirstOrDefault(ScriptVocabulary.Steps.ContainsKey) ?? "say";
+        var verb = ScriptVocabulary.KindOf(json);
         var target = ScriptVocabulary.Steps.TryGetValue(verb, out var kind) && kind.Takes == Takes.Target && json[verb] is { } node
             ? TargetSuggester.Describe(node)
             : null;
         return new DraftStep(json, KindOf(verb), target) { Source = source, State = DraftStepState.NotPlayed };
     }
 
-    /// <summary>Runs a .ps1 file in the suite, given relative to its folder.</summary>
+    /// <summary>A step made in the panel from its JSON, such as a macro's call or a repeat, with how it finds its control.</summary>
+    public static DraftStep FromJson(JsonObject json, DraftStepState state)
+    {
+        var verb = ScriptVocabulary.KindOf(json);
+        var target = ScriptVocabulary.Steps.TryGetValue(verb, out var kind) && kind.Takes == Takes.Target && json[verb] is { } node
+            ? TargetSuggester.Describe(node)
+            : null;
+        return new DraftStep(json, KindOf(verb), target) { State = state };
+    }
+
+    /// <summary>Runs a .ps1 or .cs file in the suite, given relative to its folder.</summary>
     public static DraftStep Script(string path)
     {
         path = path.Replace('\\', '/');
@@ -51,6 +61,22 @@ public static class StepMaker
 
     public static DraftStep StartApp(Suite suite) =>
         new(new JsonObject { ["startApp"] = new JsonObject(), ["say"] = $"Start {suite.App.Window}" }, ActivityKind.App);
+
+    /// <summary>
+    /// A right-click on a control and the items of its menu picked in turn; with no items, only the right-click.
+    /// </summary>
+    public static DraftStep ContextMenu(TargetChoice target, ControlFacts control, IReadOnlyList<string> items)
+    {
+        if (items.Count == 0)
+            return Make("click", target, control, $"Right-click {control.Label}", ActivityKind.Click, ("how", "right"));
+        var json = new JsonObject
+        {
+            ["menu"] = new JsonArray([.. items.Select(item => (JsonNode?)JsonValue.Create(item))]),
+            ["on"] = target.Json.DeepClone(),
+            ["say"] = $"Pick {string.Join(" › ", items)} from {control.Label}'s menu",
+        };
+        return new DraftStep(json, ActivityKind.Click, control: control);
+    }
 
     public static DraftStep Click(TargetChoice target, ControlFacts control) =>
         Make("click", target, control, $"Click {control.Label}", ActivityKind.Click);

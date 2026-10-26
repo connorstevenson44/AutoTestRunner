@@ -32,4 +32,9 @@ public class SchemaTests
     [Fact]
     public void Selectors_take_the_same_properties_in_the_schema_and_the_runner() =>
         Assert.Equal(Targets.SelectorKeys.Order(StringComparer.Ordinal), Properties("selector").Order(StringComparer.Ordinal));
+
+    [Fact]
+    public void Selectors_take_the_same_control_types_in_the_schema_and_the_runner() =>
+        Assert.Equal(Targets.ControlTypes.Order(StringComparer.Ordinal),
+            Definitions["selector"]!["properties"]!["type"]!["enum"]!.AsArray().Select(type => type!.GetValue<string>()).Order(StringComparer.Ordinal));
 }

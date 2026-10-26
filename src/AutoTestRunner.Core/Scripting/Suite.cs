@@ -98,6 +98,7 @@ public sealed class Suite
                 item["steps"] as JsonArray ?? [])
             {
                 Review = item["review"]?.GetValue<string>(),
+                Tags = (item["tags"] as JsonArray ?? []).Select(tag => tag!.GetValue<string>()).ToList(),
             });
         }
 
@@ -137,8 +138,10 @@ public sealed class Suite
                 app["window"]?.GetValue<string>() ?? "",
                 app["runAsAdmin"]?.GetValue<bool>() ?? false,
                 app["status"]?.GetValue<string>(),
-                app["arguments"]?.GetValue<string>()),
-            Reset = new ResetSettings(root["reset"]?["powershell"]?.GetValue<string>(), root["reset"]?["leftovers"]?.GetValue<string>()),
+                app["arguments"]?.GetValue<string>(),
+                app["startWindow"]?.GetValue<string>()),
+            // script was called powershell before it could be C# as well.
+            Reset = new ResetSettings((root["reset"]?["script"] ?? root["reset"]?["powershell"])?.GetValue<string>(), root["reset"]?["leftovers"]?.GetValue<string>()),
             Variables = root["variables"] as JsonObject ?? [],
             Requires = (root["requires"] as JsonArray ?? []).Select(path => path!.GetValue<string>()).ToList(),
             Helpers = helpers,
@@ -153,6 +156,17 @@ public sealed class Suite
         if (problems.Count > 0)
             throw new SuiteException(problems);
         return suite;
+    }
+
+    /// <summary>
+    /// Finds an element another way from now on, as when a run stuck on it has it picked again; elements.json is
+    /// written separately.
+    /// </summary>
+    public void Redefine(string element, JsonNode target)
+    {
+        if (Elements is not IDictionary<string, JsonNode> elements || !elements.ContainsKey(element))
+            throw new ArgumentException($"There is no element called {element} to change.", nameof(element));
+        elements[element] = target.DeepClone();
     }
 
     /// <summary>The case with this id, such as "open-package", or this number.</summary>
@@ -180,6 +194,13 @@ public sealed class Suite
         }
         return picked;
     }
+
+    /// <summary>The cases with any of these tags, in order; all of them when there are none.</summary>
+    public static IReadOnlyList<Case> Tagged(IReadOnlyList<Case> cases, IReadOnlyCollection<string> tags) =>
+        tags.Count == 0 ? cases : [.. cases.Where(item => item.Tags.Any(tag => tags.Contains(tag, StringComparer.OrdinalIgnoreCase)))];
+
+    /// <summary>Every tag the cases have, in the order they first appear.</summary>
+    public IReadOnlyList<string> Tags => [.. Cases.SelectMany(item => item.Tags).Distinct(StringComparer.OrdinalIgnoreCase)];
 
     /// <summary>A case and the cases it carries on from, in the order they run.</summary>
     public IReadOnlyList<Case> Leading(Case last)
@@ -264,11 +285,19 @@ public sealed class Suite
             if (call is not null && !Macros.ContainsKey(call))
                 problems.Add($"suite.json: {where} calls {call}, and there is no macro called that.");
         }
+        foreach (var (name, definition) in Elements)
+            CheckTarget(definition, $"elements.json, {name}", problems);
         var ids = Cases.Select(item => item.Id).ToHashSet();
         foreach (var item in Cases)
         {
-            foreach (var need in item.Needs.Where(need => !ids.Contains(need)))
-                problems.Add($"{Path.GetFileName(item.File)}: needs {need}, and there is no case with that id.");
+            foreach (var need in item.Needs)
+            {
+                // Cases run in file order, so the case it carries on from must come before it.
+                if (!ids.Contains(need))
+                    problems.Add($"{Path.GetFileName(item.File)}: needs {need}, and there is no case with that id.");
+                else if (Find(need) is { } needed && needed.Number >= item.Number)
+                    problems.Add($"{Path.GetFileName(item.File)}: needs {need}, which runs after it. Cases run in file order, so give it a lower number.");
+            }
             CheckSteps(item.Steps, Path.GetFileName(item.File), problems);
         }
         foreach (var macro in Macros.Values)
@@ -285,7 +314,7 @@ public sealed class Suite
                 problems.Add($"{at}: a step must be an object.");
                 continue;
             }
-            var kinds = step.Select(pair => pair.Key).Where(ScriptVocabulary.Steps.ContainsKey).ToList();
+            var kinds = ScriptVocabulary.Kinds(step).ToList();
             if (kinds.Count > 1)
             {
                 problems.Add($"{at}: has {string.Join(" and ", kinds)}; a step does one thing.");
@@ -307,21 +336,36 @@ public sealed class Suite
 
             if (definition.Takes == Takes.Target)
                 CheckTarget(step[kind], at, problems);
+            if (TargetKeys.GetValueOrDefault(kind) is { } other && step[other] is { } control)
+                CheckTarget(control, at, problems);
             switch (kind)
             {
                 case "call" when step["call"]?.GetValue<string>() is { } name:
                     if (!Macros.TryGetValue(name, out var macro))
                         problems.Add($"{at}: there is no macro called {name}.");
                     else
-                        foreach (var (key, _) in step["with"] as JsonObject ?? [])
+                    {
+                        var given = step["with"] as JsonObject ?? [];
+                        foreach (var (key, _) in given)
                             if (!macro.Parameters.ContainsKey(key))
                                 problems.Add($"{at}: {name} has no parameter {key}. It takes: {string.Join(", ", macro.Parameters.Keys)}.");
+                        foreach (var (parameter, fallback) in macro.Parameters)
+                            if (fallback is null && !given.ContainsKey(parameter))
+                                problems.Add($"{at}: {name} needs {parameter}, in with.");
+                    }
                     break;
                 case "repeat":
+                    if (step["repeat"] is JsonObject source && Written(source["rows"]) is { } rows && !File.Exists(Path.Combine(Folder, rows)))
+                        problems.Add($"{at}: there is no data file {rows} in the suite's folder.");
                     CheckSteps(step["steps"] as JsonArray ?? [], at, problems);
                     break;
+                case "click" when Written(step["how"]) is { } how && how is not ("mouse" or "right" or "double"):
+                    problems.Add($"{at}: how is mouse, right or double, not {how}.");
+                    break;
                 case "script" when step["script"]?.GetValue<string>() is { } script && !script.Contains("${", StringComparison.Ordinal):
-                    if (!File.Exists(Path.Combine(Folder, script)))
+                    if (!script.EndsWith(".ps1", StringComparison.OrdinalIgnoreCase) && !script.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                        problems.Add($"{at}: a script is a .ps1 or a .cs file, not {script}.");
+                    else if (!File.Exists(Path.Combine(Folder, script)))
                         problems.Add($"{at}: there is no script {script} in the suite's folder.");
                     break;
                 case "whileShows":
@@ -348,8 +392,8 @@ public sealed class Suite
     {
         CheckItems(checks, ScriptVocabulary.Checks, ScriptVocabulary.CommonCheckKeys, "check", at, problems);
         foreach (var check in checks ?? [])
-            if (check is JsonObject { } item && item["shows"] is { } target)
-                CheckTarget(target, at, problems);
+            if (check is JsonObject { } item && Kinds.Of(item, ScriptVocabulary.Checks) is { } kind && ScriptVocabulary.ControlChecks.Contains(kind))
+                CheckTarget(item[kind], at, problems);
     }
 
     private void CheckTarget(JsonNode? target, string at, List<string> problems)
@@ -367,6 +411,10 @@ public sealed class Suite
             case JsonObject selector:
                 foreach (var (key, _) in selector.Where(pair => !Targets.SelectorKeys.Contains(pair.Key)))
                     problems.Add($"{at}: a selector has no \"{key}\".");
+                if (Written(selector["type"]) is { } type && !Targets.ControlTypes.Contains(type))
+                    problems.Add($"{at}: there is no control type {type}. It is one of: {string.Join(", ", Targets.ControlTypes)}.");
+                if (Written(selector["match"]) is { } match && match is not ("exact" or "startsWith" or "contains"))
+                    problems.Add($"{at}: match is exact, startsWith or contains, not {match}.");
                 if (selector["element"] is JsonValue element)
                     CheckTarget(element, at, problems);
                 if (selector["within"] is { } within)
@@ -379,6 +427,13 @@ public sealed class Suite
                 break;
         }
     }
+
+    // The properties of steps, besides their own key, that are controls: drag's to, menu's on and expand's in.
+    private static readonly Dictionary<string, string> TargetKeys = new() { ["drag"] = "to", ["menu"] = "on", ["expand"] = "in" };
+
+    // A property's text as written, when it has no ${...} to fill in first.
+    private static string? Written(JsonNode? node) =>
+        node is JsonValue value && value.TryGetValue(out string? text) && !text.Contains("${", StringComparison.Ordinal) ? text : null;
 
     private static void CheckItems(JsonArray? items, IReadOnlyDictionary<string, string[]> vocabulary, IReadOnlySet<string> common, string noun, string at, List<string> problems)
     {

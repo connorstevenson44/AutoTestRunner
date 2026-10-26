@@ -12,6 +12,24 @@ public interface IMachine
     /// <summary>Whether a scheduled task exists, by its full path, such as \Contoso\Orders Export-main.</summary>
     bool TaskExists(string path);
 
+    /// <summary>Starts or stops a service, and waits until it has.</summary>
+    void SetServiceRunning(string name, bool running);
+
+    /// <summary>A registry value as text, such as HKLM\SOFTWARE\Contoso and Region; null when it isn't there.</summary>
+    string? RegistryValue(string key, string name);
+
+    /// <summary>Whether a program is running, by its name with or without .exe.</summary>
+    bool ProcessRunning(string name);
+
+    /// <summary>Whether a Windows event log has an entry since a time with this text in it, from source when given.</summary>
+    bool EventLogged(string log, string? source, string text, DateTime since);
+
+    /// <summary>The text on the clipboard; empty when there is none.</summary>
+    string Clipboard();
+
+    /// <summary>Asks a web address for its page: the HTTP status code and what it sent back, or 0 and why it couldn't.</summary>
+    (int Status, string Body) Get(string url);
+
     /// <summary>Runs a program and waits for it to exit.</summary>
     /// <param name="program">The program to run, by path or by name on the PATH.</param>
     /// <param name="arguments">Its arguments, each passed as one argument.</param>

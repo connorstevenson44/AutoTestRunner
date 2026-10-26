@@ -43,6 +43,9 @@ public sealed class CaseDraft
     /// <inheritdoc cref="NewWatch"/>
     public List<ClickHook> NewAfterClick { get; } = [];
 
+    /// <summary>Macros made of steps while building, by name, to write to macros/ when the case is saved.</summary>
+    public Dictionary<string, JsonObject> NewMacros { get; } = new(StringComparer.Ordinal);
+
     /// <summary>A case opened to change it: its steps up to its checkpoint, none of them played yet.</summary>
     public static CaseDraft Load(Case item)
     {

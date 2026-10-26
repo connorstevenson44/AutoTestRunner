@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using AutoTestRunner.Driving;
 using AutoTestRunner.Scripting;
 
 namespace AutoTestRunner.Running;
@@ -19,18 +20,17 @@ public static class Checks
     /// <summary>Reads a check from a checkpoint's "checks" list.</summary>
     /// <param name="node">The check as the script writes it.</param>
     /// <param name="scope">The variables to expand in its values.</param>
-    /// <param name="machine">The machine whose services, tasks and files it checks.</param>
-    /// <param name="leftovers">Lists what the case left behind, for the leftovers check.</param>
-    /// <param name="shows">Finds a target in the app now, for the shows check: what to call it, and whether it is there.</param>
-    public static Check Build(JsonObject node, VariableScope scope, IMachine machine, Func<IReadOnlyList<string>> leftovers,
-        Func<JsonNode, (string What, Func<bool> Shown)>? shows = null)
+    /// <param name="context">The machine and the app it looks at.</param>
+    public static Check Build(JsonObject node, VariableScope scope, CheckContext context)
     {
         var kind = Kinds.Of(node, ScriptVocabulary.Checks) ?? throw new ScriptException($"{node.ToJsonString()} isn't a check.");
         string Text(string key) => scope.Expand(node[key]?.ToString() ?? "");
         string? Optional(string key) => node[key] is null ? null : Text(key);
-        // A shows check's subject is a target, which shows resolves itself.
-        var subject = kind == "shows" ? "" : Text(kind);
+        var machine = context.Machine;
+        // A check of a control's subject is a target, which the app's probe resolves itself.
+        var subject = ScriptVocabulary.ControlChecks.Contains(kind) ? "" : Text(kind);
         var name = Path.GetFileName(subject);
+        ControlProbe Control() => (context.Controls ?? throw new ScriptException($"The {kind} check needs the app."))(node[kind]!);
 
         (string Label, Func<string?> Test, int Seconds) check = kind switch
         {
@@ -53,9 +53,21 @@ public static class Checks
             "matches" => ($"It matches {Text("regex")}", () => Regex.IsMatch(subject, Text("regex")) ? null : $"it is {subject}", 0),
             "contains" => ($"It has {Text("text")} in it", () => subject.Contains(Text("text"), StringComparison.Ordinal) ? null : $"it is {subject}", 0),
             "lacks" => ($"It doesn't have {Text("text")} in it", () => subject.Contains(Text("text"), StringComparison.Ordinal) ? "it does" : null, 0),
-            "shows" => Shows(node["shows"]!, shows ?? throw new ScriptException("The shows check needs the app.")),
+            "shows" => Shows(Control()),
+            "enabled" or "disabled" or "ticked" or "notTicked" or "selected" or "focused" => State(kind, Control()),
+            "says" => Says(Control(), Optional("equals"), Optional("startsWith"), Optional("contains"), Optional("matches")),
+            "rows" => Rows(Control(), int.Parse(Text("equals"), CultureInfo.InvariantCulture)),
             "nothingLeft" => ("Nothing from the tests is left on this computer",
-                () => leftovers() is [_, ..] found ? "still there: " + string.Join(", ", found) : null, 0),
+                () => context.Leftovers() is [_, ..] found ? "still there: " + string.Join(", ", found) : null, 0),
+            "fileMatches" => ($"{name} matches {Text("regex")}", () => !File.Exists(subject) ? "the file isn't there" : Regex.IsMatch(ReadShared(subject).ReplaceLineEndings("\n"), Text("regex"), RegexOptions.Multiline) ? null : "it doesn't", 0),
+            "registry" => Setting($"the registry's {subject}", Text("value"), Optional("equals") ?? "", () => machine.RegistryValue(subject, Text("value")) ?? Absent),
+            "process" => Running(subject, node["running"]?.GetValue<bool>() ?? true, machine),
+            "eventLog" => ($"The {subject} event log says \"{Text("contains")}\"{(Optional("source") is { } source ? $" from {source}" : "")}",
+                () => machine.EventLogged(subject, Optional("source"), Text("contains"), context.Since ?? DateTime.Now.AddMinutes(-10)) ? null : "it doesn't", 0),
+            "web" => Web(subject, Optional("status") is { } status ? int.Parse(status, CultureInfo.InvariantCulture) : 200, Optional("contains"), machine),
+            "clipboard" => ($"The clipboard has \"{subject}\" in it", () => machine.Clipboard() is var text && text.Contains(subject, StringComparison.Ordinal) ? null : $"it has: {text.Trim()}", 0),
+            "atMost" => Compare(subject, Text("to"), atMost: true),
+            "atLeast" => Compare(subject, Text("to"), atMost: false),
             _ => throw new ScriptException($"There is no {kind} check."),
         };
 
@@ -131,11 +143,72 @@ public static class Checks
              return found == expected ? null : $"it has {found}";
          }, 0);
 
-    private static (string, Func<string?>, int) Shows(JsonNode target, Func<JsonNode, (string What, Func<bool> Shown)> shows)
+    private static (string, Func<string?>, int) Shows(ControlProbe control) =>
+        ($"It shows {control.What}", () => control.Find() is null ? "it isn't there" : null, 0);
+
+    // What a control is like now: whether it can be used, is ticked, picked or has the keyboard.
+    private static (string, Func<string?>, int) State(string kind, ControlProbe control)
     {
-        var (what, shown) = shows(target);
-        return ($"It shows {what}", () => shown() ? null : "it isn't there", 0);
+        var what = Capital(control.What);
+        var (label, holds, otherwise) = kind switch
+        {
+            "enabled" => ($"{what} can be used", (Func<IControl, bool>)(found => found.IsEnabled), "it is greyed out"),
+            "disabled" => ($"{what} is greyed out", found => !found.IsEnabled, "it can be used"),
+            "ticked" => ($"{what} is ticked", found => found.IsChecked == true, "it isn't ticked"),
+            "notTicked" => ($"{what} isn't ticked", found => found.IsChecked == false, "it is ticked"),
+            "selected" => ($"{what} is picked", found => found.IsSelected, "it isn't picked"),
+            _ => ($"{what} has the keyboard", found => found.HasFocus, "the keyboard is elsewhere"),
+        };
+        return (label, () => control.Find() is not { } found ? "it isn't there" : holds(found) ? null : otherwise, 0);
     }
+
+    private static (string, Func<string?>, int) Says(ControlProbe control, string? equals, string? startsWith, string? contains, string? matches)
+    {
+        var wanted = equals ?? startsWith ?? contains ?? matches ?? "";
+        var how = equals is not null ? "says" : startsWith is not null ? "starts with" : contains is not null ? "has" : "matches";
+        return ($"{Capital(control.What)} {how} \"{wanted}\"", () =>
+        {
+            if (control.Find() is not { } found)
+                return "it isn't there";
+            var text = found.Value ?? found.Name;
+            var holds = (equals is null || text == equals) && (startsWith is null || text.StartsWith(startsWith, StringComparison.Ordinal))
+                && (contains is null || text.Contains(contains, StringComparison.Ordinal)) && (matches is null || Regex.IsMatch(text, matches));
+            return holds ? null : $"it says: {text}";
+        }, 0);
+    }
+
+    private static (string, Func<string?>, int) Rows(ControlProbe control, int expected) =>
+        ($"{Capital(control.What)} has {expected} row{(expected == 1 ? "" : "s")}",
+         () => control.Find() is not { } found ? "it isn't there" : control.Rows(found) is var rows && rows == expected ? null : $"it has {rows}", 0);
+
+    private static (string, Func<string?>, int) Running(string name, bool running, IMachine machine) =>
+        (running ? $"{name} is running" : $"{name} isn't running",
+         () => machine.ProcessRunning(name) == running ? null : running ? "it isn't" : "it still is", 0);
+
+    private static (string, Func<string?>, int) Web(string url, int status, string? text, IMachine machine) =>
+        ($"{url} answers {status}{(text is null ? "" : $" with \"{text}\"")}",
+         () =>
+         {
+             var (found, body) = machine.Get(url);
+             if (found == 0)
+                 return $"it couldn't be reached: {body}";
+             if (found != status)
+                 return $"it answered {found}";
+             return text is null || body.Contains(text, StringComparison.Ordinal) ? null : "the page doesn't have it";
+         }, 0);
+
+    // Numbers, such as how long a step took: at most or at least another.
+    private static (string, Func<string?>, int) Compare(string value, string limit, bool atMost) =>
+        ($"It is {(atMost ? "at most" : "at least")} {limit}",
+         () =>
+         {
+             if (!double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number))
+                 return $"{value} isn't a number";
+             var bound = double.Parse(limit, CultureInfo.InvariantCulture);
+             return (atMost ? number <= bound : number >= bound) ? null : $"it is {value}";
+         }, 0);
+
+    private static string Capital(string text) => text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
 
     private static string? Version(string exe, string expected)
     {

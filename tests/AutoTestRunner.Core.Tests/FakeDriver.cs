@@ -45,9 +45,9 @@ internal sealed class FakeDriver : IDriver
 
     public void Point(IControl control, string what) => Done.Add($"point {control.Name}");
 
-    public void Click(IControl control, bool useMouse)
+    public void Click(IControl control, ClickHow how)
     {
-        Done.Add($"click {control.Name}");
+        Done.Add(how switch { ClickHow.Right => $"right-click {control.Name}", ClickHow.Double => $"double-click {control.Name}", _ => $"click {control.Name}" });
         if (OnClick.TryGetValue(control.Name, out var reaction))
             reaction();
     }
@@ -71,6 +71,27 @@ internal sealed class FakeDriver : IDriver
         fake.Value = regex.Replace(fake.Value!, replacement, 1);
         return true;
     }
+
+    public void Drag(IControl control, IControl onto) => Done.Add($"drag {control.Name} onto {onto.Name}");
+
+    public void Menu(IReadOnlyList<string> path)
+    {
+        Done.Add($"menu {string.Join(" > ", path)}");
+        if (OnClick.TryGetValue(path[^1], out var reaction))
+            reaction();
+    }
+
+    public void Expand(IControl control) => Done.Add($"expand {control.Name}");
+
+    public void SetValue(IControl control, string value)
+    {
+        ((FakeControl)control).Value = value;
+        Done.Add($"set {control.Name} {value}");
+    }
+
+    public int Rows(IControl control) => ((FakeControl)control).Rows;
+
+    public void UseWindow(string title, TimeSpan timeout) => Done.Add($"use {title}");
 
     public void Key(string keys) => Done.Add($"key {keys}");
 

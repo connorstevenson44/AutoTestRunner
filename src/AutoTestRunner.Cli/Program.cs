@@ -8,7 +8,8 @@ using AutoTestRunner.Scripting;
 namespace AutoTestRunner.Cli;
 
 /// <summary>
-/// autotest: runs a suite while you watch, or unattended for CI, and builds cases by using the app.
+/// autotest: runs a suite while you watch, or unattended for CI, and builds cases by using the app. The commands and
+/// their options are in <see cref="CommandLine"/>; autotest --help lists them.
 ///
 ///   autotest                          the launcher, on the suites found near the runner
 ///   autotest launch [&lt;folder&gt;]        the launcher, on a suite or the suites found in a folder
@@ -21,78 +22,67 @@ namespace AutoTestRunner.Cli;
 /// </summary>
 public static class Program
 {
-    private const string Usage = """
-        autotest [launch [<suite folder, or a folder of suites>]] [the options of run, to start the launcher with]
-        autotest run <suite folder> [--cases 1-5,8] [--unattended] [--speed Slow|Modest|Fast]
-                 [--mode auto|pause-at-checkpoints|step-by-step] [--results <folder>] [--var name=value]...
-        autotest record <suite folder> [--name <name>] [--after <case>] [--edit <case>]
-        autotest validate <suite folder>
-        autotest list <suite folder>
-        autotest preview-ui [--shots <folder>]
-
-        With no folder, the launcher offers the suites near autotest and the folder it was started from.
-
-        --mode auto                  carries on by itself, showing each checkpoint for a few seconds (Space holds it there)
-        --mode pause-at-checkpoints  carries on by itself, waiting for you at each checkpoint
-        --mode step-by-step          waits for Enter before each step
-        --name                       record: what the new case is called
-        --after                      record: the new case carries on from where this case leaves off, by number or id
-        --edit                       record: opens this case to change it, by number or id: the app is taken to where it
-                                     starts, and its steps can be played to any of them, and recorded again from there
-        """;
-
     [STAThread]
     public static int Main(string[] args)
     {
-        if (args is ["preview-ui", ..])
-            return PreviewUi.Run(args[1..]);
-        if (args is [] || args[0].StartsWith("--", StringComparison.Ordinal))
-            return Launch(null, args, ["launch", .. args]);
-        if (args is ["launch", ..])
-            return args.Length > 1 && !args[1].StartsWith("--", StringComparison.Ordinal) ? Launch(args[1], args[2..], args) : Launch(null, args[1..], args);
-        if (args.Length < 2 || args[0] is not ("run" or "record" or "validate" or "list"))
-            return Problem(null);
+        var commands = CommandLine.Commands(
+            (folder, options) => Launch(folder, options, args is ["launch", ..] ? args : ["launch", .. args]),
+            (command, folder, options) => SuiteCommand(command, folder, options, args),
+            PreviewUi.Run);
+        var parsed = commands.Parse(args);
+        if (parsed.Errors is [_, ..] errors)
+        {
+            foreach (var error in errors)
+                Console.Error.WriteLine(error.Message);
+            var command = parsed.CommandResult.Command;
+            Console.Error.WriteLine(command == commands ? "autotest --help says what it takes." : $"autotest {command.Name} --help says what it takes.");
+            return (int)ExitCode.ScriptError;
+        }
+        return parsed.Invoke();
+    }
 
+    // run, record, validate and list, on a suite.
+    private static int SuiteCommand(string command, string folder, Options options, string[] args)
+    {
         Suite suite;
         try
         {
-            suite = Suite.Load(args[1]);
+            suite = Suite.Load(folder);
         }
         catch (SuiteException ex)
         {
-            Console.Error.WriteLine($"The suite in {args[1]} has problems:");
+            Console.Error.WriteLine($"The suite in {folder} has problems:");
             foreach (var line in ex.Problems)
                 Console.Error.WriteLine("  " + line);
             return (int)ExitCode.ScriptError;
         }
 
-        switch (args[0])
+        switch (command)
         {
             case "validate":
                 Console.WriteLine($"{suite.Name}: {suite.Cases.Count} cases, {suite.Macros.Count} macros, {suite.Elements.Count} elements. No problems found.");
                 return (int)ExitCode.Passed;
             case "list":
                 foreach (var item in suite.Cases)
-                    Console.WriteLine($"{item.Number,3}. {item.Name}  [{item.Id}]{(item.Needs.Count > 0 ? "  needs " + string.Join(", ", item.Needs) : "")}");
+                    Console.WriteLine($"{item.Number,3}. {item.Name}  [{item.Id}]{(item.Needs.Count > 0 ? "  needs " + string.Join(", ", item.Needs) : "")}{(item.Tags.Count > 0 ? "  #" + string.Join(" #", item.Tags) : "")}");
                 return (int)ExitCode.Passed;
+            case "record":
+                return Record(suite, options, args);
         }
-
-        var options = Options.Read(args[2..]);
-        if (args[0] == "record" && options.Unattended)
-            options = options with { Problem = "The builder is used by a person; autotest run --unattended runs without one." };
-        if (options.Problem is { } problem)
-            return Problem(problem);
-        if (args[0] == "record")
-            return Record(suite, options, args);
 
         IReadOnlyList<Case> cases;
         try
         {
-            cases = suite.Select(options.Cases);
+            cases = options.Pick(suite);
         }
         catch (SuiteException ex)
         {
             Console.Error.WriteLine(ex.Message);
+            return (int)ExitCode.ScriptError;
+        }
+        if (cases.Count == 0)
+        {
+            Console.Error.WriteLine($"No case has the tags {string.Join(", ", options.Tags)}.");
             return (int)ExitCode.ScriptError;
         }
 
@@ -110,15 +100,13 @@ public static class Program
 
     // The launcher, on the suites found near autotest and the folder given or started from. A suite given, or the
     // only one found, that needs administrator asks for it now; with several, the launcher asks when one starts.
-    private static int Launch(string? folder, string[] rest, string[] args)
+    private static int Launch(string? folder, Options options, string[] args)
     {
-        var options = Options.Read(rest);
-        if (options.Unattended)
-            options = options with { Problem = "The launcher is for a run you watch; autotest run --unattended runs without it." };
-        if (options.Problem is { } problem)
-            return Problem(problem);
         if (folder is not null && !Directory.Exists(folder))
-            return Problem($"There is no folder {folder}.");
+        {
+            Console.Error.WriteLine($"There is no folder {folder}.");
+            return (int)ExitCode.ScriptError;
+        }
 
         var asked = folder is not null && SuiteFinder.IsSuite(folder) ? Path.GetFullPath(folder) : null;
         var places = folder is null || asked is not null ? SuiteFinder.Places(AppContext.BaseDirectory, Environment.CurrentDirectory, asked) : [folder];
@@ -136,7 +124,7 @@ public static class Program
         {
             try
             {
-                suite.Select(options.Cases);
+                options.Pick(suite);
             }
             catch (SuiteException ex)
             {
@@ -171,14 +159,6 @@ public static class Program
         if (!found.Any(each => SamePath(each.Folder, suite.Folder)))
             found.Insert(0, FoundSuite.Load(suite.Folder));
         return WatchedRun.Launch(found, found.First(each => SamePath(each.Folder, suite.Folder)), options with { Edit = null, After = null, Name = null }, request);
-    }
-
-    private static int Problem(string? problem)
-    {
-        if (problem is not null)
-            Console.Error.WriteLine(problem);
-        Console.Error.WriteLine(Usage);
-        return (int)ExitCode.ScriptError;
     }
 
     // A suite that installs services needs administrator, and so does driving an app that runs as administrator.

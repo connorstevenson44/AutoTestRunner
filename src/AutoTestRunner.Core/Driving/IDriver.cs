@@ -29,8 +29,26 @@ public interface IDriver : IDisposable
     /// <summary>Scrolls a control into view, moves the mouse to it and outlines it, labelled with what.</summary>
     void Point(IControl control, string what);
 
-    /// <summary>Invokes, toggles or selects a control, or with useMouse clicks it.</summary>
-    void Click(IControl control, bool useMouse);
+    /// <summary>Invokes, toggles or selects a control, or clicks it with the mouse: once, with the right button or twice.</summary>
+    void Click(IControl control, ClickHow how);
+
+    /// <summary>Drags a control with the mouse and drops it on another.</summary>
+    void Drag(IControl control, IControl onto);
+
+    /// <summary>Opens each item of a menu in turn and clicks the last: the menu bar's, or a context menu that is open.</summary>
+    void Menu(IReadOnlyList<string> path);
+
+    /// <summary>Opens a tree item, so the items inside it show.</summary>
+    void Expand(IControl control);
+
+    /// <summary>Sets a slider's or a number box's value, or a box's text in one go, such as a date picker's.</summary>
+    void SetValue(IControl control, string value);
+
+    /// <summary>How many rows a list, grid or tree shows.</summary>
+    int Rows(IControl control);
+
+    /// <summary>Waits for another window of the app's by its title and drives that one from now on, as after a sign-in window.</summary>
+    void UseWindow(string title, TimeSpan timeout);
 
     /// <summary>Types into a text box a key at a time, then moves on with Tab so the value is taken.</summary>
     void Type(IControl control, string text, bool secret);

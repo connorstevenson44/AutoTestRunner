@@ -41,6 +41,16 @@ public sealed partial class VariableScope(VariableScope? parent = null, IReadOnl
         return false;
     }
 
+    /// <summary>Every variable it can see, each with its text, the nearest scope's where two have the same name.</summary>
+    public IReadOnlyList<(string Name, string Text)> All()
+    {
+        var seen = new Dictionary<string, string>(StringComparer.Ordinal);
+        for (var scope = this; scope is not null; scope = scope._parent)
+            foreach (var (name, value) in scope._values)
+                seen.TryAdd(name, value.Text);
+        return [.. seen.OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase).Select(pair => (pair.Key, pair.Value))];
+    }
+
     public Value Get(string name) =>
         TryGet(name, out var value) ? value : throw new ScriptException($"There is no variable called {name}.");
 

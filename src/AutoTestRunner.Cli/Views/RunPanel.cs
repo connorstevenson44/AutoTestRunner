@@ -8,6 +8,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using AutoTestRunner.Building;
 using AutoTestRunner.Driving;
 using AutoTestRunner.FlaUI;
 using AutoTestRunner.Running;
@@ -22,7 +23,7 @@ namespace AutoTestRunner.Cli.Views;
 /// command printed as it printed it.
 /// </summary>
 [SuppressMessage("Design", "CA1001", Justification = "The key hook and the timer are disposed when the window closes.")]
-internal sealed class RunPanel : Window, IRunView
+internal sealed partial class RunPanel : Window, IRunView
 {
     private const double PanelWidth = 440;
 
@@ -46,6 +47,7 @@ internal sealed class RunPanel : Window, IRunView
     private readonly DispatcherTimer _waitTimer;
 
     private GlobalKeyHook? _hooks;
+    private readonly Suite _suite;
     private Runner? _runner;
     private FlaUiDriver? _driver;
     private volatile bool _asking, _youClicked, _typing, _over;
@@ -67,7 +69,7 @@ internal sealed class RunPanel : Window, IRunView
 
     public RunPanel(Suite suite, IReadOnlyList<Case> cases, RunControl control, string resultsFolder, bool canRunAgain)
     {
-        (_control, _resultsFolder, _canRunAgain) = (control, resultsFolder, canRunAgain);
+        (_suite, _control, _resultsFolder, _canRunAgain) = (suite, control, resultsFolder, canRunAgain);
         Resources.MergedDictionaries.Add(Ui.Theme);
         Title = suite.Name;
         Width = PanelWidth;
@@ -347,14 +349,34 @@ internal sealed class RunPanel : Window, IRunView
 
     public StuckAnswer AskStuck(string message, string screenshot)
     {
-        var answer = OnUi(() => Ask(Ui.Fail, Icons.Warning, "Stuck", message + "\n\nPut the app right by hand if you can, then try again.",
-            [(Icons.Retry, "Try again"), (Icons.Skipped, "Skip the case"), (Icons.Stop, "Stop")], screenshot));
-        return answer.Result switch
+        while (true)
         {
-            0 => StuckAnswer.TryAgain,
-            1 => StuckAnswer.SkipCase,
-            _ => StuckAnswer.Stop,
-        };
+            // A step whose control can be picked again offers Pick it, which writes the new way to find it.
+            var stuck = _runner?.StuckAt;
+            var fix = stuck is null ? null : TargetFixer.Where(_suite, stuck);
+            (string, string)[] answers = fix is null
+                ? [(Icons.Retry, "Try again"), (Icons.Skipped, "Skip the case"), (Icons.Stop, "Stop")]
+                : [(Icons.Retry, "Try again"), (Icons.Pick, "Pick it"), (Icons.Skipped, "Skip the case"), (Icons.Stop, "Stop")];
+            var how = fix is null ? "Put the app right by hand if you can, then try again." : "Put the app right by hand if you can, then try again; or Pick it, to point at the control the step should use.";
+            var answer = OnUi(() => Ask(Ui.Fail, Icons.Warning, "Stuck", message + "\n\n" + how, answers, screenshot)).Result;
+            if (fix is not null)
+            {
+                if (answer == 1)
+                {
+                    if (PickAndFix(stuck!, fix))
+                        return StuckAnswer.TryAgain;
+                    continue;
+                }
+                if (answer > 1)
+                    answer--;
+            }
+            return answer switch
+            {
+                0 => StuckAnswer.TryAgain,
+                1 => StuckAnswer.SkipCase,
+                _ => StuckAnswer.Stop,
+            };
+        }
     }
 
     public bool AskScriptError(string message) =>

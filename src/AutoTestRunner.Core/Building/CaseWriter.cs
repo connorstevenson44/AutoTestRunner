@@ -17,13 +17,15 @@ public static partial class CaseWriter
     private static readonly JsonReaderOptions ReadOptions = new() { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
 
     /// <summary>
-    /// Saves the draft, and returns the case file it went in; with the controls it named, the hooks it added, and the
-    /// review lines for the cases that carry on from it.
+    /// Saves the draft, and returns the case file it went in; with the controls it named, the hooks and macros it
+    /// added, and the review lines for the cases that carry on from it.
     /// </summary>
     public static string Save(Suite suite, CaseDraft draft)
     {
         AddElements(suite, draft.NewElements);
         AddHooks(suite, draft.NewWatch, draft.NewAfterClick);
+        foreach (var (name, macro) in draft.NewMacros)
+            MacroMaker.Save(suite, name, macro);
         foreach (var (file, why) in draft.Review)
             File.WriteAllText(file, Flag(File.ReadAllText(file), why));
         if (draft.Editing is { } existing)
@@ -369,26 +371,26 @@ public static partial class CaseWriter
     }
 
     // The $schema a new file points at: as the suite's other files do, or the one on GitHub.
-    private static string Schema(Suite suite, string kind)
+    internal static string Schema(Suite suite, string kind)
     {
         foreach (var item in suite.Cases)
         {
             if (JsonNode.Parse(File.ReadAllText(item.File), documentOptions: new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true })?["$schema"]?.GetValue<string>() is not { } schema)
                 continue;
             schema = schema.Replace("case.schema.json", $"{kind}.schema.json", StringComparison.Ordinal);
-            // The suite's files are a folder above its cases, so a relative path goes up one fewer.
-            return kind != "case" && !schema.Contains("://", StringComparison.Ordinal) && schema.StartsWith("../", StringComparison.Ordinal) ? schema[3..] : schema;
+            // The suite's files are a folder above its cases and macros, so a relative path goes up one fewer.
+            return kind is not ("case" or "macro") && !schema.Contains("://", StringComparison.Ordinal) && schema.StartsWith("../", StringComparison.Ordinal) ? schema[3..] : schema;
         }
         return SchemaFolder + kind + ".schema.json";
     }
 
-    private static string NewLine(Suite suite) =>
+    internal static string NewLine(Suite suite) =>
         suite.Cases is [var item, ..] && File.ReadAllText(item.File).Contains("\r\n", StringComparison.Ordinal) ? "\r\n"
         : suite.Cases.Count > 0 ? "\n" : Environment.NewLine;
 
     // A case's name line, with its indent: the review line goes after it.
     [GeneratedRegex(@"(?m)^([ \t]*)""name""[ \t]*:[ \t]*""(?:[^""\\\r\n]|\\.)*""[ \t]*,?")]
-    private static partial Regex NameLine();
+    internal static partial Regex NameLine();
 
     // A review line, as Flag writes it, on a line of its own with a comma after it.
     [GeneratedRegex(@"(?m)^[ \t]*""review""[ \t]*:[ \t]*""(?:[^""\\\r\n]|\\.)*""[ \t]*,[ \t]*\r?\n")]
@@ -399,7 +401,7 @@ public static partial class CaseWriter
     private static partial Regex ReviewLast();
 
     [GeneratedRegex(@"^\d+")]
-    private static partial Regex Leading();
+    internal static partial Regex Leading();
 
     [GeneratedRegex(@"[a-z0-9]+")]
     private static partial Regex Words();

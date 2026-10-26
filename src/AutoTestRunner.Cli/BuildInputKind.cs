@@ -6,6 +6,9 @@ internal enum BuildInputKind
     /// <summary>A click in the app while recording.</summary>
     Click,
 
+    /// <summary>A right-click in the app while recording, which may open a menu.</summary>
+    RightClick,
+
     /// <summary>A click that picks the control under it, while picking or with Ctrl held.</summary>
     Pick,
 
@@ -32,4 +35,10 @@ internal enum BuildInputKind
     /// taken out had been played, and records from there.
     /// </summary>
     EditFrom,
+
+    /// <summary>A check from a form's Try now, to run against the app as it is.</summary>
+    Try,
+
+    /// <summary>A macro made of steps in the panel, for the runner to play when the steps are played again.</summary>
+    Use,
 }
