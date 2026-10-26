@@ -67,7 +67,7 @@ keeps every case after the cases it carries on from, and deleting one that other
 from what it did, marked as needing a look. The icons beside the suite's name open:
 
 - **Named controls**: each name in `elements.json`, how it finds its control and where it is used. The eye points it
-  out in the app, the tag renames it everywhere it is used, and **Used nowhere** shows the ones nothing uses.
+  out in the app, the rename icon changes it everywhere it is used, and **Used nowhere** shows the ones nothing uses.
 - **Without ids**: the controls on the app's screen a test would use that have no AutomationId, red with nothing to
   find them by and amber with only their words, each with the XAML that gives it one, to copy.
 - **New suite**: pick an app's `.exe`, start it to read its window's title, and point at its status bar. It writes
