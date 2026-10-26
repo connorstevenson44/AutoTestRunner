@@ -10,13 +10,15 @@ namespace AutoTestRunner.Cli;
 
 /// <summary>
 /// A case built by using the app: the builder panel beside it, the hook that sees the person's clicks and keys, and the
-/// builder's thread that reads and drives the app. The hook and the panel are on the UI thread and only note what
-/// happened, as Windows drops a hook that keeps it waiting; the builder's thread makes steps of it, in order.
+/// builder's thread that reads and drives the app. The hook runs on a thread of its own and only notes what happened,
+/// as Windows drops a hook that keeps it waiting and the mouse waits for it; the builder's thread makes steps of it, in
+/// order.
 /// </summary>
 [SuppressMessage("Design", "CA1001", Justification = "The hook goes when the panel closes. The queue is the collector's, as both threads use it until they end.")]
 internal sealed class BuildSession
 {
-    private static readonly TimeSpan Idle = TimeSpan.FromMilliseconds(120);
+    // How long the builder's thread waits for input before it looks at the app again.
+    private static readonly TimeSpan Idle = TimeSpan.FromMilliseconds(50);
 
     private readonly BuildRequest _request;
     private readonly Options _options;
@@ -46,7 +48,6 @@ internal sealed class BuildSession
         _panel.MadeMacro += macro => Post(new BuildInput(BuildInputKind.Use, Macro: macro));
         _panel.Loaded += (_, _) =>
         {
-            // A low-level hook runs on the thread that set it, which must pump messages: this one does.
             _hook = new RecordingHook(OnDown, OnKeys, () => _playing, OnRight);
             var worker = new Thread(Work) { IsBackground = true, Name = "Builder" };
             worker.SetApartmentState(ApartmentState.MTA);
@@ -126,10 +127,12 @@ internal sealed class BuildSession
         }
     }
 
-    // ===== The hook, on the UI thread: it only notes what happened =====
+    // ===== The hook, on its own thread: it only notes what happened =====
 
     // A click in the app is noted while recording; while picking, or with Ctrl held, it picks and doesn't reach the
-    // app. A message box or file picker closes as it is clicked, so that click waits until the builder has read it.
+    // app. A message box or file picker closes as its OK, Open or Cancel is clicked, so a click on one of its buttons
+    // waits until the builder has read it. Other clicks in it, on a folder or in its name box, are on the way to that:
+    // they make no step, so they go straight to it, and a double-click on a folder still opens it.
     private bool OnDown(int x, int y, bool ctrl)
     {
         var mode = _panel.Mode;
@@ -137,7 +140,13 @@ internal sealed class BuildSession
         if (mode == BuildMode.Paused || _inputs.IsAddingCompleted || !IsApp(window))
             return false;
         var pick = mode == BuildMode.Picking || ctrl;
-        var passOn = !pick && Desktop.IsDialog(window);
+        var passOn = false;
+        if (!pick && Desktop.IsDialog(window))
+        {
+            if (!Desktop.IsButtonAt(x, y))
+                return false;
+            passOn = true;
+        }
         _inputs.Add(new BuildInput(pick ? BuildInputKind.Pick : BuildInputKind.Click, x, y, PassOn: passOn));
         return pick || passOn;
     }

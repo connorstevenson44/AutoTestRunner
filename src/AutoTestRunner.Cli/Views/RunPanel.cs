@@ -62,10 +62,11 @@ internal sealed partial class RunPanel : Window, IRunView
     private bool _waitIsCommand;
     private DateTime _waitStarted;
 
-    // The question on show, and the answer that closing it gives.
-    private TaskCompletionSource<int>? _answer;
+    // The question on show, and the answer that closing it gives. The keys' hook reads whether there is one, from its
+    // own thread.
+    private volatile TaskCompletionSource<int>? _answer;
     private int _closeAnswer;
-    private bool _askingToStop;
+    private volatile bool _askingToStop;
 
     public RunPanel(Suite suite, IReadOnlyList<Case> cases, RunControl control, string resultsFolder, bool canRunAgain)
     {
@@ -420,7 +421,8 @@ internal sealed partial class RunPanel : Window, IRunView
 
     // Space, Enter and Esc belong to the run unless the person is typing: in a text box they clicked into themselves,
     // or in one of the runner's own windows, such as a note. While the run is stuck, or a question other than whether
-    // to stop is showing, they do nothing: the question's buttons answer it.
+    // to stop is showing, they do nothing: the question's buttons answer it. Called on the hook's thread: it only reads,
+    // and what a key does happens on the UI thread.
     private bool OnKey(int key)
     {
         if (_answer is not null && !_askingToStop)

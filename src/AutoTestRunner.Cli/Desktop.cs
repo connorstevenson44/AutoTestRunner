@@ -9,7 +9,7 @@ namespace AutoTestRunner.Cli;
 /// </summary>
 internal static class Desktop
 {
-    private const string DialogClass = "#32770";
+    private const string DialogClass = "#32770", ButtonClass = "Button";
     private const uint RootWindow = 2;
 
     /// <summary>The top-level window under a point on the screen, in pixels.</summary>
@@ -35,6 +35,17 @@ internal static class Desktop
         var text = new char[16];
         var length = GetClassName(hwnd, text, text.Length);
         return new string(text, 0, length) == DialogClass;
+    }
+
+    /// <summary>
+    /// Whether the window under a point is a button of a Windows message box or file picker, such as OK, Open or
+    /// Cancel: those are Win32 buttons of their own, unlike the folders and files in a picker.
+    /// </summary>
+    public static bool IsButtonAt(int x, int y)
+    {
+        var text = new char[16];
+        var length = GetClassName(WindowFromPoint(new Point { X = x, Y = y }), text, text.Length);
+        return new string(text, 0, length) == ButtonClass;
     }
 
     /// <summary>Where the mouse is, in pixels.</summary>

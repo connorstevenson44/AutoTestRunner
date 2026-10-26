@@ -2,9 +2,10 @@ using System.Drawing;
 using AutoTestRunner.Building;
 using AutoTestRunner.Driving;
 using AutoTestRunner.Scripting;
+using FlaUI.Core;
 using FlaUI.Core.AutomationElements;
+using FlaUI.Core.Conditions;
 using FlaUI.Core.Definitions;
-using FlaUI.Core.Input;
 
 namespace AutoTestRunner.FlaUI;
 
@@ -12,22 +13,47 @@ namespace AutoTestRunner.FlaUI;
 /// What the builder asks of the app while a person uses it: which control is under the mouse, what it says about
 /// itself and the controls around it, what a box holds and whether a tick box is ticked. Only the app's own controls
 /// count, not the builder's or another program's.
+/// <para>
+/// Each question UI Automation answers is a call into the app, answered on the app's UI thread, so asking many makes
+/// the app stutter while the mouse is over it. A control and the controls around it are read with a cache request, as
+/// Microsoft advises: each comes with everything the builder wants of it in one call, rather than one call for each
+/// thing. https://learn.microsoft.com/windows/win32/winauto/uiauto-cachingforclients
+/// </para>
 /// </summary>
 public sealed class FlaUiInspector(FlaUiDriver driver)
 {
     // How far up the tree a control's ancestors are read: far enough for a row in a list in a tab.
     private const int MostAncestors = 12;
 
+    // How far up a control is followed to find the window it is in, past the ancestors kept: a cell in a list in a tab
+    // in a styled window can be thirty levels down. Knowing it is in the main window spares a search of the window for
+    // an open drop-down.
+    private const int MostLevels = 80;
+
+    // How long a control's process not being the app's is trusted before the app's processes are read again, in
+    // milliseconds: reading them asks Windows for every process there is.
+    private const int ProcessesFor = 1000;
+
+    private readonly CacheRequest _facts = FactsRequest(driver);
+    private IReadOnlySet<int> _processes = new HashSet<int>();
+    private long _processesRead = long.MinValue;
+
     /// <summary>The ids of the processes running the app's exe, whose windows are the app's.</summary>
-    public IReadOnlySet<int> Processes() => driver.ProcessIds();
+    public IReadOnlySet<int> Processes()
+    {
+        _processes = driver.ProcessIds();
+        _processesRead = Environment.TickCount64;
+        return _processes;
+    }
 
     /// <summary>The app's control at a point on the screen, in pixels, or null when the point isn't on the app.</summary>
     public InspectedControl? At(int x, int y)
     {
         try
         {
+            using var cached = _facts.Activate();
             var element = driver.Automation.FromPoint(new Point(x, y));
-            return element is null || !driver.ProcessIds().Contains(element.Properties.ProcessId.ValueOrDefault) ? null : Inspect(element);
+            return element is null || !IsApp(element) ? null : Inspect(element);
         }
         catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or TimeoutException)
         {
@@ -40,8 +66,9 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
     {
         try
         {
+            using var cached = _facts.Activate();
             var element = driver.Automation.FocusedElement();
-            return element is null || !driver.ProcessIds().Contains(element.Properties.ProcessId.ValueOrDefault) ? null : Inspect(element);
+            return element is null || !IsApp(element) ? null : Inspect(element);
         }
         catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or TimeoutException)
         {
@@ -49,14 +76,21 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
         }
     }
 
-    /// <summary>The app's control that has the keyboard, when it is a box that can be typed in.</summary>
-    public InspectedControl? TypingIn()
+    /// <summary>
+    /// The app's control that has the keyboard, when it is a box that can be typed in. When it is the box given, that
+    /// is returned as it is: only a box newly typed in is read, with the controls around it.
+    /// </summary>
+    public InspectedControl? TypingIn(InspectedControl? current = null)
     {
-        if (Focused() is not { } focused || focused.Facts.Type is not (nameof(ControlType.Edit) or nameof(ControlType.Document)))
-            return null;
         try
         {
-            return focused.Element.Patterns.Value.IsSupported && focused.Element.Patterns.Value.Pattern.IsReadOnly.ValueOrDefault ? null : focused;
+            using var cached = _facts.Activate();
+            var element = driver.Automation.FocusedElement();
+            if (element is null || element.Properties.ControlType.ValueOrDefault is not (ControlType.Edit or ControlType.Document) || !IsApp(element))
+                return null;
+            if (element.Patterns.Value.IsSupported && element.Patterns.Value.Pattern.IsReadOnly.ValueOrDefault)
+                return null;
+            return current is not null && current.Element.Equals(element) ? current : Inspect(element);
         }
         catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or TimeoutException)
         {
@@ -69,7 +103,8 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
     {
         try
         {
-            return Inspect(control.Element);
+            using var cached = _facts.Activate();
+            return Inspect(control.Element, again: true);
         }
         catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or TimeoutException)
         {
@@ -105,9 +140,9 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
 
     /// <summary>
     /// Passes on a click the builder held back to read a message box or file picker before it closed, or a key: the
-    /// person's own input, a moment late.
+    /// person's own input, a moment late. The mouse stays where the person has it now.
     /// </summary>
-    public static void Pass(int x, int y) => Mouse.Click(new Point(x, y));
+    public static void Pass(int x, int y) => Native.ClickAt(x, y);
 
     /// <inheritdoc cref="Pass(int, int)"/>
     public void Pass(string keys) => driver.Key(keys);
@@ -119,6 +154,8 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
     public IReadOnlyList<ControlFacts> Survey()
     {
         var found = new List<ControlFacts>();
+        // Every control comes with its facts in the one call that finds them all.
+        using var cached = _facts.Activate();
         foreach (var hwnd in driver.AppWindows().Where(Native.IsVisible))
         {
             try
@@ -152,18 +189,36 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
         return string.Join("\n", lines);
     }
 
-    private InspectedControl Inspect(AutomationElement element)
+    // Whether a control is the app's. The app's processes are read again when it seems not to be, as the app may have
+    // started again, but not more than once a second.
+    private bool IsApp(AutomationElement element)
+    {
+        var process = element.Properties.ProcessId.ValueOrDefault;
+        if (_processes.Contains(process))
+            return true;
+        if (Environment.TickCount64 - _processesRead < ProcessesFor)
+            return false;
+        return Processes().Contains(process);
+    }
+
+    // Read with the cache request active: the control and each control above it come with their facts. A control read
+    // again has its own facts read afresh, as its cached ones are from when it was first read.
+    private InspectedControl Inspect(AutomationElement element, bool again = false)
     {
         var ancestors = new List<ControlFacts>();
         DialogFacts? dialog = null;
         var inMain = false;
         var walker = driver.Automation.TreeWalkerFactory.GetControlViewWalker();
-        // Up to the window it is in; the desktop, which has no parent, isn't one of its ancestors.
-        for (var parent = walker.GetParent(element); parent is not null && walker.GetParent(parent) is not null && ancestors.Count < MostAncestors; parent = walker.GetParent(parent))
+        // Up to the window it is in; the desktop isn't one of its ancestors. Past the ancestors kept, it is only
+        // followed up to see which window it is in.
+        var levels = 0;
+        for (var parent = walker.GetParent(element); parent is not null && levels < MostLevels; parent = walker.GetParent(parent), levels++)
         {
+            var hwnd = parent.Properties.NativeWindowHandle.ValueOrDefault;
+            if (hwnd != 0 && hwnd == Native.Desktop)
+                break;
             if (parent.Properties.ControlType.ValueOrDefault == ControlType.Window)
             {
-                var hwnd = parent.Properties.NativeWindowHandle.ValueOrDefault;
                 if (hwnd == driver.Main)
                 {
                     inMain = true;
@@ -171,36 +226,43 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
                 }
                 // Another of the app's windows: a Windows message box or file picker, or one of its own.
                 if (Native.ClassName(hwnd) == Native.DialogClass)
-                    dialog = Dialog(parent, hwnd);
-                else
+                    dialog = Dialog(hwnd);
+                else if (ancestors.Count < MostAncestors)
                     ancestors.Add(Own(parent) with { Type = "Window", Name = Native.Title(hwnd) });
                 break;
             }
-            ancestors.Add(Own(parent));
+            if (ancestors.Count < MostAncestors)
+                ancestors.Add(Own(parent));
         }
         // A drop-down's list is a popup window of its own, outside the main window: the drop-down open in the main
-        // window is what its items are in.
-        if (!inMain && dialog is null && !ancestors.Any(around => around.Type == nameof(ControlType.ComboBox)) && OpenDropDown() is { } owner)
+        // window is what its items are in. A control too deep to follow up to its window isn't in one.
+        if (!inMain && dialog is null && levels < MostLevels && !ancestors.Any(around => around.Type == nameof(ControlType.ComboBox)) && OpenDropDown() is { } owner)
         {
             ancestors.RemoveAll(around => around.Type == nameof(ControlType.Window));
             var box = Inspect(owner).Facts;
             ancestors.Add(box with { Ancestors = [] });
             ancestors.AddRange(box.Ancestors);
         }
-        var facts = Own(element) with
+        using (again ? CacheRequest.ForceNoCache() : null)
         {
-            Ancestors = ancestors,
-            Value = element.Patterns.Value.IsSupported ? element.Patterns.Value.Pattern.Value.ValueOrDefault : null,
-            IsPassword = element.Properties.IsPassword.ValueOrDefault,
-            Dialog = dialog,
-        };
-        return new InspectedControl(element, facts);
+            var facts = Own(element) with
+            {
+                Ancestors = ancestors,
+                Value = element.Patterns.Value.IsSupported ? element.Patterns.Value.Pattern.Value.ValueOrDefault : null,
+                IsPassword = element.Properties.IsPassword.ValueOrDefault,
+                Dialog = dialog,
+            };
+            return new InspectedControl(element, facts);
+        }
     }
 
-    private AutomationElement? OpenDropDown() =>
-        driver.Automation.FromHandle(driver.Main)
-            .FindAllDescendants(driver.Automation.ConditionFactory.ByControlType(ControlType.ComboBox))
-            .FirstOrDefault(box => box.Patterns.ExpandCollapse.PatternOrDefault?.ExpandCollapseState.ValueOrDefault == ExpandCollapseState.Expanded);
+    // The drop-down open in the main window, if any: UI Automation looks for it in the app, in one call.
+    private AutomationElement? OpenDropDown()
+    {
+        var cf = driver.Automation.ConditionFactory;
+        var expanded = new PropertyCondition(driver.Automation.PropertyLibrary.ExpandCollapse.ExpandCollapseState, (int)ExpandCollapseState.Expanded);
+        return driver.Automation.FromHandle(driver.Main).FindFirstDescendant(cf.ByControlType(ControlType.ComboBox).And(expanded));
+    }
 
     private static ControlFacts Own(AutomationElement element)
     {
@@ -218,26 +280,44 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
     }
 
     // A message box's title and message, or a file picker's: whether it picks a folder, and the path it would open,
-    // from its name box and, when that holds only a name, the folder its address bar shows.
-    private DialogFacts Dialog(AutomationElement window, nint hwnd)
+    // from its name box and, when that holds only a name, the folder its address bar shows. The name box and the
+    // address bar are Win32 windows, found by their control id and class without searching the picker's folders.
+    private DialogFacts Dialog(nint hwnd)
     {
         var title = Native.Title(hwnd);
-        var cf = driver.Automation.ConditionFactory;
-        var file = window.FindFirstDescendant(cf.ByAutomationId("1148"));
-        var folder = window.FindFirstDescendant(cf.ByAutomationId("1152"));
-        var box = file ?? folder;
-        if (box is null)
+        var file = Native.Control(hwnd, 1148);
+        var box = file != 0 ? file : Native.Control(hwnd, 1152);
+        if (box == 0)
             return new DialogFacts(title, driver.MessageText(hwnd));
-        var path = box.Patterns.Value.IsSupported ? box.Patterns.Value.Pattern.Value.ValueOrDefault ?? "" : "";
+        var named = driver.Automation.FromHandle(box);
+        var path = named.Patterns.Value.IsSupported ? named.Patterns.Value.Pattern.Value.ValueOrDefault ?? "" : "";
         if (path.Length > 0 && !Path.IsPathRooted(path))
         {
-            var address = window.FindAllDescendants(cf.ByControlType(ControlType.ToolBar))
-                .Select(bar => bar.Properties.Name.ValueOrDefault ?? "")
+            var address = Native.Children(hwnd, "ToolbarWindow32")
+                .Select(bar => driver.Automation.FromHandle(bar).Properties.Name.ValueOrDefault ?? "")
                 .FirstOrDefault(name => name.StartsWith("Address: ", StringComparison.Ordinal));
             if (address is not null)
                 path = Path.Combine(address["Address: ".Length..], path);
         }
-        return new DialogFacts(title, IsPicker: true, PicksFolder: file is null, Path: path.Length > 0 ? path : null);
+        return new DialogFacts(title, IsPicker: true, PicksFolder: file == 0, Path: path.Length > 0 ? path : null);
+    }
+
+    // What Inspect reads of each control, asked for with the control rather than one by one.
+    private static CacheRequest FactsRequest(FlaUiDriver driver)
+    {
+        var properties = driver.Automation.PropertyLibrary;
+        var patterns = driver.Automation.PatternLibrary;
+        var request = new CacheRequest { AutomationElementMode = AutomationElementMode.Full, TreeScope = TreeScope.Element };
+        foreach (var property in new[]
+        {
+            properties.Element.ControlType, properties.Element.Name, properties.Element.AutomationId, properties.Element.HelpText, properties.Element.ClassName,
+            properties.Element.BoundingRectangle, properties.Element.ProcessId, properties.Element.NativeWindowHandle, properties.Element.IsPassword,
+            properties.Value.Value, properties.Value.IsReadOnly, properties.Toggle.ToggleState,
+        })
+            request.Add(property);
+        request.Add(patterns.ValuePattern);
+        request.Add(patterns.TogglePattern);
+        return request;
     }
 
     private static string? Empty(string? text) => string.IsNullOrEmpty(text) ? null : text;

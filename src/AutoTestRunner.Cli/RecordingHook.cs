@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace AutoTestRunner.Cli;
@@ -8,18 +7,16 @@ namespace AutoTestRunner.Cli;
 /// Pick and Ctrl+click do, and as a message box's are while the builder reads it. While the builder plays steps itself,
 /// everything is let through unnoticed. Input
 /// another program sends counts as the person's, so a test can build a case as a person would. The
-/// callbacks must be quick, as Windows drops a hook that keeps it waiting, so they only note what happened: the
-/// builder reads the app on a thread of its own. A low-level hook runs on the thread that installed it, which must
-/// pump messages: the builder panel's UI thread does.
+/// callbacks must be quick, as Windows drops a hook that keeps it waiting and the mouse waits for it, so they only note
+/// what happened: the builder reads the app on a thread of its own. They are called on the hook's own thread, not the
+/// UI thread, so a busy panel never holds up the mouse.
 /// </summary>
 internal sealed class RecordingHook : IDisposable
 {
-    private const int KeyboardHook = 13, MouseHook = 14;
     private const int KeyDown = 0x0100, SystemKeyDown = 0x0104, LeftButtonDown = 0x0201, LeftButtonUp = 0x0202, RightButtonDown = 0x0204;
     private const int LeftButton = 0x01, Control = 0x11, Shift = 0x10, Menu = 0x12;
 
-    private readonly HookProc _keyboard, _mouse;
-    private readonly nint _keyboardHook, _mouseHook;
+    private readonly HookThread _hooks;
     private readonly Func<int, int, bool, bool> _onDown;
     private readonly Func<string, bool> _onKeys;
     private readonly Func<bool> _playing;
@@ -33,11 +30,7 @@ internal sealed class RecordingHook : IDisposable
     public RecordingHook(Func<int, int, bool, bool> onDown, Func<string, bool> onKeys, Func<bool> playing, Action<int, int>? onRight = null)
     {
         (_onDown, _onKeys, _playing, _onRight) = (onDown, onKeys, playing, onRight);
-        _keyboard = OnKeyboard;
-        _mouse = OnMouse;
-        var module = GetModuleHandle(Process.GetCurrentProcess().MainModule?.ModuleName);
-        _keyboardHook = SetWindowsHookEx(KeyboardHook, _keyboard, module, 0);
-        _mouseHook = SetWindowsHookEx(MouseHook, _mouse, module, 0);
+        _hooks = new HookThread(OnKeyboard, OnMouse, "Recording hook");
     }
 
     /// <summary>Whether Ctrl is held down now.</summary>
@@ -46,8 +39,13 @@ internal sealed class RecordingHook : IDisposable
     /// <summary>Whether the left mouse button is held down now.</summary>
     public static bool ButtonHeld => Held(LeftButton);
 
+    // Until Dispose. The hook can be called before the constructor has set _hooks.
+    private bool Open => _hooks is not { Closed: true };
+
     private nint OnMouse(int code, nint message, nint data)
     {
+        if (!Open)
+            return HookThread.Next(code, message, data);
         if (code >= 0 && message == RightButtonDown && _onRight is not null && !_playing())
             _onRight(Marshal.ReadInt32(data), Marshal.ReadInt32(data, 4));
         if (code >= 0 && message is LeftButtonDown or LeftButtonUp)
@@ -65,14 +63,14 @@ internal sealed class RecordingHook : IDisposable
                 return 1;
             }
         }
-        return CallNextHookEx(0, code, message, data);
+        return HookThread.Next(code, message, data);
     }
 
     private nint OnKeyboard(int code, nint message, nint data)
     {
-        if (code >= 0 && message is KeyDown or SystemKeyDown && !_playing() && Keys(Marshal.ReadInt32(data)) is { } keys && _onKeys(keys))
+        if (Open && code >= 0 && message is KeyDown or SystemKeyDown && !_playing() && Keys(Marshal.ReadInt32(data)) is { } keys && _onKeys(keys))
             return 1;
-        return CallNextHookEx(0, code, message, data);
+        return HookThread.Next(code, message, data);
     }
 
     // A key as a key step writes it, with the keys held with it: "Enter", "F5", "Ctrl+S". Null for keys that are
@@ -101,26 +99,8 @@ internal sealed class RecordingHook : IDisposable
 
     private static bool Held(int key) => (GetAsyncKeyState(key) & 0x8000) != 0;
 
-    public void Dispose()
-    {
-        UnhookWindowsHookEx(_keyboardHook);
-        UnhookWindowsHookEx(_mouseHook);
-    }
-
-    private delegate nint HookProc(int code, nint message, nint data);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern nint SetWindowsHookEx(int hook, HookProc callback, nint module, uint threadId);
-
-    [DllImport("user32.dll")]
-    private static extern bool UnhookWindowsHookEx(nint hook);
-
-    [DllImport("user32.dll")]
-    private static extern nint CallNextHookEx(nint hook, int code, nint message, nint data);
+    public void Dispose() => _hooks.Dispose();
 
     [DllImport("user32.dll")]
     private static extern short GetAsyncKeyState(int key);
-
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
-    private static extern nint GetModuleHandle(string? name);
 }
