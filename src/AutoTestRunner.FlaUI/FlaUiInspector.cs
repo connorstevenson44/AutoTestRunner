@@ -134,6 +134,7 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
     {
         var ancestors = new List<ControlFacts>();
         DialogFacts? dialog = null;
+        var inMain = false;
         var walker = driver.Automation.TreeWalkerFactory.GetControlViewWalker();
         // Up to the window it is in; the desktop, which has no parent, isn't one of its ancestors.
         for (var parent = walker.GetParent(element); parent is not null && walker.GetParent(parent) is not null && ancestors.Count < MostAncestors; parent = walker.GetParent(parent))
@@ -142,7 +143,10 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
             {
                 var hwnd = parent.Properties.NativeWindowHandle.ValueOrDefault;
                 if (hwnd == driver.Main)
+                {
+                    inMain = true;
                     break;
+                }
                 // Another of the app's windows: a Windows message box or file picker, or one of its own.
                 if (Native.ClassName(hwnd) == Native.DialogClass)
                     dialog = Dialog(parent, hwnd);
@@ -151,6 +155,15 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
                 break;
             }
             ancestors.Add(Own(parent));
+        }
+        // A drop-down's list is a popup window of its own, outside the main window: the drop-down open in the main
+        // window is what its items are in.
+        if (!inMain && dialog is null && !ancestors.Any(around => around.Type == nameof(ControlType.ComboBox)) && OpenDropDown() is { } owner)
+        {
+            ancestors.RemoveAll(around => around.Type == nameof(ControlType.Window));
+            var box = Inspect(owner).Facts;
+            ancestors.Add(box with { Ancestors = [] });
+            ancestors.AddRange(box.Ancestors);
         }
         var facts = Own(element) with
         {
@@ -161,6 +174,11 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
         };
         return new InspectedControl(element, facts);
     }
+
+    private AutomationElement? OpenDropDown() =>
+        driver.Automation.FromHandle(driver.Main)
+            .FindAllDescendants(driver.Automation.ConditionFactory.ByControlType(ControlType.ComboBox))
+            .FirstOrDefault(box => box.Patterns.ExpandCollapse.PatternOrDefault?.ExpandCollapseState.ValueOrDefault == ExpandCollapseState.Expanded);
 
     private static ControlFacts Own(AutomationElement element)
     {

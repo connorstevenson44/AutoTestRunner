@@ -20,30 +20,24 @@ public static class StepMaker
     {
         if (control.IsPassword)
         {
-            var secret = Make("type", target, control, $"Type the password in {control.Label}", ActivityKind.Type);
-            secret.Json["text"] = "${password}";
-            secret.Json["secret"] = true;
-            secret.Json["note"] = "A password box can't be read: give the password with autotest run --var password=…";
-            return secret;
+            return Make("type", target, control, $"Type the password in {control.Label}", ActivityKind.Type,
+                ("text", "${password}"), ("secret", true), ("note", "A password box can't be read: give the password with autotest run --var password=…"));
         }
-        var step = Make("type", target, control, text.Length is > 0 and <= 40 && !text.Contains('\n') ? $"Type {text} in {control.Label}" : $"Type in {control.Label}", ActivityKind.Type);
-        step.Json["text"] = text;
-        return step;
+        var say = text.Length is > 0 and <= 40 && !text.Contains('\n') ? $"Type {text} in {control.Label}" : $"Type in {control.Label}";
+        return Make("type", target, control, say, ActivityKind.Type, ("text", text));
     }
 
     public static DraftStep Choose(TargetChoice target, ControlFacts control, string option)
     {
-        var step = Make("choose", target, control, $"Pick {option} from {control.Label}", ActivityKind.Choose);
-        step.Json["option"] = option;
-        return step;
+        return Make("choose", target, control, $"Pick {option} from {control.Label}", ActivityKind.Choose, ("option", option));
     }
 
     public static DraftStep Tick(TargetChoice target, ControlFacts control, bool isChecked)
     {
-        var step = Make("tick", target, control, $"{(isChecked ? "Tick" : "Clear")} {control.Label}", ActivityKind.Choose);
-        if (!isChecked)
-            step.Json["checked"] = false;
-        return step;
+        var say = $"{(isChecked ? "Tick" : "Clear")} {control.Label}";
+        return isChecked
+            ? Make("tick", target, control, say, ActivityKind.Choose)
+            : Make("tick", target, control, say, ActivityKind.Choose, ("checked", false));
     }
 
     public static DraftStep Tab(string name) => new(new JsonObject { ["tab"] = name, ["say"] = $"Open the {name} tab" }, ActivityKind.Click);
@@ -82,9 +76,7 @@ public static class StepMaker
     /// <summary>Keeps what a control says in a variable, for a check at the checkpoint.</summary>
     public static DraftStep Keep(TargetChoice target, ControlFacts control, string name)
     {
-        var step = Make("find", target, control, $"Keep what it says as {name}: ${{{name}}}", ActivityKind.Point);
-        step.Json["as"] = name;
-        return step;
+        return Make("find", target, control, $"Keep what it says as {name}: ${{{name}}}", ActivityKind.Point, ("as", name));
     }
 
     /// <summary>
@@ -126,8 +118,15 @@ public static class StepMaker
         return sentence;
     }
 
-    private static DraftStep Make(string verb, TargetChoice target, ControlFacts control, string say, ActivityKind kind) =>
-        new(new JsonObject { [verb] = target.Json.DeepClone(), ["say"] = say }, kind, target, control);
+    // A step as a person writes one: what it does to which control, what goes with that, and last, what it says.
+    private static DraftStep Make(string verb, TargetChoice target, ControlFacts control, string say, ActivityKind kind, params (string Key, JsonNode? Value)[] with)
+    {
+        var json = new JsonObject { [verb] = target.Json.DeepClone() };
+        foreach (var (key, value) in with)
+            json[key] = value;
+        json["say"] = say;
+        return new(json, kind, target, control);
+    }
 
     private static string Capital(string text) => text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
 }

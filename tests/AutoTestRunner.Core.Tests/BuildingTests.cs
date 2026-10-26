@@ -139,10 +139,10 @@ public sealed class BuildingTests : IDisposable
 
         string[] expected =
         [
-            """{ "type": "customer", "say": "Type Ada Lovelace in Customer", "text": "Ada Lovelace" }""",
-            """{ "choose": "product", "say": "Pick Coffee beans from Product", "option": "Coffee beans" }""",
+            """{ "type": "customer", "text": "Ada Lovelace", "say": "Type Ada Lovelace in Customer" }""",
+            """{ "choose": "product", "option": "Coffee beans", "say": "Pick Coffee beans from Product" }""",
             """{ "tick": "giftWrap", "say": "Tick Gift wrap" }""",
-            """{ "tick": "express", "say": "Clear Express delivery", "checked": false }""",
+            """{ "tick": "express", "checked": false, "say": "Clear Express delivery" }""",
             """{ "click": "addOrder", "say": "Click Add order" }""",
             """{ "call": "waitForStatusBar", "with": { "startsWith": "Added order 1001 for Ada Lovelace" } }""",
             """{ "tab": "Catalogue", "say": "Open the Catalogue tab" }""",
@@ -187,7 +187,7 @@ public sealed class BuildingTests : IDisposable
               "name": "Take an order for Ada",
               "steps": [
                 { "startApp": {}, "say": "Start Order Desk" },
-                { "find": "formTotal", "say": "Keep what it says as total: ${total}", "as": "total" },
+                { "find": "formTotal", "as": "total", "say": "Keep what it says as total: ${total}" },
                 { "checkpoint": "Ada's order was added",
                   "checks": [
                     { "equals": "${total}", "to": "Total: £26.00" },
