@@ -25,7 +25,8 @@ internal static class EditFromWindow
         };
         window.Resources.MergedDictionaries.Add(Ui.Theme);
         var stack = new StackPanel { Margin = new Thickness(22, 18, 22, 18) };
-        stack.Children.Add(Ui.IconText(Icons.Warning, $"The {Steps(later.Count)} after step {number} are taken out", Ui.Hold, 14));
+        var taken = later.Count == 1 ? $"The step after step {number} is taken out" : $"The {later.Count} steps after step {number} are taken out";
+        stack.Children.Add(Ui.IconText(Icons.Warning, taken, Ui.Hold, 14));
         var intro = Ui.Words("so you can record new ones from there. Saving writes the case without them.", 12.5, Ui.Muted);
         intro.Margin = new Thickness(0, 4, 0, 8);
         stack.Children.Add(intro);

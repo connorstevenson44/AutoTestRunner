@@ -189,7 +189,9 @@ try {
 
     # Edit from the wait for the bar at the bottom: the step after it, pointing at the new order, goes.
     Step-Button $panel 'Wait for the bar at the bottom to say*' 'Edit from here'
-    $confirm = Wait-For { Window 'Edit from step 11' } 'the window that asks before steps are taken out' 20
+    # A window the panel owns is under it, as UI Automation sees it.
+    $confirm = Wait-For { $panel.FindFirst([System.Windows.Automation.TreeScope]::Children,
+        (New-Object System.Windows.Automation.PropertyCondition($ui::NameProperty, 'Edit from step 11'))) } 'the window that asks before steps are taken out' 20
     if (-not (Named $confirm '2. Take three more orders with a macro')) { throw 'Case 2, which carries on from case 1, isn''t offered to mark.' }
     Invoke (Find $confirm $ui::NameProperty 'Take them out and record')
     Saying $panel 'Use Order Desk*' 'case 1 played to step 11, and recording' 120
