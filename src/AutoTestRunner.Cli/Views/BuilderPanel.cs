@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -714,7 +715,9 @@ internal sealed partial class BuilderPanel : Window
         icon.HorizontalAlignment = HorizontalAlignment.Center;
         stack.Children.Add(icon);
         stack.Children.Add(new TextBlock { Text = text, FontSize = 11.5, Margin = new Thickness(0, 3, 0, 0), HorizontalAlignment = HorizontalAlignment.Center });
-        return new ToggleButton { Content = stack, ToolTip = tip, Style = (Style)Ui.Theme["ToggleIcon"], Padding = new Thickness(10, 6, 10, 5), Margin = new Thickness(0, 0, 4, 0), IsEnabled = false };
+        var tile = new ToggleButton { Content = stack, ToolTip = tip, Style = (Style)Ui.Theme["ToggleIcon"], Padding = new Thickness(10, 6, 10, 5), Margin = new Thickness(0, 0, 4, 0), IsEnabled = false };
+        AutomationProperties.SetName(tile, text);
+        return tile;
     }
 
     /// <summary>How a step finds its control, after a dot coloured by how sturdy that is.</summary>

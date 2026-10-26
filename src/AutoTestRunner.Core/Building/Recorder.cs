@@ -28,8 +28,8 @@ public sealed class Recorder(Suite suite, CaseDraft draft, Func<ControlFacts, Ta
     public ControlFacts? Box => _box;
 
     /// <summary>
-    /// A click in the app, on the control under the mouse, read as the button went down: before the click took
-    /// effect, so a tick box's click changes what it was then.
+    /// A click in the app, on the control under the mouse, read as the button went down; a tick box's tick is read
+    /// once the click took effect.
     /// </summary>
     public IReadOnlyList<DraftStep> Clicked(ControlFacts hit)
     {
@@ -43,7 +43,7 @@ public sealed class Recorder(Suite suite, CaseDraft draft, Func<ControlFacts, Ta
             return [];
         return control.Type switch
         {
-            "CheckBox" => Add(StepMaker.Tick(name(control), control, control.Checked != true), changesStatus: true),
+            "CheckBox" => Add(StepMaker.Tick(name(control), control, control.Checked ?? true), changesStatus: true),
             "TabItem" when control.Name.Length > 0 => Add(StepMaker.Tab(control.Name), changesStatus: false),
             _ => Add(StepMaker.Click(name(control), control), changesStatus: true),
         };

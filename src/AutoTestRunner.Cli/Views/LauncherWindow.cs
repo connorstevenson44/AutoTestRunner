@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
@@ -254,7 +255,9 @@ internal sealed class LauncherWindow : Window
         icon.HorizontalAlignment = HorizontalAlignment.Center;
         stack.Children.Add(icon);
         stack.Children.Add(new TextBlock { Text = text, FontSize = 11.5, Margin = new Thickness(0, 4, 0, 0), HorizontalAlignment = HorizontalAlignment.Center });
-        return new ToggleButton { Content = stack, ToolTip = tip, Style = (Style)Ui.Theme["ToggleIcon"], Padding = new Thickness(10, 8, 10, 6), Margin = new Thickness(0, 0, 4, 0) };
+        var tile = new ToggleButton { Content = stack, ToolTip = tip, Style = (Style)Ui.Theme["ToggleIcon"], Padding = new Thickness(10, 8, 10, 6), Margin = new Thickness(0, 0, 4, 0) };
+        AutomationProperties.SetName(tile, text);
+        return tile;
     }
 
     private static void Only(ToggleButton[] group, ToggleButton picked)

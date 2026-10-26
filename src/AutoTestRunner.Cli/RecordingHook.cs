@@ -16,7 +16,7 @@ internal sealed class RecordingHook : IDisposable
 {
     private const int KeyboardHook = 13, MouseHook = 14;
     private const int KeyDown = 0x0100, SystemKeyDown = 0x0104, LeftButtonDown = 0x0201, LeftButtonUp = 0x0202;
-    private const int Control = 0x11, Shift = 0x10, Menu = 0x12;
+    private const int LeftButton = 0x01, Control = 0x11, Shift = 0x10, Menu = 0x12;
 
     private readonly HookProc _keyboard, _mouse;
     private readonly nint _keyboardHook, _mouseHook;
@@ -39,7 +39,10 @@ internal sealed class RecordingHook : IDisposable
     }
 
     /// <summary>Whether Ctrl is held down now.</summary>
-    public static bool ControlHeld => (GetAsyncKeyState(Control) & 0x8000) != 0;
+    public static bool ControlHeld => Held(Control);
+
+    /// <summary>Whether the left mouse button is held down now.</summary>
+    public static bool ButtonHeld => Held(LeftButton);
 
     private nint OnMouse(int code, nint message, nint data)
     {

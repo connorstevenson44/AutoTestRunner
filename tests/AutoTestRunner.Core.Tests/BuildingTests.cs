@@ -129,8 +129,8 @@ public sealed class BuildingTests : IDisposable
         recorder.Left("Ada Lovelace");
         var coffee = new ControlFacts("ListItem", "Coffee beans") { Ancestors = [new("ComboBox", "Product", Id: "ProductBox")] };
         recorder.Clicked(new ControlFacts("Text", "Coffee beans") { Ancestors = [coffee with { Ancestors = [] }, .. coffee.Ancestors] });
-        recorder.Clicked(new ControlFacts("CheckBox", "Gift wrap", Id: "GiftWrapBox") { Checked = false });
-        recorder.Clicked(new ControlFacts("CheckBox", "Express delivery", Id: "ExpressBox") { Checked = true });
+        recorder.Clicked(new ControlFacts("CheckBox", "Gift wrap", Id: "GiftWrapBox") { Checked = true });
+        recorder.Clicked(new ControlFacts("CheckBox", "Express delivery", Id: "ExpressBox") { Checked = false });
         recorder.Clicked(new ControlFacts("Text", "Add order") { Ancestors = [new("Button", "Add order", Id: "AddButton")] });
         recorder.StatusSaid("Added order 1001 for Ada Lovelace, £26.00.");
         recorder.StatusSaid("Ready.");

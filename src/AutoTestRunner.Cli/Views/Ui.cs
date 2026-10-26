@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
@@ -76,12 +77,18 @@ internal static class Ui
     public static Button IconButton(string glyph, string tip, Action click, double size = 18)
     {
         var button = new Button { Content = Glyph(glyph, size), ToolTip = tip, Style = (Style)Theme["IconButton"] };
+        // An icon says nothing to a screen reader, or to a test that drives the window: the tip names it.
+        AutomationProperties.SetName(button, tip);
         button.Click += (_, _) => click();
         return button;
     }
 
-    public static ToggleButton Toggle(string glyph, string tip, double size = 18) =>
-        new() { Content = Glyph(glyph, size), ToolTip = tip, Style = (Style)Theme["ToggleIcon"] };
+    public static ToggleButton Toggle(string glyph, string tip, double size = 18)
+    {
+        var toggle = new ToggleButton { Content = Glyph(glyph, size), ToolTip = tip, Style = (Style)Theme["ToggleIcon"] };
+        AutomationProperties.SetName(toggle, tip);
+        return toggle;
+    }
 
     /// <summary>A button with an icon and a word or two, for answers and things to open.</summary>
     public static Button LabelledButton(string glyph, string text, Action click, string style = "PlainButton", Brush? glyphColor = null)
@@ -90,6 +97,7 @@ internal static class Ui
         content.Children.Add(Glyph(glyph, 14, glyphColor));
         content.Children.Add(new TextBlock { Text = text, Margin = new Thickness(7, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
         var button = new Button { Content = content, Style = (Style)Theme[style] };
+        AutomationProperties.SetName(button, text);
         button.Click += (_, _) => click();
         return button;
     }

@@ -154,9 +154,28 @@ internal sealed class BuildWorker
         if (_typing is { } box && !box.Is(hit))
             LeaveBox();
         if (hit is not null)
-            _panel.Add(_recorder.Clicked(hit.Facts));
+            _panel.Add(_recorder.Clicked(Ticked(hit)));
         if (click.PassOn)
             Quietly(() => FlaUiInspector.Pass(click.X, click.Y));
+    }
+
+    // A tick box's click is read once it took effect: when the button is up and the app has had a moment, the tick is
+    // read again, of the box clicked or the one around the words clicked.
+    private ControlFacts Ticked(InspectedControl hit)
+    {
+        var before = hit.Facts;
+        if (before.Type != "CheckBox" && !before.Ancestors.Take(4).Any(around => around.Type == "CheckBox"))
+            return before;
+        for (var end = Environment.TickCount64 + 2000; RecordingHook.ButtonHeld && Environment.TickCount64 < end;)
+            Thread.Sleep(20);
+        Thread.Sleep(200);
+        var after = _inspector.Again(hit).Facts;
+        return before with
+        {
+            Checked = after.Checked,
+            Ancestors = [.. before.Ancestors.Select((around, index) =>
+                index < after.Ancestors.Count && after.Ancestors[index].Type == around.Type ? around with { Checked = after.Ancestors[index].Checked } : around)],
+        };
     }
 
     private void Picked(int x, int y)
