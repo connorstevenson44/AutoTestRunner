@@ -91,8 +91,12 @@ internal sealed class SuitePane : Grid
         add.Margin = new Thickness(0, 0, 0, 6);
         DockPanel.SetDock(add, Dock.Right);
         pick.Children.Add(add);
-        SetRow(pick, 1);
-        Children.Add(pick);
+        var picking = new StackPanel();
+        picking.Children.Add(pick);
+        if (suite.Tags.Count > 0)
+            picking.Children.Add(TagChips(suite.Tags));
+        SetRow(picking, 1);
+        Children.Add(picking);
 
         var list = new StackPanel();
         foreach (var item in suite.Cases)
@@ -152,6 +156,30 @@ internal sealed class SuitePane : Grid
         return found;
     }
 
+    // A chip for each tag in the suite: those turned on tick the cases with any of them, as --tags picks them.
+    private WrapPanel TagChips(IReadOnlyList<string> tags)
+    {
+        var chips = new WrapPanel { Margin = new Thickness(0, 0, 0, 2) };
+        var on = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var tag in tags)
+        {
+            var chip = Ui.Chip(Icons.Tag, tag, $"Tick the cases tagged {tag}");
+            chip.IsChecked = _options.Tags.Contains(tag, StringComparer.OrdinalIgnoreCase);
+            if (chip.IsChecked == true)
+                on.Add(tag);
+            chip.Click += (_, _) =>
+            {
+                if (chip.IsChecked == true)
+                    on.Add(tag);
+                else
+                    on.Remove(tag);
+                Tick(item => on.Count == 0 || item.Tags.Any(on.Contains));
+            };
+            chips.Children.Add(chip);
+        }
+        return chips;
+    }
+
     private Grid CaseRow(Case item)
     {
         var row = new Grid { Background = Brushes.Transparent, Cursor = System.Windows.Input.Cursors.Hand, Margin = new Thickness(0, 1, 0, 1), ToolTip = item.Covers };
@@ -169,6 +197,8 @@ internal sealed class SuitePane : Grid
         number.HorizontalAlignment = HorizontalAlignment.Left;
         var name = Ui.Words(item.Name, 13.5, Ui.Ink, wrap: false);
         name.Margin = new Thickness(0, 6, 8, 6);
+        if (item.Tags.Count > 0)
+            name.Inlines.Add(new System.Windows.Documents.Run("   " + string.Join("  ", item.Tags.Select(tag => "#" + tag))) { Foreground = Ui.Faint, FontSize = 11.5 });
         var needs = Ui.Pill(new TextBlock(), Ui.Surface, 8, new Thickness(6, 1, 7, 1));
         needs.Margin = new Thickness(0, 0, 6, 0);
         needs.Visibility = item.Needs.Count > 0 ? Visibility.Visible : Visibility.Collapsed;

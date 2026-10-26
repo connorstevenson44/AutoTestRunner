@@ -90,6 +90,20 @@ internal static class Ui
         return toggle;
     }
 
+    /// <summary>A small icon and word that stays on or off, such as a tag to pick cases by.</summary>
+    public static ToggleButton Chip(string glyph, string text, string tip)
+    {
+        var chip = new ToggleButton { Content = IconText(glyph, text, Muted, 11.5, FontWeights.Normal), ToolTip = tip, Style = (Style)Theme["ToggleIcon"] };
+        chip.Padding = new Thickness(8, 3, 9, 3);
+        chip.Margin = new Thickness(0, 0, 6, 4);
+        chip.Background = Surface;
+        AutomationProperties.SetName(chip, text);
+        // The words take the chip's colour, so that on they show in the accent colour as the glyph does.
+        foreach (var part in ((StackPanel)chip.Content).Children.OfType<TextBlock>())
+            part.ClearValue(TextBlock.ForegroundProperty);
+        return chip;
+    }
+
     /// <summary>A button with an icon and a word or two, for answers and things to open.</summary>
     public static Button LabelledButton(string glyph, string text, Action click, string style = "PlainButton", Brush? glyphColor = null)
     {

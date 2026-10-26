@@ -37,6 +37,9 @@ public sealed class Runner
     // The status text before the last click, so a wait for a new status doesn't take the old one.
     private string? _marked;
 
+    // Macros made while building, which the suite as it was loaded doesn't have.
+    private readonly Dictionary<string, Macro> _made = new(StringComparer.Ordinal);
+
     // When the running case started, for checks of logs written since.
     private DateTime _since = DateTime.Now;
 
@@ -191,6 +194,12 @@ public sealed class Runner
 
     /// <summary>Forgets what steps played outside a case kept, as the builder does when it starts the case again.</summary>
     public void Forget() => _played = null;
+
+    /// <summary>The variables the steps played so far can use, with what each holds now: the suite's and those kept.</summary>
+    public IReadOnlyList<(string Name, string Text)> Values() => (_played ?? _globals).All();
+
+    /// <summary>A macro made while building, for the steps that call it to play before the suite is loaded again.</summary>
+    public void Use(Macro macro) => _made[macro.Name] = macro;
 
     // ===== Steps =====
 
@@ -695,7 +704,7 @@ public sealed class Runner
     private void Call(JsonObject step, VariableScope scope)
     {
         var name = scope.Expand(step["call"]!.GetValue<string>());
-        if (!_suite.Macros.TryGetValue(name, out var macro))
+        if (!_suite.Macros.TryGetValue(name, out var macro) && !_made.TryGetValue(name, out macro))
             throw new ScriptException($"There is no macro called {name}.");
         var inner = scope.Child();
         var given = step["with"] as JsonObject ?? [];
