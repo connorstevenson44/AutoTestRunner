@@ -143,7 +143,7 @@ internal static class PreviewUi
         view.CaseFinished(Ended(cases[1], CaseStatus.Failed, 41.7));
 
         view.CaseStarted(3, cases.Count, cases[2]);
-        view.ShowStep(Activity.Of(ActivityKind.Point, Part.Verb("Point at"), Badge("installRow main", "Button \"main\"\nelements.json  installRow main\nFound by  Button tooltip \"C:\\Apps\\Contoso.Orders\\main\"")));
+        view.ShowStep(Activity.Of(ActivityKind.Point, Part.Verb("Point at"), Badge("main", "Button \"main\"\nelements.json  installRow main\nFound by  Button tooltip \"C:\\Apps\\Contoso.Orders\\main\"")));
         view.ShowStep(Activity.Of(ActivityKind.Click, Part.Verb("Click"), Badge("Remove", "Button \"Remove\"\nFound by  Button \"Remove\" beside Button \"main\"")));
         view.ShowStep(Activity.Of(ActivityKind.Dialog, Part.Verb("Answer"), Part.Window("Remove main?"), Part.Word("with"), Part.Key("Yes")) with { Detail = "Remove main? Its service, scheduled task and folder are removed." });
         view.ShowStep(Activity.Of(ActivityKind.Type, Part.Verb("Type"), Part.Value("main"), Part.Word("in"), Badge("confirmName", "Edit\nAutomationId  ConfirmNameBox\nelements.json  confirmName\nFound by  id ConfirmNameBox")));
@@ -179,7 +179,7 @@ internal static class PreviewUi
     }
 
     // NetDeploy's status bar, as a step that waits on it shows it.
-    private static readonly Part Status = Badge("statusText", "Text\nAutomationId  StatusText\nelements.json  statusText\nFound by  id StatusText");
+    private static readonly Part Status = Badge("status bar", "Text\nAutomationId  StatusText\nelements.json  statusText\nFound by  id StatusText");
 
     private static Part Badge(string label, string tip) => new(PartKind.Control, label, tip.Length == 0 ? null : tip);
 
