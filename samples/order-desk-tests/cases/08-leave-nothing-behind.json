@@ -10,7 +10,7 @@
     { "checkpoint": "Nothing is left behind",
       "checks": [
         { "fileMissing": "${dataDir}" },
-        { "process": "OrderDesk", "running": false },
+        { "process": "OrderDesk", "running": false, "within": 10 },
         { "nothingLeft": {} }
       ] }
   ]
