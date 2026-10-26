@@ -24,7 +24,7 @@ internal static class HookWindow
         };
         window.Resources.MergedDictionaries.Add(Ui.Theme);
         var stack = new StackPanel { Margin = new Thickness(20, 16, 20, 16) };
-        stack.Children.Add(Ui.Words($"Each time {element} is clicked while recording, the builder adds a call of this macro after it, instead of a wait for the status text.", 13, Ui.Ink));
+        stack.Children.Add(Ui.Words($"While recording, each click on {element} is followed by a step that calls this macro.", 13, Ui.Ink));
         stack.Children.Add(Ui.Heading("Macro", top: 12));
         var macros = new ComboBox { FontSize = 13 };
         foreach (var name in suite.Macros.Keys.Order(StringComparer.Ordinal))
@@ -46,7 +46,7 @@ internal static class HookWindow
                 label.Width = 110;
                 label.VerticalAlignment = VerticalAlignment.Center;
                 row.Children.Add(label);
-                var box = new TextBox { FontSize = 12.5, Padding = new Thickness(4, 3, 4, 3), ToolTip = fallback is null ? "Needed" : $"Left empty, it is {fallback}" };
+                var box = new TextBox { FontSize = 12.5, Padding = new Thickness(4, 3, 4, 3), ToolTip = fallback is null ? "Required" : $"Optional. Default: {fallback}" };
                 fields[parameter] = box;
                 row.Children.Add(box);
                 parameters.Children.Add(row);
@@ -55,10 +55,10 @@ internal static class HookWindow
         macros.SelectionChanged += (_, _) => ShowParameters();
         ShowParameters();
         stack.Children.Add(parameters);
-        stack.Children.Add(Ui.Heading("Wait first, in seconds", top: 12));
+        stack.Children.Add(Ui.Heading("Delay before the macro (seconds)", top: 12));
         var delay = new TextBox { Text = "0", FontSize = 13, Padding = new Thickness(4, 3, 4, 3), Width = 80, HorizontalAlignment = HorizontalAlignment.Left };
         stack.Children.Add(delay);
-        var add = Ui.LabelledButton(Icons.Add, "Add to suite.json", () =>
+        var add = Ui.LabelledButton(Icons.Add, "Add", () =>
         {
             if (macros.SelectedItem is not string name)
                 return;
@@ -75,7 +75,7 @@ internal static class HookWindow
         add.Margin = new Thickness(0, 14, 0, 0);
         stack.Children.Add(add);
         if (macros.Items.Count == 0)
-            stack.Children.Add(Ui.Words("The suite has no macros yet: add one to macros/ first.", 12, Ui.Fail));
+            stack.Children.Add(Ui.Words("This suite has no macros yet. Add one to its macros folder first.", 12, Ui.Fail));
         window.Content = stack;
         window.ShowDialog();
         return hook;

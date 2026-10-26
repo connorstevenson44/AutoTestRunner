@@ -96,8 +96,8 @@ internal sealed partial class BuilderPanel : Window
         tools.ColumnDefinitions.Add(new ColumnDefinition());
         tools.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var modes = new StackPanel { Orientation = Orientation.Horizontal };
-        _record = Tile(Icons.Record, "Record", "Each click, pick and tick in the app becomes a step, and what you type becomes one when you leave the box", Ui.Fail);
-        _pick = Tile(Icons.Pick, "Pick", "Point at a control and click it, to wait for it, check it or name it. The click doesn't reach the app. Ctrl+click picks while recording.", null);
+        _record = Tile(Icons.Record, "Record", "Record: each click, choice and entry in the app becomes a step", Ui.Fail);
+        _pick = Tile(Icons.Pick, "Pick", "Pick a control to wait for it, check it or name it. The click doesn't reach the app.\nWhile recording, Ctrl+click picks.", null);
         _record.Click += (_, _) => SetMode(_record.IsChecked == true ? BuildMode.Recording : BuildMode.Paused);
         _pick.Click += (_, _) => SetMode(_pick.IsChecked == true ? BuildMode.Picking : BuildMode.Paused);
         _addStep = AddTile();
@@ -107,7 +107,7 @@ internal sealed partial class BuilderPanel : Window
         _save = Ui.LabelledButton(Icons.Save, "Save", Save, "MainButton");
         _save.VerticalAlignment = VerticalAlignment.Center;
         _save.Margin = new Thickness(0);
-        _save.ToolTip = request.Edit is null ? "Saves the case in cases/, and checks the suite" : "Saves the case's steps as they are here, before its checkpoint, and checks the suite";
+        _save.ToolTip = request.Edit is null ? "Save the case, and check the suite for mistakes" : "Save the changes to the case, and check the suite for mistakes";
         Grid.SetColumn(_save, 2);
         tools.Children.Add(modes);
         tools.Children.Add(_save);
@@ -157,15 +157,15 @@ internal sealed partial class BuilderPanel : Window
         // ===== The checkpoint =====
         var checkpoint = new StackPanel { Margin = new Thickness(0, 10, 4, 0) };
         var existingCheckpoint = request.Edit?.Steps.LastOrDefault()?["checkpoint"]?.GetValue<string>();
-        checkpoint.Children.Add(Ui.Heading(existingCheckpoint is null ? "Checkpoint" : "Checkpoint: adds to its own"));
-        (var titleField, _checkpointTitle) = Field(existingCheckpoint ?? "What should be true now", single: true);
+        checkpoint.Children.Add(Ui.Heading(existingCheckpoint is null ? "Checkpoint" : "Checkpoint: checks added to the existing ones"));
+        (var titleField, _checkpointTitle) = Field(existingCheckpoint ?? "Checkpoint title, such as: The order is in the list", single: true);
         if (existingCheckpoint is not null)
             titleField.Visibility = Visibility.Collapsed;
         _checkpointTitle.TextChanged += (_, _) => _draft.CheckpointTitle = _checkpointTitle.Text;
         checkpoint.Children.Add(titleField);
         _checks.Margin = new Thickness(0, 4, 0, 0);
         checkpoint.Children.Add(_checks);
-        (var lookField, _look) = Field("What to look at yourself, a line each", single: false);
+        (var lookField, _look) = Field("Manual checks for the tester, one per line", single: false);
         lookField.Margin = new Thickness(0, 6, 0, 0);
         _look.TextChanged += (_, _) =>
         {
@@ -194,7 +194,7 @@ internal sealed partial class BuilderPanel : Window
             // A new case with nothing recorded, or a case opened and left as it was, has nothing to lose.
             if (_saved || _changes == 0 || (_draft.Editing is null && !_draft.Steps.Any(step => step.Verb != "startApp")))
                 return;
-            var lost = _draft.Editing is null ? $"The {_draft.Steps.Count} steps so far are lost." : "The changes to the case are lost.";
+            var lost = _draft.Editing is null ? $"The {_draft.Steps.Count} steps recorded so far will be lost." : "Your changes to the case will be lost.";
             if (MessageBox.Show(this, $"Close without saving? {lost}", Title, MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
                 e.Cancel = true;
         };
@@ -387,11 +387,11 @@ internal sealed partial class BuilderPanel : Window
         (_nowIcon.Text, _nowText.Text) = (problem, mode) switch
         {
             ({ } why, _) => (Icons.Warning, why),
-            (_, BuildMode.Recording) => (Icons.Record, $"Use {app}: each click, pick and tick becomes a step, and what you type becomes one when you leave the box. Ctrl+click picks a control without using it."),
-            (_, BuildMode.Picking) => (Icons.Pick, $"Point at a control in {app}, then click it to wait for it, check it or name it. The click doesn't reach {app}."),
+            (_, BuildMode.Recording) => (Icons.Record, $"Recording. Use {app} as normal: each click, choice and entry becomes a step. Ctrl+click picks a control instead."),
+            (_, BuildMode.Picking) => (Icons.Pick, $"Picking. Click a control in {app} to wait for it, check it or name it."),
             _ when _saved => (Icons.Passed, "Saved."),
             _ when Behind => (Icons.Next, BehindText()),
-            _ => (Icons.Pause, "Not recording. Record or Pick carries on."),
+            _ => (Icons.Pause, "Paused. Press Record or Pick to carry on."),
         };
         if (mode != BuildMode.Picking && _current is null)
             _outline.Hide();
@@ -402,8 +402,8 @@ internal sealed partial class BuilderPanel : Window
         int played;
         lock (_draft.Steps)
             played = _draft.Steps.TakeWhile(step => step.State != DraftStepState.NotPlayed).Count();
-        var at = played == 0 ? "where the case starts" : $"step {played}";
-        return $"{_suite.App.Window} is at {at}. Run to here on a step plays the case up to it; Edit from here takes out the steps after it and records new ones.";
+        var at = played == 0 ? "the start of the case" : $"step {played}";
+        return $"{_suite.App.Window} is at {at}. Hover a step to run to it or edit from it.";
     }
 
     // ===== A step of another kind =====
@@ -416,7 +416,7 @@ internal sealed partial class BuilderPanel : Window
         icon.HorizontalAlignment = HorizontalAlignment.Center;
         stack.Children.Add(icon);
         stack.Children.Add(new TextBlock { Text = "Step", FontSize = 11.5, Margin = new Thickness(0, 3, 0, 0), HorizontalAlignment = HorizontalAlignment.Center });
-        var tile = new Button { Content = stack, ToolTip = "Adds a step that isn't a click: a PowerShell script, something to say, or a wait", Style = (Style)Ui.Theme["IconButton"], Padding = new Thickness(10, 6, 10, 5), Margin = new Thickness(0, 0, 4, 0), IsEnabled = false };
+        var tile = new Button { Content = stack, ToolTip = "Add a script, a message or a wait as a step", Style = (Style)Ui.Theme["IconButton"], Padding = new Thickness(10, 6, 10, 5), Margin = new Thickness(0, 0, 4, 0), IsEnabled = false };
         AutomationProperties.SetName(tile, "Step");
         var menu = new ContextMenu { PlacementTarget = tile, Placement = PlacementMode.Bottom };
         MenuItem Item(string glyph, string text, string tip, Action click)
@@ -426,10 +426,10 @@ internal sealed partial class BuilderPanel : Window
             menu.Items.Add(item);
             return item;
         }
-        Item(Icons.Console, "Run a script…", "Picks a .ps1 file in the suite, runs it now, and adds a step that runs it", PickScript);
-        Item(Icons.Document, "New script…", "Writes a .ps1 file in the suite's tools folder and opens it, with a step that runs it once you've written it", NewScript);
-        Item(Icons.Message, "Say something…", "A step that only explains what is on screen", SaySomething);
-        Item(Icons.Wait, "Wait…", "Waits a number of seconds, for an app that shows nothing to wait for", WaitAWhile);
+        Item(Icons.Console, "Run a script…", "Choose a .ps1 file: it runs now, and is added as a step", PickScript);
+        Item(Icons.Document, "New script…", "Create a .ps1 file in the tools folder and open it to write. Its step plays with Run to here.", NewScript);
+        Item(Icons.Message, "Show a message…", "A step that only shows the tester a message, such as what to notice", SaySomething);
+        Item(Icons.Wait, "Wait…", "Wait a number of seconds", WaitAWhile);
         tile.Click += (_, _) => menu.IsOpen = true;
         return tile;
     }
@@ -448,7 +448,7 @@ internal sealed partial class BuilderPanel : Window
 
     private void NewScript()
     {
-        if (Ui.Prompt(this, "New script", "What the script does, such as Check the orders file. It goes in the suite's tools folder, named for it, and opens for you to write:", "", "Write it", Icons.Document, tall: false) is not { } name
+        if (Ui.Prompt(this, "New script", "Name of the script, such as Check the orders file. It is saved in the tools folder and opened for editing.", "", "Create", Icons.Document, tall: false) is not { } name
             || name.Trim().Length == 0)
             return;
         var relative = ScriptEditor.Create(_suite, name, _draft.Name);
@@ -462,13 +462,13 @@ internal sealed partial class BuilderPanel : Window
 
     private void SaySomething()
     {
-        if (Ui.Prompt(this, "Say something", "What the panel says at this point of the case, such as what to notice on screen:", "", "Add", Icons.Message) is { } text && text.Trim().Length > 0)
+        if (Ui.Prompt(this, "Show a message", "Message to show the tester at this step:", "", "Add", Icons.Message) is { } text && text.Trim().Length > 0)
             AddStep?.Invoke(StepMaker.Say(text.Trim()));
     }
 
     private void WaitAWhile()
     {
-        if (Ui.Prompt(this, "Wait", "How many seconds to wait. A wait for what the app shows is sturdier, where there is something to wait for.", "1", "Add", Icons.Wait, tall: false) is { } text
+        if (Ui.Prompt(this, "Wait", "Seconds to wait. Where the app shows something to wait for, Pick it and choose Wait for it instead: that is more reliable.", "1", "Add", Icons.Wait, tall: false) is { } text
             && double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var seconds) && seconds > 0)
             Play?.Invoke(StepMaker.Wait(seconds), true);
     }
@@ -479,7 +479,7 @@ internal sealed partial class BuilderPanel : Window
     {
         var stack = new StackPanel();
         var top = new DockPanel();
-        var close = Ui.IconButton(Icons.Cross, "Done with this control", ClosePicked, 11);
+        var close = Ui.IconButton(Icons.Cross, "Deselect this control", ClosePicked, 11);
         close.Padding = new Thickness(5, 3, 5, 3);
         DockPanel.SetDock(close, Dock.Right);
         top.Children.Add(close);
@@ -500,19 +500,19 @@ internal sealed partial class BuilderPanel : Window
             actions.Children.Add(button);
         }
         var text = facts.Value is { Length: > 0 } value ? value : facts.Name;
-        Action(Icons.Pointer, "Click", PickAction.Click, "Clicks it now, and adds the step");
-        Action(Icons.Look, "Point at", PickAction.Hover, "Moves the mouse onto it, as for buttons that only show while it is over their row");
-        Action(Icons.Wait, "Wait for it", PickAction.WaitFor, "Waits until it is there");
-        Action(Icons.Wait, "Wait for it to go", PickAction.WaitGone, "Waits until it has gone");
-        Action(Icons.Wait, "Wait for its text", PickAction.WaitText, $"Waits until it says \"{StepMaker.StartOf(text)}\"", text.Length > 0);
-        Action(Icons.Note, "Keep its text", PickAction.Keep, "Keeps what it says in a variable, for a check or a later step", text.Length > 0);
-        Action(Icons.CheckList, "Check it shows", PickAction.CheckShows, "The checkpoint checks that it is there");
-        Action(Icons.CheckList, "Check its text", PickAction.CheckText, $"The checkpoint checks that it says \"{text}\"", text.Length > 0);
-        Action(Icons.Name, "Name it", PickAction.Name, "Adds it to elements.json under a name of your own, and has the steps use the name",
+        Action(Icons.Pointer, "Click", PickAction.Click, "Click it now, and add the step");
+        Action(Icons.Look, "Point at", PickAction.Hover, "Move the mouse onto it, for buttons that only show on hover");
+        Action(Icons.Wait, "Wait for it", PickAction.WaitFor, "Wait until it appears");
+        Action(Icons.Wait, "Wait for it to go", PickAction.WaitGone, "Wait until it disappears");
+        Action(Icons.Wait, "Wait for its text", PickAction.WaitText, $"Wait until it says \"{StepMaker.StartOf(text)}\"", text.Length > 0);
+        Action(Icons.Note, "Keep its text", PickAction.Keep, "Save its text in a variable, for a check or a later step", text.Length > 0);
+        Action(Icons.CheckList, "Check it shows", PickAction.CheckShows, "Check at the checkpoint that it is there");
+        Action(Icons.CheckList, "Check its text", PickAction.CheckText, $"Check at the checkpoint that it says \"{text}\"", text.Length > 0);
+        Action(Icons.Name, "Name it", PickAction.Name, "Give it a name in elements.json, which the steps then use",
             choice.Json is JsonObject selector && !selector.ContainsKey("element"));
-        Action(Icons.Look, "Watch it", PickAction.Watch, "Whenever what it says changes after a step, the builder adds a wait for its new words, in this case and the ones built after. Goes in suite.json.",
+        Action(Icons.Look, "Watch it", PickAction.Watch, "When a step changes its text, add a wait for the new text. Applies to this case and new ones (saved in suite.json).",
             choice.Json is not JsonArray);
-        Action(Icons.Pointer, "After clicking it…", PickAction.AfterClick, "Each time it is clicked while recording, the builder adds a macro after the click, such as a wait for what it starts. Goes in suite.json.",
+        Action(Icons.Pointer, "After clicking it…", PickAction.AfterClick, "Choose a macro to add as a step after each click on it while recording (saved in suite.json)",
             choice.Json is not JsonArray);
         stack.Children.Add(actions);
         return new Border
@@ -580,7 +580,7 @@ internal sealed partial class BuilderPanel : Window
                     lock (_draft.NewAfterClick)
                         _draft.NewAfterClick.Add(hook);
                     _changes++;
-                    Note($"After each click on {clicked}, the builder adds a call of {hook.Call}. It goes in suite.json when the case is saved.");
+                    Note($"After each click on {clicked}, {hook.Call} is added as a step. Saved to suite.json with the case.");
                 }
                 break;
         }
@@ -601,7 +601,7 @@ internal sealed partial class BuilderPanel : Window
     private void Watch(string element)
     {
         var answer = MessageBox.Show(this,
-            $"After each step that changes what {element} says, the builder adds a wait for its new words.\n\nCheck what it says at the checkpoint too?",
+            $"When a step changes the text of {element}, a wait for the new text is added.\n\nAlso check its text at the checkpoint?",
             "Watch it", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
         if (answer == MessageBoxResult.Cancel)
             return;
@@ -612,7 +612,7 @@ internal sealed partial class BuilderPanel : Window
             _draft.NewWatch.Add(new WatchHook(element, call, answer == MessageBoxResult.Yes));
         }
         _changes++;
-        Note($"Watching {element}{(call is null ? "" : $", with {call}")}. It goes in suite.json when the case is saved.");
+        Note($"Watching {element}{(call is null ? "" : $" with {call}")}. Saved to suite.json with the case.");
     }
 
     // Says what happened in the card at the top, as a step does.
@@ -626,7 +626,7 @@ internal sealed partial class BuilderPanel : Window
     private TargetChoice? NameIt(TargetChoice choice)
     {
         var suggestion = Camel(_current?.Facts.Label ?? "control");
-        if (Ui.Prompt(this, "Name it", "A name for it in elements.json, which steps use instead of how it is found now:", suggestion, "Name it", Icons.Name, tall: false) is not { } name)
+        if (Ui.Prompt(this, "Name it", "Name for this control in elements.json. Steps will refer to it by this name.", suggestion, "Name it", Icons.Name, tall: false) is not { } name)
             return null;
         name = name.Trim();
         try
@@ -695,7 +695,7 @@ internal sealed partial class BuilderPanel : Window
     {
         _shownChecks.Add(check);
         var row = new DockPanel { Margin = new Thickness(0, 2, 0, 2), Tag = check };
-        var remove = Ui.IconButton(Icons.Cross, "Take this check out", () =>
+        var remove = Ui.IconButton(Icons.Cross, "Remove this check", () =>
         {
             lock (_draft.Checks)
                 _draft.Checks.Remove(check);
@@ -746,7 +746,7 @@ internal sealed partial class BuilderPanel : Window
         var played = step.State != DraftStepState.NotPlayed;
         Mark(row, step.State == DraftStepState.Failed ? step.Problem ?? "It didn't work." : null);
         if (!played)
-            row.ToolTip = "Not played yet: the app hasn't been taken through this step";
+            row.ToolTip = "Not played yet";
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(22) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
@@ -761,7 +761,7 @@ internal sealed partial class BuilderPanel : Window
         var words = new StackPanel();
         var say = Ui.Words(step.Text, 13, played ? Ui.Ink : Ui.Muted);
         say.Cursor = Cursors.IBeam;
-        say.ToolTip = "Click to change what the panel says for this step";
+        say.ToolTip = "Click to edit the description";
         say.MouseLeftButtonUp += (_, _) => EditSay(step, words, say);
         words.Children.Add(say);
         if (step.Target is { } target)
@@ -777,17 +777,17 @@ internal sealed partial class BuilderPanel : Window
         var actions = new List<(string Glyph, string Tip, Action Act)>();
         if (played)
         {
-            actions.Add((Icons.Play, "Try this step in the app", () => Play?.Invoke(step, false)));
-            actions.Add((Icons.Retry, "Roll back to here: starts the app again from where the case starts, and plays the steps up to this one. The steps after it stay, to play again", () => RollBackTo(step)));
+            actions.Add((Icons.Play, "Play this step", () => Play?.Invoke(step, false)));
+            actions.Add((Icons.Retry, "Roll back to here\nRestarts the app and plays the steps up to this one. Later steps are kept.", () => RollBackTo(step)));
         }
         else
-            actions.Add((Icons.Next, "Run to here: plays the steps up to this one", () => RunToHere(step)));
-        actions.Add((Icons.Edit, "Edit from here: takes the app to just after this step, takes out the steps after it, and records new ones", () => EditFromHere(step)));
+            actions.Add((Icons.Next, "Run to here\nPlays the steps up to this one.", () => RunToHere(step)));
+        actions.Add((Icons.Edit, "Edit from here\nPlays up to this step, removes the steps after it, and starts recording.", () => EditFromHere(step)));
         if (step.Script is { } script)
-            actions.Add((Icons.Document, "Open the script, in Notepad++ or Notepad", () => ScriptEditor.Open(Path.Combine(_suite.Folder, script))));
-        actions.Add((Icons.Up, "Move it up", () => Move(step, -1)));
-        actions.Add((Icons.Down, "Move it down", () => Move(step, 1)));
-        actions.Add((Icons.Delete, "Take this step out", () => Remove(step)));
+            actions.Add((Icons.Document, "Open the script in Notepad++ or Notepad", () => ScriptEditor.Open(Path.Combine(_suite.Folder, script))));
+        actions.Add((Icons.Up, "Move up", () => Move(step, -1)));
+        actions.Add((Icons.Down, "Move down", () => Move(step, 1)));
+        actions.Add((Icons.Delete, "Delete this step", () => Remove(step)));
         foreach (var (glyph, tip, act) in actions)
         {
             var button = Ui.IconButton(glyph, tip, act, 12);
@@ -981,7 +981,7 @@ internal sealed partial class BuilderPanel : Window
         var open = (Icons.Document, "Open it", (Action)(() => new WindowsMachine().Open("file", path)));
         var done = (Icons.Back, "Back to the cases", (Action)Close);
         _footer.Content = problems.Count == 0
-            ? Card(Ui.Pass, Ui.PassSoft, Icons.Passed, $"Saved in {relative}", "The suite has no mistakes. Run it from the launcher to see it play.", [open, done])
+            ? Card(Ui.Pass, Ui.PassSoft, Icons.Passed, $"Saved in {relative}", "No mistakes found in the suite.", [open, done])
             : Card(Ui.Hold, Ui.HoldSoft, Icons.Warning, $"Saved in {relative}, with mistakes", string.Join("\n", problems), [open, done]);
     }
 

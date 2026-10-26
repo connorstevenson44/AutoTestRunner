@@ -113,7 +113,7 @@ $problem = $null
 try {
     $panel = Wait-For { Window "New case: $name" } 'the builder panel'
     Wait-For { $panel.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition) |
-        Where-Object { $_.Current.Name -like 'Use Order Desk*' } } 'the builder to start Order Desk and record' 90 | Out-Null
+        Where-Object { $_.Current.Name -like 'Recording. Use Order Desk*' } } 'the builder to start Order Desk and record' 90 | Out-Null
     $app = Wait-For { Window 'Order Desk' } 'Order Desk'
 
     Click (Find $app $ui::AutomationIdProperty 'CustomerBox')
@@ -179,7 +179,7 @@ $editor = Start-Process $autotest -ArgumentList @('record', "`"$suite`"", '--edi
 $problem = $null
 try {
     $panel = Wait-For { Window 'Edit 1. Take an order' } 'the builder panel, on case 1'
-    Saying $panel 'Order Desk is at where the case starts*' 'the case opened at its start' 90
+    Saying $panel 'Order Desk is at the start of the case*' 'the case opened at its start' 90
 
     Step-Button $panel 'Pick Coffee beans from the drop-down' 'Run to here'
     Saying $panel 'Order Desk is at step 5.*' 'case 1 played to step 5' 90
@@ -193,8 +193,9 @@ try {
     $confirm = Wait-For { $panel.FindFirst([System.Windows.Automation.TreeScope]::Children,
         (New-Object System.Windows.Automation.PropertyCondition($ui::NameProperty, 'Edit from step 11'))) } 'the window that asks before steps are taken out' 20
     if (-not (Named $confirm '2. Take three more orders with a macro')) { throw 'Case 2, which carries on from case 1, isn''t offered to mark.' }
-    Invoke (Find $confirm $ui::NameProperty 'Take them out and record')
-    Saying $panel 'Use Order Desk*' 'case 1 played to step 11, and recording' 120
+    Save-Screen 'edit-confirm.png'
+    Invoke (Find $confirm $ui::NameProperty 'Confirm')
+    Saying $panel 'Recording. Use Order Desk*' 'case 1 played to step 11, and recording' 120
 
     Invoke (Find $panel $ui::NameProperty 'Save')
     Saying $panel 'Saved in*' 'case 1 to be saved' 20

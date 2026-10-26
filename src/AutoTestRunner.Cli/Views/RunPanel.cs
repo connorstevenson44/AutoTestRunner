@@ -488,7 +488,7 @@ internal sealed class RunPanel : Window, IRunView
             case HoldReason.Pause: SetState(Icons.Pause, "Paused", Ui.Hold, Ui.HoldSoft); break;
             case HoldReason.Step: SetState(Icons.Next, "Your step", Ui.Step, Ui.StepSoft, "Enter does it"); break;
             case HoldReason.Checkpoint:
-                SetState(Icons.Look, "Your turn", _caseFailed ? Ui.Fail : Ui.Pass, _caseFailed ? Ui.FailSoft : Ui.PassSoft, "Look it over, then Space carries on");
+                SetState(Icons.Look, "Your turn", _caseFailed ? Ui.Fail : Ui.Pass, _caseFailed ? Ui.FailSoft : Ui.PassSoft, "Check the screen, then press Space to continue");
                 break;
             case HoldReason.Stuck: SetState(Icons.Warning, "Stuck", Ui.Fail, Ui.FailSoft); break;
             default:

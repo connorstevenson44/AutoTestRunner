@@ -22,14 +22,14 @@ internal static class NewCaseWindow
         };
         window.Resources.MergedDictionaries.Add(Ui.Theme);
         var stack = new StackPanel { Margin = new Thickness(22, 18, 22, 18) };
-        stack.Children.Add(Ui.Heading("What it does"));
+        stack.Children.Add(Ui.Heading("Case name"));
         var name = new TextBox { FontSize = 14, Padding = new Thickness(6, 5, 6, 5), Text = "" };
-        name.ToolTip = "Named for what it tries, such as Take an order with gift wrap";
+        name.ToolTip = "What the case tests, such as Take an order with gift wrap";
         stack.Children.Add(name);
 
         stack.Children.Add(Ui.Heading("Starts from", top: 16));
         var fresh = new RadioButton { Content = $"A fresh start of {suite.App.Window}", IsChecked = true, Margin = new Thickness(0, 2, 0, 6), FontSize = 13 };
-        var after = new RadioButton { Content = "Where a case leaves off", Margin = new Thickness(0, 2, 0, 4), FontSize = 13, IsEnabled = suite.Cases.Count > 0 };
+        var after = new RadioButton { Content = "The end of another case", Margin = new Thickness(0, 2, 0, 4), FontSize = 13, IsEnabled = suite.Cases.Count > 0 };
         var cases = new ComboBox { Margin = new Thickness(22, 2, 0, 0), IsEnabled = false, FontSize = 13 };
         foreach (var item in suite.Cases)
             cases.Items.Add(new ComboBoxItem { Content = $"{item.Number}. {item.Name}", Tag = item });
@@ -39,7 +39,7 @@ internal static class NewCaseWindow
         stack.Children.Add(fresh);
         stack.Children.Add(after);
         stack.Children.Add(cases);
-        var note = Ui.Words("The builder plays that case, and the ones it carries on from, to get the app there first.", 11.5, Ui.Muted);
+        var note = Ui.Words("The builder first plays that case, and any it needs, to get the app there.", 11.5, Ui.Muted);
         note.Margin = new Thickness(22, 6, 0, 0);
         stack.Children.Add(note);
 

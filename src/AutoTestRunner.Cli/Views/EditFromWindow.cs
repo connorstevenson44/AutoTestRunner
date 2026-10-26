@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using AutoTestRunner.Building;
 using AutoTestRunner.Scripting;
@@ -7,13 +8,11 @@ using AutoTestRunner.Scripting;
 namespace AutoTestRunner.Cli.Views;
 
 /// <summary>
-/// Asks before a case is changed from a step: which steps after it are taken out, so new ones can be recorded from
-/// there, and which cases carry on from it, each ticked to show a warning in the launcher that it needs looking at.
+/// Asks before a case is changed from a step: lists the steps after it that are removed, so new ones can be recorded
+/// from there, and the cases that carry on from it, each ticked to show a warning in the launcher that it needs checking.
 /// </summary>
 internal static class EditFromWindow
 {
-    private const int StepsShown = 6;
-
     /// <summary>The cases ticked to be marked, or null when the change was called off.</summary>
     public static IReadOnlyList<Case>? Ask(Window owner, int number, IReadOnlyList<DraftStep> later, IReadOnlyList<Case> carryingOn)
     {
@@ -25,30 +24,30 @@ internal static class EditFromWindow
         };
         window.Resources.MergedDictionaries.Add(Ui.Theme);
         var stack = new StackPanel { Margin = new Thickness(22, 18, 22, 18) };
-        var taken = later.Count == 1 ? $"The step after step {number} is taken out" : $"The {later.Count} steps after step {number} are taken out";
-        stack.Children.Add(Ui.IconText(Icons.Warning, taken, Ui.Hold, 14));
-        var intro = Ui.Words("so you can record new ones from there. Saving writes the case without them.", 12.5, Ui.Muted);
+        var removed = later.Count == 1 ? $"Step {number + 1} will be removed" : $"Steps {number + 1} to {number + later.Count} will be removed";
+        stack.Children.Add(Ui.IconText(Icons.Delete, removed, Ui.Hold, 14));
+        var intro = Ui.Words($"Recording starts again after step {number}. The case file only changes when you save.", 12.5, Ui.Muted);
         intro.Margin = new Thickness(0, 4, 0, 8);
         stack.Children.Add(intro);
-        foreach (var (step, index) in later.Take(StepsShown).Select((step, index) => (step, index)))
+        var lines = new StackPanel();
+        foreach (var (step, index) in later.Select((step, index) => (step, index)))
         {
             var line = Ui.Words($"{number + index + 1}.  {step.Text}", 12.5, Ui.Ink, wrap: false);
             line.TextDecorations = TextDecorations.Strikethrough;
             line.Margin = new Thickness(8, 1, 0, 1);
-            stack.Children.Add(line);
+            lines.Children.Add(line);
         }
-        if (later.Count > StepsShown)
+        stack.Children.Add(new Border
         {
-            var more = Ui.Words($"and {Steps(later.Count - StepsShown)} more", 12, Ui.Muted);
-            more.Margin = new Thickness(8, 1, 0, 1);
-            stack.Children.Add(more);
-        }
+            BorderBrush = Ui.Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(2, 4, 2, 4),
+            Child = new ScrollViewer { Content = lines, MaxHeight = 200, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled },
+        });
 
         var boxes = new List<(Case Case, CheckBox Box)>();
         if (carryingOn.Count > 0)
         {
-            stack.Children.Add(Ui.Heading("Cases that carry on from this one", top: 16));
-            var why = Ui.Words("They start where this case leaves off, so they may need changing too. Those ticked show a warning in the launcher until they are.", 12, Ui.Muted);
+            stack.Children.Add(Ui.Heading("Cases that start where this one ends", top: 16));
+            var why = Ui.Words("Changing this case may break them. Ticked cases get a warning in the launcher until you clear it.", 12, Ui.Muted);
             why.Margin = new Thickness(0, 0, 0, 6);
             stack.Children.Add(why);
             foreach (var item in carryingOn)
@@ -59,23 +58,28 @@ internal static class EditFromWindow
             }
         }
 
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 18, 0, 0) };
-        var cancel = Ui.LabelledButton(Icons.Cross, "Keep them", window.Close);
+        // Cancel and Confirm side by side, the same size.
+        var buttons = new UniformGrid { Columns = 2, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 18, 0, 0) };
+        var cancel = Ui.LabelledButton(Icons.Cross, "Cancel", window.Close);
         cancel.IsCancel = true;
-        var edit = Ui.LabelledButton(Icons.Edit, "Take them out and record", () =>
+        cancel.Margin = new Thickness(0, 0, 4, 0);
+        var confirm = Ui.LabelledButton(Icons.Tick, "Confirm", () =>
         {
             ticked = [.. boxes.Where(pair => pair.Box.IsChecked == true).Select(pair => pair.Case)];
             window.Close();
         }, "MainButton");
-        edit.IsDefault = true;
-        edit.Margin = new Thickness(8, 0, 0, 0);
+        confirm.IsDefault = true;
+        confirm.Margin = new Thickness(4, 0, 0, 0);
+        foreach (var button in new[] { cancel, confirm })
+        {
+            button.MinWidth = 110;
+            button.Padding = new Thickness(14, 8, 14, 8);
+        }
         buttons.Children.Add(cancel);
-        buttons.Children.Add(edit);
+        buttons.Children.Add(confirm);
         stack.Children.Add(buttons);
         window.Content = stack;
         window.ShowDialog();
         return ticked;
     }
-
-    private static string Steps(int count) => count == 1 ? "step" : $"{count} steps";
 }

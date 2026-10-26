@@ -54,6 +54,10 @@ from the folder it is in or was started from, such as `samples/` in a clone. Pic
 whether its app is there, and how its last run went; a suite with mistakes in its scripts shows them instead. A shield
 on Start means the suite needs administrator, which autotest asks for when it starts.
 
+A case that runs after others shows their numbers in a small pill with an arrow, such as ← 1, 2: amber when one of
+them isn't ticked. Click the pill to tick the case with every case it needs. **Clean up** runs the suite's reset
+script and shows its log, which folds away, or hides with ✕.
+
 ## Building a case
 
 **New case** in the launcher opens the builder: a panel beside the app, which gets the app to where the case starts
@@ -72,12 +76,12 @@ on Start means the suite needs administrator, which autotest asks for when it st
   click its words to change what the panel says.
 - **Step** adds a step that isn't a click: **Run a script…** picks a `.ps1` in the suite and runs it; **New script…**
   writes one in `tools/` from a short template and opens it, in Notepad++ when it is installed, else Notepad, and
-  its step plays once you've written it; **Say something…** and **Wait…**. The page icon on a script step opens its file.
+  its step plays once you've written it; **Show a message…** and **Wait…**. The page icon on a script step opens its file.
 - **Watch it** under a picked control has the builder wait for its new words whenever a step changes them, as it
   does for the status text; **After clicking it…** adds a macro after each click on it, after a delay if need be.
   Both go in `suite.json`'s `builder` section, for every case built after: see [docs/format.md](docs/format.md).
 - **Save** writes `cases/NN-name.json`, as a person would write it, then checks the suite. The checkpoint's title,
-  checks and what to look at are at the bottom of the panel.
+  checks and the manual checks for the tester are at the bottom of the panel.
 
 ### Changing a case
 
@@ -87,9 +91,10 @@ carries on from, and its steps are listed, greyed until they have been played. O
 - **Run to here** plays the case up to that step.
 - **Roll back to here**, on a step already played, starts the app again from where the case starts, after the
   suite's reset, and plays up to that step. The steps after it stay, greyed, to play again.
-- **Edit from here** takes the app to just after that step, takes out the steps after it, and records new ones. It
-  first shows which steps go, and the cases that carry on from this one, ticked: those ticked get a warning in the
-  launcher, saying why, until they are changed too or the warning is clicked away.
+- **Edit from here** takes the app to just after that step, removes the steps after it, and records new ones. It
+  first lists the steps that will be removed, and the cases that start where this one ends, ticked: those ticked get
+  a warning in the launcher, saying why, until they are changed too or the warning is cleared. **Confirm** goes on;
+  **Cancel** leaves the case as it was.
 
 Record and Pick wait until the app is at the last step. Saving writes only what changed: the steps before the first
 one changed, the checkpoint, and everything else in the file stay as they were written.
