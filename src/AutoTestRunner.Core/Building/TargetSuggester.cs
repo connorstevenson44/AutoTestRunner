@@ -20,10 +20,16 @@ public static class TargetSuggester
             if (count(match.Json) == 1)
                 return new TargetChoice(match.Json, match.Shown, TargetQuality.Sturdy, $"Found by its name in elements.json, {match.Name}.");
 
+        // An element that is only the way found here is that element, even when the app answered differently when
+        // asked about it a moment before, as a drop-down closing can make it.
         var own = Own(control).ToList();
         foreach (var choice in own)
-            if (count(choice.Json) == 1)
-                return choice;
+        {
+            if (count(choice.Json) != 1)
+                continue;
+            var same = named.FirstOrDefault(match => match.With.Count == 0 && elements.TryGetValue(match.Name, out var definition) && JsonNode.DeepEquals(definition, choice.Json));
+            return same is null ? choice : new TargetChoice(same.Json, same.Shown, TargetQuality.Sturdy, $"Found by its name in elements.json, {same.Name}.");
+        }
 
         // Inside the nearest control around it that can be named, such as a list's row or another window.
         var inner = own.Count > 0 ? own : [new TargetChoice(new JsonObject { ["type"] = control.Type }, control.Type.ToLowerInvariant(), TargetQuality.Wording, "")];

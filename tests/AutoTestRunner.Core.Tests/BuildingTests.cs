@@ -70,6 +70,14 @@ public sealed class BuildingTests : IDisposable
     }
 
     [Fact]
+    public void An_element_that_is_just_its_id_is_used_even_when_the_app_answered_for_it_a_moment_late()
+    {
+        var suite = Suite.Load(Tour);
+        var product = new ControlFacts("ComboBox", "Product", Id: "ProductBox");
+        Assert.Equal("\"product\"", JsonLine.Write(Name(suite, product, Count(("\"product\"", 0))).Json));
+    }
+
+    [Fact]
     public void An_element_with_parameters_is_filled_in_from_the_control_and_the_row_around_it()
     {
         var suite = Suite.Load(Tour);
