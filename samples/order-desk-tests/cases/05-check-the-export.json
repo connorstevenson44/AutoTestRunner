@@ -1,0 +1,22 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "Check the export",
+  "needs": ["export-orders"],
+  "covers": "orders.csv read back: the order count, the sum of the totals, and which orders are shipped",
+  "tags": ["export"],
+  "steps": [
+    { "script": "tools/Summarize-Export.ps1", "args": ["${exportFile}"], "as": "summary" },
+    { "run": "cmd.exe", "args": ["/c", "findstr", "/c:Shipped", "${exportFile}"], "as": "shipped" },
+    { "checkpoint": "The export adds up",
+      "checks": [
+        { "contains": "${summary.output}", "text": "3 orders, 58.00 in all" },
+        { "equals": "${shipped.code}", "to": "0" },
+        { "contains": "${shipped.output}", "text": "Alan Turing" },
+        { "lacks": "${shipped.output}", "text": "Ada Lovelace" },
+        { "output": "cmd.exe", "args": ["/c", "type", "${exportFile}"], "contains": "Grace Hopper" }
+      ],
+      "tools": [
+        { "console": "Import-Csv -LiteralPath $args[0] | Format-Table -AutoSize", "args": ["${exportFile}"], "label": "Export as a table" }
+      ] }
+  ]
+}

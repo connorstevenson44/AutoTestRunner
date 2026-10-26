@@ -1,0 +1,15 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "Import orders from a file",
+  "needsNote": "Nothing",
+  "covers": "Importing three orders at once. Gets stuck at once: Order Desk now asks about each order in a window of its own.",
+  "tags": ["import"],
+  "steps": [
+    { "call": "startWithNoOrders" },
+    { "click": "importOrders" },
+    { "pickFile": "Import orders", "path": "${suiteDir}\\data\\orders-to-import.csv" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Import finished", "within": "60" } },
+    { "checkpoint": "The orders are imported",
+      "checks": [ { "jsonValue": "${ordersFile}", "path": "orders:1003:customer", "equals": "Margaret Hamilton" } ] }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "Export orders",
+  "needsNote": "Nothing",
+  "covers": "Exporting one order. Gets stuck: Export orders is greyed out until \"I have checked the orders\" is ticked. Watched, tick it and Try again.",
+  "tags": ["export"],
+  "steps": [
+    { "call": "startWithNoOrders" },
+    { "call": "addOrder", "with": { "customer": "Alan Turing", "product": "Mug" } },
+    { "click": "exportOrders" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Exported 1 order." } },
+    { "checkpoint": "The order is exported",
+      "checks": [ { "fileExists": "${dataDir}\\orders.csv" } ] }
+  ]
+}

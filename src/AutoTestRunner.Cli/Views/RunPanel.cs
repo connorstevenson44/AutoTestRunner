@@ -25,7 +25,7 @@ namespace AutoTestRunner.Cli.Views;
 [SuppressMessage("Design", "CA1001", Justification = "The key hook and the timer are disposed when the window closes.")]
 internal sealed partial class RunPanel : Window, IRunView
 {
-    private const double PanelWidth = 440;
+    private const double PanelWidth = 460;
 
     private readonly RunControl _control;
     private readonly string _resultsFolder;
@@ -38,7 +38,7 @@ internal sealed partial class RunPanel : Window, IRunView
     private readonly Button _main, _next;
     private readonly ToggleButton _checks;
     private readonly ToggleButton[] _speeds;
-    private readonly TextBlock _nowIcon, _nowLabel, _nowText, _waitText;
+    private readonly TextBlock _nowIcon, _nowLabel, _nowText, _waitText, _waitTook;
     private readonly Border _nowCommand, _countdown;
     private readonly TextBlock _nowCommandText;
     private readonly DockPanel _waitRow;
@@ -57,9 +57,8 @@ internal sealed partial class RunPanel : Window, IRunView
     // Whether a step or check of the case running has failed, which a checkpoint's "Your turn" shows in red.
     private bool _caseFailed;
 
-    // What the run is waiting for, and since when; a command running counts too, but isn't added to the feed after.
-    private string? _wait;
-    private bool _waitIsCommand;
+    // What the run is waiting for, a command running too, and since when.
+    private Activity? _wait;
     private DateTime _waitStarted;
 
     // The question on show, and the answer that closing it gives. The keys' hook reads whether there is one, from its
@@ -181,11 +180,16 @@ internal sealed partial class RunPanel : Window, IRunView
         _nowCommand = new Border { Background = Ui.Terminal, CornerRadius = new CornerRadius(5), Padding = new Thickness(8, 5, 8, 5), Margin = new Thickness(0, 6, 0, 0), Child = _nowCommandText, Visibility = Visibility.Collapsed };
         _waitText = Ui.Words("", 11.5, Ui.Muted);
         _waitText.Margin = new Thickness(6, 0, 0, 0);
+        _waitTook = Ui.Words("", 11, Ui.Muted, wrap: false);
+        _waitTook.VerticalAlignment = VerticalAlignment.Top;
+        _waitTook.Margin = new Thickness(8, 2, 0, 0);
         _waitRow = new DockPanel { Margin = new Thickness(0, 6, 0, 0), Visibility = Visibility.Collapsed };
         var turning = Ui.Spinner(11, Ui.Muted);
         turning.VerticalAlignment = VerticalAlignment.Top;
-        turning.Margin = new Thickness(0, 2, 0, 0);
+        turning.Margin = new Thickness(0, 3, 0, 0);
+        DockPanel.SetDock(_waitTook, Dock.Right);
         _waitRow.Children.Add(turning);
+        _waitRow.Children.Add(_waitTook);
         _waitRow.Children.Add(_waitText);
         said.Children.Add(_nowLabel);
         said.Children.Add(_nowText);
@@ -295,22 +299,29 @@ internal sealed partial class RunPanel : Window, IRunView
         _feed.CaseFinished(result);
     });
 
-    public void ShowStep(string text, ActivityKind kind = ActivityKind.Say, string? command = null) => OnUi(() =>
+    public void ShowStep(Activity step) => OnUi(() =>
     {
         EndWait();
         HideCountdown();
-        _nowIcon.Text = Icons.Of(kind);
-        _nowText.Text = text;
-        _nowCommandText.Text = command is null ? "" : "> " + command.Replace("\r", "");
-        _nowCommand.Visibility = command is null ? Visibility.Collapsed : Visibility.Visible;
-        _feed.Step(kind, text);
+        _nowIcon.Text = Icons.Of(step.Kind);
+        StepLine.Fill(_nowText, step, 14.5);
+        _nowText.ToolTip = step.Say;
+        _nowCommandText.Text = step.Command is null ? "" : "> " + step.Command.Replace("\r", "");
+        _nowCommand.Visibility = step.Command is null ? Visibility.Collapsed : Visibility.Visible;
+        _feed.Step(step);
     });
 
-    public void ShowWait(string what) => OnUi(() => StartWait(what, isCommand: false));
+    public void ShowWait(Activity what) => OnUi(() => StartWait(what));
+
+    public void Waited(Activity what, TimeSpan took) => OnUi(() =>
+    {
+        EndWait();
+        _feed.Waited(what, took);
+    });
 
     public void CommandStarted(string line, string? script) => OnUi(() =>
     {
-        StartWait("Running", isCommand: true);
+        StartWait(Activity.Of(ActivityKind.Command, Part.Verb("Running")));
         _feed.CommandStarted(line, script);
     });
 
@@ -323,10 +334,10 @@ internal sealed partial class RunPanel : Window, IRunView
         _feed.CommandFinished(exitCode, took);
     });
 
-    public void StepFailed(string message) => OnUi(() =>
+    public void StepFailed(StepFailure failure) => OnUi(() =>
     {
         _caseFailed = true;
-        _feed.StepFailed(message);
+        _feed.StepFailed(failure);
     });
 
     public void ShowCheckpoint(string title, IReadOnlyList<CheckResult> checks, IReadOnlyList<string> look, IReadOnlyList<ToolButton> tools) => OnUi(() =>
@@ -400,7 +411,7 @@ internal sealed partial class RunPanel : Window, IRunView
         _main.IsEnabled = _next.IsEnabled = false;
         SetState(allPassed ? Icons.Passed : Icons.Failed, "Finished", allPassed ? Ui.Pass : Ui.Fail, allPassed ? Ui.PassSoft : Ui.FailSoft);
         _nowIcon.Text = allPassed ? Icons.Passed : Icons.Failed;
-        _nowText.Text = allPassed ? "Everything passed" : "Finished, with problems";
+        StepLine.Fill(_nowText, Activity.Words(allPassed ? "Everything passed" : "Finished, with problems"), 14.5);
         _nowCommand.Visibility = Visibility.Collapsed;
         _question.Content = FinishedCard(resultsFolder, allPassed);
         System.Media.SystemSounds.Asterisk.Play();
@@ -546,20 +557,21 @@ internal sealed partial class RunPanel : Window, IRunView
 
     // ===== Waits =====
 
-    private void StartWait(string what, bool isCommand)
+    private void StartWait(Activity what)
     {
         EndWait();
-        (_wait, _waitIsCommand, _waitStarted) = (what, isCommand, DateTime.Now);
+        (_wait, _waitStarted) = (what, DateTime.Now);
+        StepLine.Fill(_waitText, what, 11.5, quiet: true);
         _waitTimer.Start();
     }
 
-    // A wait shows once it has gone on long enough to notice, and goes in the feed after, with how long it took.
+    // A wait shows once it has gone on long enough to notice, with how long so far.
     private void ShowWaitTime()
     {
         var took = DateTime.Now - _waitStarted;
         if (_wait is null || took < TimeSpan.FromMilliseconds(600))
             return;
-        _waitText.Text = $"{_wait} · {Ui.Took(took)}";
+        _waitTook.Text = Ui.Took(took);
         _waitRow.Visibility = Visibility.Visible;
     }
 
@@ -567,11 +579,6 @@ internal sealed partial class RunPanel : Window, IRunView
     {
         _waitTimer.Stop();
         _waitRow.Visibility = Visibility.Collapsed;
-        if (_wait is null)
-            return;
-        var took = DateTime.Now - _waitStarted;
-        if (!_waitIsCommand && took >= TimeSpan.FromSeconds(1))
-            _feed.Waited(_wait, took);
         _wait = null;
     }
 

@@ -9,8 +9,10 @@ using AutoTestRunner.Running;
 namespace AutoTestRunner.Cli.Views;
 
 /// <summary>
-/// Everything the run has done, newest at the bottom: each case with its steps, the commands it ran with what they
-/// printed as they printed it, and its checkpoints. A step that failed is red, and pointing at it says why. A case that
+/// Everything the run has done, newest at the bottom: each case with its steps, each a verb and the controls and values
+/// it acts on; the waits, with what they saw and how long they took; the commands it ran with what they printed as they
+/// printed it; and its checkpoints, as a table of what each check expected and found. A step that failed is red, with
+/// what it wanted beside what it found. A case that
 /// passed folds away when it ends; a click on a case or command opens and closes it. It keeps the newest in view unless
 /// you scroll up, and a button brings you back.
 /// </summary>
@@ -24,8 +26,10 @@ internal sealed class ActivityFeed : Grid
     private readonly Button _latest;
     private readonly string _before;
     private Group? _group;
-    private CommandRow? _command;
-    private Grid? _step;
+    private CommandRow? _command, _ran;
+    private StepRow? _step;
+    // The last step shown, which a failure is about.
+    private Activity? _last;
     private bool _follow = true;
 
     /// <param name="before">The name of the group for what happens before the first case.</param>
@@ -67,37 +71,49 @@ internal sealed class ActivityFeed : Grid
         _group = null;
     }
 
-    public void Step(ActivityKind kind, string text) => Body.Children.Add(_step = Row(Icons.Of(kind), text, Ui.Ink));
-
-    /// <summary>The last step failed, though the case carries on: it turns red, and pointing at it says why.</summary>
-    public void StepFailed(string message)
+    /// <summary>
+    /// A step: its line, with the time. A checkpoint's line isn't added, as its card follows, nor a command's, as the
+    /// command's own row does.
+    /// </summary>
+    public void Step(Activity step)
     {
-        var group = _group ??= AddGroup();
-        group.Failed(message);
-        if (_step is null || !group.Body.Children.Contains(_step))
+        _last = step;
+        if (step.Kind == ActivityKind.Check || step.Command is not null)
         {
-            group.Body.Children.Add(_step = Row(Icons.Cross, message, Ui.Fail));
+            _step = null;
             return;
         }
-        // A row is its icon, its words and the time.
-        var icon = (TextBlock)_step.Children[0];
-        icon.Text = Icons.Cross;
-        icon.Foreground = Ui.Fail;
-        ((TextBlock)_step.Children[1]).Foreground = Ui.Fail;
-        _step.Background = Ui.FailSoft;
-        _step.ToolTip = new ToolTip { Content = Ui.Words(message, 12, Ui.Ink), MaxWidth = 380 };
-        ToolTipService.SetInitialShowDelay(_step, 150);
-        ToolTipService.SetShowDuration(_step, 60_000);
+        Body.Children.Add(_step = new StepRow(step, step.Kind == ActivityKind.Say ? Icons.Info : Icons.Of(step.Kind), Time()));
     }
 
-    /// <summary>A wait that took long enough to notice, once it is over.</summary>
-    public void Waited(string what, TimeSpan took) => Body.Children.Add(Row(Icons.Wait, $"{what} · {Ui.Took(took)}", Ui.Faint, small: true));
+    /// <summary>A wait step that is over: what it waited for, what it saw, and how long it took.</summary>
+    public void Waited(Activity step, TimeSpan took)
+    {
+        _last = step;
+        Body.Children.Add(_step = new StepRow(step, Icons.Wait, Ui.Took(took), quiet: true));
+    }
 
-    public void Note(string text) => Body.Children.Add(Row(Icons.Note, text, Ui.Hold));
+    /// <summary>The last step failed, though the case carries on: it turns red, with what it wanted and what it found.</summary>
+    public void StepFailed(StepFailure failure)
+    {
+        var group = _group ??= AddGroup();
+        group.Failed(_last, failure);
+        if (_last?.Command is not null && _ran is { } ran)
+        {
+            // A command's row shows its exit code in red already.
+            ran.ToolTip = new ToolTip { Content = Ui.Words(failure.Message, 12, Ui.Ink), MaxWidth = 380 };
+            return;
+        }
+        if (_step is null || !group.Body.Children.Contains(_step))
+            group.Body.Children.Add(_step = new StepRow(Activity.Words(failure.Message), Icons.Cross, Time()));
+        _step.Fail(failure);
+    }
+
+    public void Note(string text) => Body.Children.Add(new StepRow(Activity.Words(text), Icons.Note, Time()));
 
     public void CommandStarted(string line, string? script)
     {
-        _command = new CommandRow(line, script);
+        _ran = _command = new CommandRow(line, script, _last?.Say);
         Body.Children.Add(_command);
     }
 
@@ -109,7 +125,7 @@ internal sealed class ActivityFeed : Grid
         _command = null;
     }
 
-    /// <summary>Adds a checkpoint's card, red if a check failed or a step since the last checkpoint did. Says which.</summary>
+    /// <summary>Adds a checkpoint's card, red if a check failed or a step since the last checkpoint did.</summary>
     public bool Checkpoint(string title, IReadOnlyList<CheckResult> checks, IReadOnlyList<string> look, IReadOnlyList<ToolButton> tools, Action<ToolButton> open)
     {
         var group = _group ??= AddGroup();
@@ -130,31 +146,104 @@ internal sealed class ActivityFeed : Grid
 
     private void Add(UIElement item) => _items.Children.Add(item);
 
-    private static Grid Row(string glyph, string text, Brush color, bool small = false)
+    private static string Time() => DateTime.Now.ToString("HH:mm:ss", CultureInfo.CurrentCulture);
+
+    /// <summary>What a step wanted beside what it found, as the checkpoint's table has them, for a step that failed.</summary>
+    private static Grid Compare(string expected, string actual)
     {
-        var row = new Grid { Margin = new Thickness(0, 3, 0, 3) };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(26) });
-        row.ColumnDefinitions.Add(new ColumnDefinition());
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var icon = Ui.Glyph(glyph, small ? 12 : 14, small ? Ui.Faint : Ui.Muted);
-        icon.VerticalAlignment = VerticalAlignment.Top;
-        icon.Margin = new Thickness(2, 2, 0, 0);
-        var words = Ui.Words(text, small ? 11.5 : 12.5, color);
-        var time = Ui.Words(DateTime.Now.ToString("HH:mm:ss", CultureInfo.CurrentCulture), 10.5, Ui.Faint, wrap: false);
-        time.VerticalAlignment = VerticalAlignment.Top;
-        time.Margin = new Thickness(8, 2, 0, 0);
-        Grid.SetColumn(words, 1);
-        Grid.SetColumn(time, 2);
-        row.Children.Add(icon);
-        row.Children.Add(words);
-        row.Children.Add(time);
-        return row;
+        var grid = new Grid { Margin = new Thickness(0, 4, 0, 2) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition());
+        grid.ColumnDefinitions.Add(new ColumnDefinition());
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Put(grid, Ui.Heading("Expected"), 0, 0);
+        Put(grid, Ui.Heading("Actual"), 0, 1);
+        Put(grid, Value(expected, Ui.Ink), 1, 0);
+        Put(grid, Value(actual, Ui.Fail), 1, 1);
+        return grid;
+    }
+
+    private static void Put(Grid grid, UIElement item, int row, int column, int span = 1)
+    {
+        Grid.SetRow(item, row);
+        Grid.SetColumn(item, column);
+        Grid.SetColumnSpan(item, span);
+        grid.Children.Add(item);
+    }
+
+    // A value in a table: a few lines of it, the rest when pointed at.
+    private static TextBlock Value(string text, Brush color, string? full = null)
+    {
+        var value = Ui.Words(text, 12, color);
+        value.MaxHeight = 50;
+        value.TextTrimming = TextTrimming.CharacterEllipsis;
+        value.Margin = new Thickness(0, 0, 8, 0);
+        if (full is not null || text.Length > 40)
+            value.ToolTip = new ToolTip { Content = new TextBlock { Text = full ?? text, FontFamily = Ui.Mono, FontSize = 11, TextWrapping = TextWrapping.Wrap }, MaxWidth = 520 };
+        return value;
+    }
+
+    /// <summary>
+    /// A step's row: an icon for what it does, its line, what it saw under it, and on the right the time, or how long a
+    /// wait took. Pointing at it shows the script's own words for it. A step that failed turns red.
+    /// </summary>
+    private sealed class StepRow : Grid
+    {
+        private readonly TextBlock _icon;
+        private readonly StackPanel _words;
+
+        public StepRow(Activity step, string glyph, string right, bool quiet = false)
+        {
+            Margin = new Thickness(0, 1, 0, 1);
+            ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(26) });
+            ColumnDefinitions.Add(new ColumnDefinition());
+            ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            _icon = Ui.Glyph(glyph, 14, quiet ? Ui.Faint : Ui.Muted);
+            _icon.VerticalAlignment = VerticalAlignment.Top;
+            _icon.Margin = new Thickness(2, 4, 0, 0);
+            _words = new StackPanel { Margin = new Thickness(0, 2, 0, 2) };
+            _words.Children.Add(StepLine.Of(step, 12.5, quiet));
+            if (step.Detail is { } detail)
+            {
+                var saw = Value(detail, Ui.Muted);
+                saw.FontSize = 11.5;
+                saw.FontFamily = Ui.Mono;
+                saw.Margin = new Thickness(0, 2, 0, 0);
+                _words.Children.Add(saw);
+            }
+            var time = Ui.Words(right, 10.5, Ui.Faint, wrap: false);
+            time.VerticalAlignment = VerticalAlignment.Top;
+            time.Margin = new Thickness(8, 5, 0, 0);
+            SetColumn(_words, 1);
+            SetColumn(time, 2);
+            Children.Add(_icon);
+            Children.Add(_words);
+            Children.Add(time);
+            if (step.Say is { } say)
+            {
+                ToolTip = new ToolTip { Content = Ui.Words(say, 12, Ui.Ink), MaxWidth = 380 };
+                ToolTipService.SetInitialShowDelay(this, 400);
+            }
+        }
+
+        public void Fail(StepFailure failure)
+        {
+            _icon.Text = Icons.Cross;
+            _icon.Foreground = Ui.Fail;
+            Background = Ui.FailSoft;
+            _words.Children.Add(failure.Expected is { } expected
+                ? Compare(expected, failure.Actual ?? "")
+                : Ui.Words(failure.Message, 11.5, Ui.Fail));
+            ToolTip = new ToolTip { Content = Ui.Words(failure.Message, 12, Ui.Ink), MaxWidth = 380 };
+            ToolTipService.SetInitialShowDelay(this, 150);
+            ToolTipService.SetShowDuration(this, 60_000);
+        }
     }
 
     /// <summary>A case: a header with its number, name and how it went, over its steps.</summary>
     private sealed class Group : StackPanel
     {
-        private readonly List<string> _failures = [];
+        private readonly List<(Activity? Step, StepFailure Failure)> _failures = [];
         private readonly Border _badge;
         private readonly TextBlock _chevron, _took;
 
@@ -188,10 +277,10 @@ internal sealed class ActivityFeed : Grid
 
         public StackPanel Body { get; }
 
-        public void Failed(string message) => _failures.Add(message);
+        public void Failed(Activity? step, StepFailure failure) => _failures.Add((step, failure));
 
         /// <summary>The steps that failed since the last checkpoint, for the next one to show.</summary>
-        public List<string> TakeFailures()
+        public List<(Activity? Step, StepFailure Failure)> TakeFailures()
         {
             var failures = _failures.ToList();
             _failures.Clear();
@@ -231,7 +320,7 @@ internal sealed class ActivityFeed : Grid
         private readonly System.Text.StringBuilder _text = new();
         private int _lines;
 
-        public CommandRow(string line, string? script)
+        public CommandRow(string line, string? script, string? say)
         {
             Margin = new Thickness(0, 3, 0, 5);
             var header = new Grid { Cursor = System.Windows.Input.Cursors.Hand, Background = Brushes.Transparent };
@@ -240,7 +329,7 @@ internal sealed class ActivityFeed : Grid
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var icon = Ui.Glyph(Icons.Console, 14, Ui.Accent);
             icon.Margin = new Thickness(2, 0, 0, 0);
-            var words = new TextBlock { Text = line, FontFamily = Ui.Mono, FontSize = 11.5, Foreground = Ui.Ink, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center, ToolTip = line };
+            var words = new TextBlock { Text = line, FontFamily = Ui.Mono, FontSize = 11.5, Foreground = Ui.Ink, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
             _clock = Ui.Words("", 10.5, Ui.Muted, wrap: false);
             _clock.Margin = new Thickness(5, 0, 0, 0);
             var running = new StackPanel { Orientation = Orientation.Horizontal };
@@ -287,6 +376,8 @@ internal sealed class ActivityFeed : Grid
             _terminal = new Border { Background = Ui.Terminal, CornerRadius = new CornerRadius(6), Margin = new Thickness(26, 4, 0, 0), Child = _scroll };
             Children.Add(_terminal);
             header.MouseLeftButtonUp += (_, _) => Open(_terminal.Visibility != Visibility.Visible);
+            if (say is not null)
+                header.ToolTip = new ToolTip { Content = Ui.Words(say, 12, Ui.Ink), MaxWidth = 380 };
 
             _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
             _timer.Tick += (_, _) => _clock.Text = Ui.Took(DateTime.Now - _started);
@@ -340,12 +431,14 @@ internal sealed class ActivityFeed : Grid
     }
 
     /// <summary>
-    /// A checkpoint: the steps before it that failed, what it checked, each with a tick or a cross, what to look at, and
-    /// buttons that open things. Red if anything failed.
+    /// A checkpoint: a table of what it checked, with what each expected beside what it found, and the steps before it
+    /// that failed; then what to look at yourself, and buttons that open things. Red if anything failed.
     /// </summary>
     private sealed class CheckpointCard : Border
     {
-        public CheckpointCard(string title, IReadOnlyList<string> stepFailures, IReadOnlyList<CheckResult> checks, IReadOnlyList<string> look,
+        private readonly Grid _table = new();
+
+        public CheckpointCard(string title, IReadOnlyList<(Activity? Step, StepFailure Failure)> stepFailures, IReadOnlyList<CheckResult> checks, IReadOnlyList<string> look,
             IReadOnlyList<ToolButton> tools, Action<ToolButton> open)
         {
             var failed = Failed = stepFailures.Count > 0 || checks.Any(check => !check.Passed);
@@ -357,26 +450,51 @@ internal sealed class ActivityFeed : Grid
             Margin = new Thickness(0, 4, 0, 6);
 
             var stack = new StackPanel();
-            var heading = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
-            heading.Children.Add(Ui.Glyph(Icons.CheckList, 15, failed ? Ui.Fail : Ui.Pass));
+            var heading = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+            heading.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            heading.ColumnDefinitions.Add(new ColumnDefinition());
+            heading.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var icon = Ui.Glyph(Icons.CheckList, 15, failed ? Ui.Fail : Ui.Pass);
+            icon.VerticalAlignment = VerticalAlignment.Top;
+            icon.Margin = new Thickness(0, 1, 0, 0);
             var words = Ui.Words(title, 13, Ui.Ink, FontWeights.SemiBold);
-            words.Margin = new Thickness(8, 0, 0, 0);
+            words.Margin = new Thickness(8, 0, 8, 0);
+            Grid.SetColumn(words, 1);
+            heading.Children.Add(icon);
             heading.Children.Add(words);
+            var total = checks.Count + stepFailures.Count;
+            if (total > 0)
+            {
+                var passed = checks.Count(check => check.Passed);
+                var count = Ui.Pill(Ui.IconText(failed ? Icons.Cross : Icons.Tick, $"{passed} / {total}", failed ? Ui.Fail : Ui.Pass, 11), Brushes.White, 8, new Thickness(7, 1, 8, 1));
+                count.VerticalAlignment = VerticalAlignment.Top;
+                count.ToolTip = $"{passed} of {total} passed";
+                Grid.SetColumn(count, 2);
+                heading.Children.Add(count);
+            }
             stack.Children.Add(heading);
 
-            foreach (var failure in stepFailures)
+            if (total > 0)
             {
-                stack.Children.Add(Line(Icons.Cross, "A step before this checkpoint failed", Ui.Fail));
-                stack.Children.Add(Why(failure));
+                _table.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(20) });
+                _table.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.25, GridUnitType.Star) });
+                _table.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                _table.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                Row(null, Ui.Heading("Check"), Ui.Heading("Expected"), Ui.Heading("Actual"));
+                foreach (var (step, failure) in stepFailures)
+                    Row(false, StepCell(step, failure), Value(failure.Expected ?? "", Ui.Ink), Value(failure.Actual ?? failure.Message, Ui.Fail, failure.Message));
+                foreach (var check in checks)
+                    Row(check.Passed, SubjectCell(check), ExpectedCell(check), Value(check.Actual, check.Passed ? Ui.Ink : Ui.Fail, check.Full));
+                stack.Children.Add(_table);
             }
-            foreach (var check in checks)
+
+            if (look.Count > 0)
             {
-                stack.Children.Add(Line(check.Passed ? Icons.Tick : Icons.Cross, check.Label, check.Passed ? Ui.Pass : Ui.Fail));
-                if (!check.Passed && check.Detail is { } detail)
-                    stack.Children.Add(Why(detail));
+                var manual = new StackPanel { Margin = new Thickness(0, total > 0 ? 8 : 0, 0, 0) };
+                foreach (var item in look)
+                    manual.Children.Add(Line(Icons.Look, item, Ui.Accent));
+                stack.Children.Add(manual);
             }
-            foreach (var item in look)
-                stack.Children.Add(Line(Icons.Look, item, Ui.Accent));
             if (tools.Count > 0)
             {
                 var buttons = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
@@ -395,17 +513,68 @@ internal sealed class ActivityFeed : Grid
 
         public bool Failed { get; }
 
-        private static TextBlock Why(string text)
+        // A row of the table, with a line under it; passed is null for the headings.
+        private void Row(bool? passed, UIElement what, UIElement expected, UIElement actual)
         {
-            var why = Ui.Words(text, 11.5, Ui.Fail);
-            why.Margin = new Thickness(22, 0, 0, 3);
-            return why;
+            var row = _table.RowDefinitions.Count;
+            _table.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var line = new Border { BorderBrush = Ui.Line, BorderThickness = new Thickness(0, 0, 0, 1) };
+            Put(_table, line, row, 0, 4);
+            if (passed is { } ok)
+            {
+                var mark = Ui.Glyph(ok ? Icons.Tick : Icons.Cross, 12, ok ? Ui.Pass : Ui.Fail);
+                mark.VerticalAlignment = VerticalAlignment.Top;
+                mark.Margin = new Thickness(0, 5, 0, 0);
+                Put(_table, mark, row, 0);
+            }
+            foreach (var (cell, column) in new[] { (what, 1), (expected, 2), (actual, 3) })
+            {
+                if (cell is FrameworkElement element)
+                    element.Margin = new Thickness(0, passed is null ? 0 : 4, 8, passed is null ? 0 : 4);
+                Put(_table, cell, row, column);
+            }
         }
+
+        // What a check looked at: an icon for what kind of thing, its name, and a detail such as the setting.
+        private static StackPanel SubjectCell(CheckResult check)
+        {
+            var cell = new StackPanel();
+            var name = new TextBlock { FontSize = 12, Foreground = Ui.Ink, TextWrapping = TextWrapping.Wrap };
+            name.Inlines.Add(new Run(Icons.Of(check.Subject.Kind)) { FontFamily = Icons.Font, Foreground = Ui.Muted, FontSize = 11.5, BaselineAlignment = BaselineAlignment.Center });
+            name.Inlines.Add(new Run("  " + (Labelled(check) ? check.Label : check.Subject.Name)) { FontWeight = FontWeights.SemiBold });
+            cell.Children.Add(name);
+            if (!Labelled(check) && check.Subject.Detail is { } detail)
+                cell.Children.Add(new TextBlock { Text = detail, FontSize = 11, FontFamily = Ui.Mono, Foreground = Ui.Muted, TextWrapping = TextWrapping.Wrap });
+            var tip = string.Join("\n", new[] { check.Subject.Tip, Labelled(check) ? Checks.Label(check.Subject, check.How, check.Expected) : null }.OfType<string>());
+            if (tip.Length > 0)
+                cell.ToolTip = new ToolTip { Content = new TextBlock { Text = tip, FontFamily = Ui.Mono, FontSize = 11, TextWrapping = TextWrapping.Wrap }, MaxWidth = 460 };
+            return cell;
+        }
+
+        // A label the script gave the check names it in the table, in place of what it looks at.
+        private static bool Labelled(CheckResult check) => check.Label != Checks.Label(check.Subject, check.How, check.Expected);
+
+        // What it expected, with how it compares, such as contains, quiet in front.
+        private static TextBlock ExpectedCell(CheckResult check)
+        {
+            var cell = Value(check.Expected, Ui.Ink);
+            if (!Checks.IsState(check.How))
+            {
+                cell.Text = "";
+                cell.Inlines.Add(new Run(check.How + " ") { Foreground = Ui.Muted, FontSize = 11 });
+                cell.Inlines.Add(new Run(check.Expected));
+            }
+            return cell;
+        }
+
+        // A step that failed before the checkpoint, by its line.
+        private static UIElement StepCell(Activity? step, StepFailure failure) =>
+            step is null ? Ui.Words(failure.Message, 12, Ui.Fail) : StepLine.Of(step, 12);
 
         private static Grid Line(string glyph, string text, Brush color)
         {
             var row = new Grid { Margin = new Thickness(0, 2, 0, 2) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(22) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(20) });
             row.ColumnDefinitions.Add(new ColumnDefinition());
             var icon = Ui.Glyph(glyph, 12, color);
             icon.VerticalAlignment = VerticalAlignment.Top;

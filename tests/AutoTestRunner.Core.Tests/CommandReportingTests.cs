@@ -56,7 +56,7 @@ public sealed class CommandReportingTests : IDisposable
         var file = Path.Combine(tools, "Hello.ps1");
         Assert.Equal(ActivityKind.Command, view.Kinds[0]);
         Assert.Equal($"start powershell.exe -NoProfile -ExecutionPolicy Bypass -File {Quoted(file)} Ada", view.Commands[0]);
-        Assert.Contains("Wait 0.1 seconds", view.Waits);
+        Assert.Contains("Wait \"0.1 s\"", view.Waits);
         Assert.Equal(CaseStatus.Passed, results.Cases.Single().Status);
     }
 
@@ -70,7 +70,7 @@ public sealed class CommandReportingTests : IDisposable
 
         var (view, results) = Run("""{ "powershell": ["Get-Thing", "Write-Output done"], "args": ["a b"] }""", machine);
 
-        Assert.Equal("Run a PowerShell script", view.Shown[1]);
+        Assert.Equal("Run PowerShell", view.Shown[1]);
         Assert.Equal(ActivityKind.Command, view.Kinds.Single());
         Assert.Equal(["start powershell \"a b\"", "out first", "err it broke", "exit 1"], view.Commands);
         Assert.Equal(CaseStatus.Failed, view.Ended.Single().Status);
@@ -96,11 +96,12 @@ public sealed class CommandReportingTests : IDisposable
     }
 
     [Fact]
-    public void A_pick_step_without_a_say_names_the_file_it_picks()
+    public void A_pick_step_names_the_file_it_picks_and_the_picker()
     {
         var (view, _) = Run("""{ "pickFile": "Open package", "path": "packages/Contoso.Orders-1.0.0.zip" }""");
 
-        Assert.Equal("Pick Contoso.Orders-1.0.0.zip", view.Shown[1]);
+        Assert.Equal("Pick Contoso.Orders-1.0.0.zip in Open package", view.Shown[1]);
+        Assert.Equal([PartKind.Verb, PartKind.File, PartKind.Word, PartKind.Window], view.Steps[0].Parts.Select(part => part.Kind));
         Assert.Equal(ActivityKind.File, view.Kinds.Single());
     }
 
@@ -119,7 +120,11 @@ public sealed class CommandReportingTests : IDisposable
             """, driver: app);
 
         Assert.Equal([ActivityKind.Click, ActivityKind.Check], view.Kinds);
-        Assert.Equal(["Look for the Save button", "Wait for the status text to say \"Saved\""], view.Waits);
+        Assert.Equal(["Look for Save", "Wait statusText starts with \"Saved\""], view.Waits);
+        var saved = Assert.Single(view.Waited);
+        Assert.Equal("Saved.", saved.Detail);
+        Assert.Equal(PartKind.Control, saved.Parts[1].Kind);
+        Assert.Contains("AutomationId  StatusText", saved.Parts[1].Tip, StringComparison.Ordinal);
         Assert.Equal(CaseStatus.Passed, view.Ended.Single().Status);
     }
 }

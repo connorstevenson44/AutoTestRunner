@@ -1,0 +1,17 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "Shipped orders are in the export",
+  "needsNote": "Nothing",
+  "covers": "orders.csv has the shipped orders. Fails: nothing has been exported, so the script ends with exit code 2 and findstr finds nothing.",
+  "tags": ["export"],
+  "steps": [
+    { "call": "startWithNoOrders" },
+    { "script": "tools/Find-Export.ps1", "args": ["${dataDir}\\orders.csv"] },
+    { "run": "cmd.exe", "args": ["/c", "findstr", "/c:Shipped", "${dataDir}\\orders.csv"], "as": "shipped" },
+    { "checkpoint": "The export has a shipped order",
+      "checks": [
+        { "equals": "${shipped.code}", "to": "0" },
+        { "contains": "${shipped.output}", "text": "Shipped" }
+      ] }
+  ]
+}

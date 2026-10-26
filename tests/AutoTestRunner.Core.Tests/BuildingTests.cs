@@ -6,12 +6,12 @@ using AutoTestRunner.Scripting;
 namespace AutoTestRunner.Core.Tests;
 
 /// <summary>
-/// The builder's engine, against the feature tour's elements: how it names the controls the person used, the steps it
+/// The builder's engine, against the Order Desk tests' elements: how it names the controls the person used, the steps it
 /// makes of what they did, and the files it writes, which must load as a suite with no mistakes.
 /// </summary>
 public sealed class BuildingTests : IDisposable
 {
-    private static readonly string Tour = Path.Combine(AppContext.BaseDirectory, "samples", "order-desk-feature-tour");
+    private static readonly string Tour = Path.Combine(AppContext.BaseDirectory, "samples", "order-desk-tests");
 
     private readonly string _temp = Path.Combine(Path.GetTempPath(), "AutoTestRunner.Tests", Guid.NewGuid().ToString("N"));
 
@@ -272,9 +272,9 @@ public sealed class BuildingTests : IDisposable
         var text = File.ReadAllText(existing.File);
         var reloaded = Suite.Load(suite.Folder).Cases[0];
         Assert.Equal(7, reloaded.Steps.Count);
-        Assert.Equal("""{ "find": "statusText", "as": "ready", "what": "the bar at the bottom", "say": "The bar at the bottom says what the app is doing: ${ready}" }""", JsonLine.Write(reloaded.Steps[1]));
+        Assert.Equal("""{ "find": "statusText", "as": "ready", "what": "status bar", "say": "The bar at the bottom says what the app is doing: ${ready}" }""", JsonLine.Write(reloaded.Steps[1]));
         Assert.Equal("""{ "type": "quantity", "text": "3", "say": "Type 3 in Quantity" }""", JsonLine.Write(reloaded.Steps[5]));
-        Assert.Equal("Ada's order was added and saved", reloaded.Steps[^1]!["checkpoint"]!.GetValue<string>());
+        Assert.Equal("Order 1001 is added and saved", reloaded.Steps[^1]!["checkpoint"]!.GetValue<string>());
         // The first step is as it was written, and so is everything from the checkpoint on.
         var first = before.Split('\n').First(line => line.Contains("startApp", StringComparison.Ordinal));
         Assert.Contains(first, text, StringComparison.Ordinal);

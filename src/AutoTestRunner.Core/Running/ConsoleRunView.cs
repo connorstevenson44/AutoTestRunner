@@ -8,12 +8,13 @@ public sealed class ConsoleRunView : IRunView
 {
     public void CaseStarted(int index, int count, Case item) { }
     public void CaseFinished(CaseResult result) { }
-    public void ShowStep(string text, ActivityKind kind = ActivityKind.Say, string? command = null) { }
-    public void ShowWait(string what) { }
+    public void ShowStep(Activity step) { }
+    public void ShowWait(Activity what) { }
+    public void Waited(Activity what, TimeSpan took) { }
     public void CommandStarted(string line, string? script) { }
     public void CommandOutput(string line, bool error) { }
     public void CommandFinished(int exitCode, TimeSpan took) { }
-    public void StepFailed(string message) { }
+    public void StepFailed(StepFailure failure) { }
     public void ShowCheckpoint(string title, IReadOnlyList<CheckResult> checks, IReadOnlyList<string> look, IReadOnlyList<ToolButton> tools) { }
     public void ShowCarryingOn(TimeSpan after) { }
     public StuckAnswer AskStuck(string message, string screenshot) => StuckAnswer.Stop;

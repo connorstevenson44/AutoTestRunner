@@ -41,9 +41,12 @@ autotest run --help                 # every option a command takes
 
 The panel shows the case and a bar of every case, coloured as each ends; the controls as icons, with their keys under
 them; what it is doing now, the command a step is about to run and what it is waiting for; and below, everything it
-has done: steps, checkpoints, and each command with its output, streaming while it runs, then its exit code. A step
-that fails while the case carries on, such as a message box that says something else, turns red, and pointing at it
-says why; the next checkpoint is red too, and lists it.
+has done. Each step is a row of what it does and what to, such as Click [Add order] or Type `Ada` in [customer]: a
+control is on a badge, and pointing at it shows its type, AutomationId, name in `elements.json` and how it was found.
+A wait shows what it saw and how long it took. Each command shows with its output, streaming while it runs, then its
+exit code. A checkpoint is a table of its checks, each with what it expected beside what it found, passed or not. A
+step that fails while the case carries on, such as a message box that says something else, turns red with what it
+expected and found; the next checkpoint is red too, and lists it.
 
 `--mode auto` (the default) shows each checkpoint for a few seconds and carries on; `pause-at-checkpoints` waits at
 each checkpoint; `step-by-step` waits for Enter before every step. The keys belong to the test unless you clicked into a text box
@@ -151,15 +154,15 @@ A case reads like the manual test it automates:
 
 ```json
 {
-  "name": "Try a deploy without changing anything",
+  "name": "Dry run",
   "needs": ["open-package"],
   "steps": [
-    { "type": "newInstallName", "text": "main", "say": "Name the new install main" },
-    { "click": { "button": "Dry run" }, "say": "Click Dry run, to see what a deploy would do without doing it" },
+    { "type": "newInstallName", "text": "main" },
+    { "click": { "button": "Dry run" } },
     { "call": "waitForStatusBar", "with": { "startsWith": "Dry run finished." }, "as": "status" },
-    { "checkpoint": "The dry run changed nothing",
+    { "checkpoint": "Nothing changed",
       "checks": [ { "fileMissing": "${ordersDir}" }, { "service": "Contoso.Orders-main" } ],
-      "look": [ "The bar at the bottom says Dry run finished. Nothing was changed." ],
+      "look": [ "The summary lists the service and task it would add." ],
       "tools": [ { "openFile": "${logFile(status)}", "label": "Open the log" } ] }
   ]
 }

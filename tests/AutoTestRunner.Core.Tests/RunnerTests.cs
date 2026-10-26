@@ -57,7 +57,7 @@ public sealed class RunnerTests : IDisposable
         Assert.Contains("click Save", driver.Done);
         Assert.All(view.Checks, check => Assert.True(check.Passed, $"{check.Label}: {check.Detail}"));
         Assert.Equal(4, view.Checks.Count);
-        Assert.Contains("Type main as the name", view.Shown);
+        Assert.Contains("Type main as the name", view.Steps.Select(step => step.Say));
         Assert.Equal(CaseStatus.Passed, results.Cases.Single().Status);
     }
 
@@ -159,12 +159,13 @@ public sealed class RunnerTests : IDisposable
     {
         public void CaseStarted(int index, int count, Case item) { }
         public void CaseFinished(CaseResult result) { }
-        public void ShowStep(string text, ActivityKind kind = ActivityKind.Say, string? command = null) { }
-        public void ShowWait(string what) { }
+        public void ShowStep(Activity step) { }
+        public void ShowWait(Activity what) { }
+        public void Waited(Activity what, TimeSpan took) { }
         public void CommandStarted(string line, string? script) { }
         public void CommandOutput(string line, bool error) { }
         public void CommandFinished(int exitCode, TimeSpan took) { }
-        public void StepFailed(string message) { }
+        public void StepFailed(StepFailure failure) { }
         public void ShowCheckpoint(string title, IReadOnlyList<CheckResult> checks, IReadOnlyList<string> look, IReadOnlyList<ToolButton> tools) { }
         public void ShowCarryingOn(TimeSpan after) { }
 

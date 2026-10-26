@@ -1,0 +1,17 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "Leave nothing behind",
+  "needsNote": "Any time",
+  "covers": "Closing Order Desk and deleting its data leaves nothing on the computer",
+  "tags": ["smoke"],
+  "steps": [
+    { "closeApp": {} },
+    { "delete": "${dataDir}" },
+    { "checkpoint": "Nothing is left behind",
+      "checks": [
+        { "fileMissing": "${dataDir}" },
+        { "process": "OrderDesk", "running": false, "within": 10 },
+        { "nothingLeft": {} }
+      ] }
+  ]
+}

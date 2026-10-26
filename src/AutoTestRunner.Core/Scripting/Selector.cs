@@ -38,6 +38,29 @@ public sealed record Selector(
         _ => found == wanted,
     };
 
+    /// <summary>How it finds its control, written short: Button "Add order", id StatusText in id HistoryList.</summary>
+    public string Shown()
+    {
+        var parts = new List<string>();
+        if (Id is not null)
+            parts.Add($"id {Id}");
+        if (Name is not null)
+            parts.Add($"{Type ?? "any"} \"{Name}\"{(Match == NameMatch.Exact ? "" : "…")}");
+        else if (Type is not null)
+            parts.Add(Type);
+        if (HelpText is not null)
+            parts.Add($"tooltip \"{HelpText}\"{(Match == NameMatch.Exact ? "" : "…")}");
+        if (ClassName is not null)
+            parts.Add($"class {ClassName}");
+        if (Cell is { } cell)
+            parts.Add($"cell {cell.Column} of {cell.Row}");
+        if (Within is { } within)
+            parts.Add($"in {within.Selectors[0].Shown()}");
+        if (SameRowAs is { } row)
+            parts.Add($"beside {row.Selectors[0].Shown()}");
+        return string.Join(" ", parts);
+    }
+
     /// <summary>What a person would call it, as in "the Add button".</summary>
     public string Describe()
     {

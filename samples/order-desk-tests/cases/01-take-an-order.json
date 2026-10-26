@@ -1,0 +1,44 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "Take an order",
+  "needsNote": "No orders",
+  "covers": "Order form: what it asks for, the total with gift wrap, Add order, orders.json and the activity log",
+  "tags": ["smoke", "orders"],
+  "steps": [
+    { "startApp": {} },
+    { "find": "statusText", "as": "ready", "what": "status bar" },
+    { "type": "customer", "text": "Ada Lovelace" },
+    { "find": "formProblem", "as": "problem" },
+    { "choose": "product", "option": "Coffee beans" },
+    { "type": "quantity", "text": "2" },
+    { "tick": "giftWrap" },
+    { "type": "notes", "text": "Leave it at the back door" },
+    { "find": "formTotal", "as": "total" },
+    { "click": "addOrder" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Added order 1001" }, "as": "status" },
+    { "hover": { "element": "orderRow", "with": { "number": "1001" } } },
+    { "checkpoint": "Order 1001 is added and saved",
+      "checks": [
+        { "matches": "${ready}", "regex": "^Ready\\.", "label": "Status at start" },
+        { "equals": "${problem}", "to": "Pick a product.", "label": "Form, no product" },
+        { "equals": "${total}", "to": "Total: £26.00", "label": "Form total" },
+        { "equals": "${status}", "to": "Added order 1001 for Ada Lovelace: £26.00.", "label": "Status after Add" },
+        { "jsonValue": "${ordersFile}", "path": "orders:1001:customer", "equals": "Ada Lovelace" },
+        { "jsonValue": "${ordersFile}", "path": "orders:1001:quantity", "equals": "2" },
+        { "jsonValue": "${ordersFile}", "path": "orders:1001:giftWrap", "equals": "true" },
+        { "jsonValue": "${ordersFile}", "path": "orders:1001:total", "equals": "26.00" },
+        { "jsonValue": "${ordersFile}", "path": "orders:1001:notes", "equals": "Leave it at the back door" },
+        { "lastLine": "${activityLog}", "contains": "Added order 1001: Ada Lovelace" },
+        { "shows": { "element": "orderRow", "with": { "number": "1001" } } },
+        { "says": "quantity", "equals": "1" },
+        { "notTicked": "giftWrap" },
+        { "disabled": "addOrder" }
+      ],
+      "look": [ "Order 1001 in the list: Ada Lovelace, 2 × Coffee beans, gift wrapped, £26.00." ],
+      "tools": [
+        { "openFile": "${ordersFile}", "label": "orders.json" },
+        { "openFile": "${activityLog}", "label": "Activity log" },
+        { "openFolder": "${dataDir}", "label": "Data folder" }
+      ] }
+  ]
+}

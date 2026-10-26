@@ -2,7 +2,7 @@
 # saved has the steps a person would write, file picker and all, and that it passes when run. Then it opens case 1 to change it: runs it to
 # a step, rolls back to an earlier one, and edits from a later one, which takes out the step after it and marks case 2,
 # which carries on from it; and checks both still pass. CI runs it against the demo bundle, after the demos; it builds
-# in a copy of the feature tour beside it, so the bundle is left as it was.
+# in a copy of the Order Desk tests beside it, so the bundle is left as it was.
 #
 #   tools/Try-Builder.ps1 -Bundle <folder with autotestrunner\, OrderDesk\ and the suites> -Results <folder>
 param(
@@ -24,7 +24,7 @@ $autotest = Join-Path $Bundle 'autotestrunner\autotest.exe'
 $suite = Join-Path $Bundle 'builder-try'
 New-Item -ItemType Directory -Force -Path $Results | Out-Null
 if (Test-Path -LiteralPath $suite) { Remove-Item -LiteralPath $suite -Recurse -Force }
-Copy-Item (Join-Path $Bundle 'order-desk-feature-tour') $suite -Recurse
+Copy-Item (Join-Path $Bundle 'order-desk-tests') $suite -Recurse
 # Order numbers start again at 1001, as they do when the case runs.
 & (Join-Path $suite 'tools\Reset-OrderDesk.ps1')
 # A file with no orders in it, to import through Windows' file picker.
@@ -36,7 +36,12 @@ $root = $ui::RootElement
 function Wait-For([scriptblock] $find, [string] $what, [int] $seconds = 60) {
     $end = (Get-Date).AddSeconds($seconds)
     while ((Get-Date) -lt $end) {
-        $found = & $find
+        # A window closing while its controls are listed, such as the file picker, takes them away mid-list: look again.
+        try { $found = & $find }
+        catch {
+            if ($_.Exception.GetBaseException() -isnot [System.Windows.Automation.ElementNotAvailableException]) { throw }
+            $found = $null
+        }
         if ($found) { return $found }
         Start-Sleep -Milliseconds 250
     }
@@ -211,9 +216,9 @@ try {
     $panel = Wait-For { Window 'Edit 1. Take an order' } 'the builder panel, on case 1'
     Saying $panel 'Order Desk is at the start of the case*' 'the case opened at its start' 90
 
-    Step-Button $panel 'Pick Coffee beans from the drop-down' 'Run to here'
+    Step-Button $panel 'Pick Coffee beans from product' 'Run to here'
     Saying $panel 'Order Desk is at step 5.*' 'case 1 played to step 5' 90
-    Step-Button $panel 'Type Ada Lovelace as the customer*' 'Roll back to here'
+    Step-Button $panel 'Type Ada Lovelace in customer*' 'Roll back to here'
     Saying $panel 'Order Desk is at step 3.*' 'Order Desk started again, and played to step 3' 120
     Save-Screen 'edit-rolled-back.png'
 
@@ -222,7 +227,7 @@ try {
     # A window the panel owns is under it, as UI Automation sees it.
     $confirm = Wait-For { $panel.FindFirst([System.Windows.Automation.TreeScope]::Children,
         (New-Object System.Windows.Automation.PropertyCondition($ui::NameProperty, 'Edit from step 11'))) } 'the window that asks before steps are taken out' 20
-    if (-not (Named $confirm '2. Take three more orders with a macro')) { throw 'Case 2, which carries on from case 1, isn''t offered to mark.' }
+    if (-not (Named $confirm '2. Take orders for three customers')) { throw 'Case 2, which carries on from case 1, isn''t offered to mark.' }
     Save-Screen 'edit-confirm.png'
     Invoke (Find $confirm $ui::NameProperty 'Confirm')
     Saying $panel 'Recording. Use Order Desk*' 'case 1 played to step 11, and recording' 120
@@ -250,7 +255,7 @@ $after
 $kept = $before.Substring(0, $before.IndexOf('{ "hover"'))
 if (-not $after.StartsWith($kept.TrimEnd())) { throw 'Case 1''s steps before the edit aren''t as they were written.' }
 if ($after.Contains('"hover"')) { throw 'The step after the one edited from is still in case 1.' }
-if (-not $after.Contains('"checkpoint": "Ada''s order was added and saved"')) { throw 'Case 1 lost its checkpoint.' }
+if (-not $after.Contains('"checkpoint": "Order 1001 is added and saved"')) { throw 'Case 1 lost its checkpoint.' }
 if (-not (Get-Content -Raw -LiteralPath $second.FullName).Contains('"review": "Case 1, Take an order, was changed from step 11')) {
     throw 'Case 2 isn''t marked as needing a look.'
 }

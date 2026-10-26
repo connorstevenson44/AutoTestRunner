@@ -41,14 +41,15 @@ public static class Targets
     public static Target Resolve(JsonNode? node, VariableScope scope, IReadOnlyDictionary<string, JsonNode> elements, string? what = null)
     {
         var selectors = new List<Selector>();
-        string? described = null;
-        Add(node, scope, elements, selectors, ref described, 0);
+        string? described = null, element = null;
+        Add(node, scope, elements, selectors, ref described, ref element, 0);
         if (selectors.Count == 0)
             throw new ScriptException("The step doesn't say which control.");
-        return new Target(selectors, what ?? described ?? selectors[0].Describe());
+        return new Target(selectors, what ?? described ?? selectors[0].Describe()) { Element = element, Called = what };
     }
 
-    private static void Add(JsonNode? node, VariableScope scope, IReadOnlyDictionary<string, JsonNode> elements, List<Selector> selectors, ref string? described, int depth)
+    private static void Add(JsonNode? node, VariableScope scope, IReadOnlyDictionary<string, JsonNode> elements, List<Selector> selectors, ref string? described,
+        ref string? element, int depth)
     {
         if (depth > 10)
             throw new ScriptException("Elements refer to each other in a loop.");
@@ -56,13 +57,13 @@ public static class Targets
         {
             case JsonArray list:
                 foreach (var item in list)
-                    Add(item, scope, elements, selectors, ref described, depth + 1);
+                    Add(item, scope, elements, selectors, ref described, ref element, depth + 1);
                 break;
             case JsonValue value when value.TryGetValue(out string? name):
-                AddElement(scope.Expand(name), null, scope, elements, selectors, ref described, depth);
+                AddElement(scope.Expand(name), null, scope, elements, selectors, ref described, ref element, depth);
                 break;
-            case JsonObject selector when selector["element"] is JsonValue element:
-                AddElement(scope.Expand(element.GetValue<string>()), selector["with"] as JsonObject, scope, elements, selectors, ref described, depth);
+            case JsonObject selector when selector["element"] is JsonValue named:
+                AddElement(scope.Expand(named.GetValue<string>()), selector["with"] as JsonObject, scope, elements, selectors, ref described, ref element, depth);
                 break;
             case JsonObject selector:
                 selectors.Add(Parse(selector, scope, elements));
@@ -72,7 +73,8 @@ public static class Targets
         }
     }
 
-    private static void AddElement(string name, JsonObject? with, VariableScope scope, IReadOnlyDictionary<string, JsonNode> elements, List<Selector> selectors, ref string? described, int depth)
+    private static void AddElement(string name, JsonObject? with, VariableScope scope, IReadOnlyDictionary<string, JsonNode> elements, List<Selector> selectors,
+        ref string? described, ref string? element, int depth)
     {
         if (!elements.TryGetValue(name, out var definition))
             throw new ScriptException($"There is no element called {name} in elements.json.");
@@ -84,7 +86,8 @@ public static class Targets
                 inner.Set(key, scope.Expand(value?.ToString() ?? ""));
         }
         described ??= $"the {Words(name)}";
-        Add(definition, inner, elements, selectors, ref described, depth + 1);
+        element ??= with is null ? name : string.Join(" ", [name, .. with.Select(pair => scope.Expand(pair.Value?.ToString() ?? ""))]);
+        Add(definition, inner, elements, selectors, ref described, ref element, depth + 1);
     }
 
     private static Selector Parse(JsonObject node, VariableScope scope, IReadOnlyDictionary<string, JsonNode> elements)

@@ -7,9 +7,14 @@ namespace AutoTestRunner.Core.Tests;
 /// <summary>A watched run's view that answers questions as the test says, and remembers what was shown.</summary>
 internal sealed class FakeRunView(StuckAnswer answer = StuckAnswer.Stop) : IRunView
 {
+    /// <summary>Each step's line as words, and the case each started.</summary>
     public List<string> Shown { get; } = [];
+    public List<Activity> Steps { get; } = [];
     public List<ActivityKind> Kinds { get; } = [];
     public List<string> Waits { get; } = [];
+
+    /// <summary>The wait steps that are over, as words, with what they saw.</summary>
+    public List<Activity> Waited { get; } = [];
     public List<CheckResult> Checks { get; } = [];
     public List<CaseResult> Ended { get; } = [];
 
@@ -24,17 +29,19 @@ internal sealed class FakeRunView(StuckAnswer answer = StuckAnswer.Stop) : IRunV
     public void CaseStarted(int index, int count, Case item) => Shown.Add($"case {item.Name}");
     public void CaseFinished(CaseResult result) => Ended.Add(result);
 
-    public void ShowStep(string text, ActivityKind kind = ActivityKind.Say, string? command = null)
+    public void ShowStep(Activity step)
     {
-        Shown.Add(text);
-        Kinds.Add(kind);
+        Shown.Add(step.Text);
+        Steps.Add(step);
+        Kinds.Add(step.Kind);
     }
 
-    public void ShowWait(string what) => Waits.Add(what);
+    public void ShowWait(Activity what) => Waits.Add(what.Text);
+    void IRunView.Waited(Activity what, TimeSpan took) => Waited.Add(what);
     public void CommandStarted(string line, string? script) => Commands.Add("start " + line);
     public void CommandOutput(string line, bool error) => Commands.Add((error ? "err " : "out ") + line);
     public void CommandFinished(int exitCode, TimeSpan took) => Commands.Add($"exit {exitCode}");
-    public void StepFailed(string message) => StepFailures.Add(message);
+    public void StepFailed(StepFailure failure) => StepFailures.Add(failure.Message);
     public void ShowCheckpoint(string title, IReadOnlyList<CheckResult> checks, IReadOnlyList<string> look, IReadOnlyList<ToolButton> tools) => Checks.AddRange(checks);
     public void ShowCarryingOn(TimeSpan after) { }
 

@@ -82,7 +82,7 @@ internal sealed partial class BuilderPanel
     {
         var answer = new TaskCompletionSource<CheckResult>();
         if (Try is null || !_ready)
-            answer.SetResult(new CheckResult("The check", false, "The app isn't ready yet."));
+            answer.SetResult(CheckResult.Unmade("The app isn't ready yet."));
         else
             Try(check, result => answer.TrySetResult(result));
         return answer.Task;

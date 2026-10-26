@@ -1,0 +1,15 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "Add an order",
+  "needsNote": "Nothing",
+  "covers": "Adding a teapot order. Gets stuck: the test clicks Submit order, which is now called Add order.",
+  "tags": ["orders"],
+  "steps": [
+    { "call": "startWithNoOrders" },
+    { "type": "customer", "text": "Katherine Johnson" },
+    { "choose": "product", "option": "Teapot" },
+    { "click": { "button": "Submit order" }, "within": 5 },
+    { "checkpoint": "Order 1001 is added",
+      "checks": [ { "jsonValue": "${ordersFile}", "path": "orders:1001:customer", "equals": "Katherine Johnson" } ] }
+  ]
+}
