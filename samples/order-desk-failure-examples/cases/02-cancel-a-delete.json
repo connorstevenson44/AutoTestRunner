@@ -1,0 +1,20 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "Keep an order when Delete is cancelled",
+  "needsNote": "Nothing",
+  "covers": "Delete's message box, and No keeping the order. Fails: the message's words have changed since the test was written.",
+  "tags": ["orders"],
+  "steps": [
+    { "call": "startWithNoOrders" },
+    { "call": "addOrder", "with": { "customer": "Grace Hopper", "product": "Green tea" } },
+    { "hover": { "element": "orderRow", "with": { "number": "1001" } } },
+    { "click": { "element": "orderRowButton", "with": { "number": "1001", "tip": "Delete this order" } }, "what": "Delete on order 1001" },
+    { "answerDialog": "Delete order", "button": "No", "expect": "Delete 1 order?" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Kept order 1001." } },
+    { "checkpoint": "Order 1001 is kept",
+      "checks": [
+        { "jsonValue": "${ordersFile}", "path": "orders:1001:status", "equals": "New" },
+        { "shows": { "element": "orderRow", "with": { "number": "1001" } } }
+      ] }
+  ]
+}

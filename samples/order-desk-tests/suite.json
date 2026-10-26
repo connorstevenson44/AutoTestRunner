@@ -1,6 +1,6 @@
 {
   "$schema": "../../schema/suite.schema.json",
-  "name": "Order Desk feature tour",
+  "name": "Order Desk tests",
   "app": { "exe": "${exe}", "window": "Order Desk", "status": "statusText" },
   "variables": {
     "exe": { "firstExisting": [
@@ -10,10 +10,10 @@
     ] },
     "dataDir": "${env:LOCALAPPDATA}\\OrderDesk",
     "ordersFile": "${dataDir}\\orders.json",
+    "exportFile": "${dataDir}\\orders.csv",
     "activityLog": "${dataDir}\\activity.log"
   },
   "helpers": {
-    "amount": { "regex": "£(\\d+\\.\\d\\d)" },
     "exportedFile": { "regex": "File: (.+)$" }
   },
   "requires": ["${exe}"],

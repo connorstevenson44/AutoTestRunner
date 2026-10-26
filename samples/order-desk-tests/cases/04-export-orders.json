@@ -1,0 +1,26 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "Export orders",
+  "needs": ["ship-keep-and-delete"],
+  "covers": "Export orders greyed out until the orders are checked, the export's progress, and orders.csv",
+  "tags": ["export"],
+  "steps": [
+    { "checkpoint": "Export needs the orders checked",
+      "checks": [
+        { "notTicked": "checkedTheOrders" },
+        { "disabled": "exportOrders" }
+      ] },
+    { "tick": "checkedTheOrders" },
+    { "click": "exportOrders" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Exported 3 orders." }, "as": "status" },
+    { "checkpoint": "The orders are exported",
+      "checks": [
+        { "equals": "${exportedFile(status)}", "to": "${exportFile}", "label": "File in status" },
+        { "atMost": "${status.seconds}", "to": "20", "label": "Export time (s)" },
+        { "fileExists": "${exportFile}" },
+        { "fileContains": "${exportFile}", "text": "1003,Alan Turing,Mug,1,True,False,8.00,Shipped" },
+        { "fileCount": "${dataDir}", "pattern": "*.csv", "equals": 1 }
+      ],
+      "tools": [ { "openFile": "${exportFile}", "label": "orders.csv" } ] }
+  ]
+}

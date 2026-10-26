@@ -1,0 +1,32 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "Import orders",
+  "needs": ["export-orders"],
+  "covers": "Import orders from a .csv: one window per order, Import or Skip, drafts skipped",
+  "tags": ["import"],
+  "steps": [
+    { "click": "importOrders" },
+    { "pickFile": "Import orders", "path": "${suiteDir}\\data\\orders-to-import.csv" },
+    { "whileShows": "importWindow", "untilText": "statusText", "matches": "^Import finished", "new": true, "within": 60, "as": "finished",
+      "what": "the import finishing",
+      "steps": [
+        { "find": { "id": "Counter", "within": "importWindow" }, "as": "counter", "within": 10, "what": "the order counter" },
+        { "find": { "id": "Summary", "within": "importWindow" }, "as": "summary", "within": 10, "what": "the order" },
+        { "if": { "contains": "${summary}", "text": "(draft)" },
+          "steps": [ { "click": { "button": "Skip", "within": "importWindow" } } ],
+          "else": [ { "click": { "button": "Import", "within": "importWindow" } } ] },
+        { "note": "The next order's window can show straight away, so this waits for this one's counter to go rather than the window.",
+          "waitGone": { "id": "Counter", "name": "${counter}", "within": "importWindow" }, "within": 10 }
+      ] },
+    { "checkpoint": "2 orders imported, the draft skipped",
+      "checks": [
+        { "equals": "${finished}", "to": "Import finished: 2 imported, 1 skipped.", "label": "Status after import" },
+        { "jsonValue": "${ordersFile}", "path": "orders:1005:customer", "equals": "Mary Jackson" },
+        { "jsonValue": "${ordersFile}", "path": "orders:1006:customer", "equals": "Margaret Hamilton" },
+        { "jsonValue": "${ordersFile}", "path": "orders:1007", "equals": "<absent>", "label": "Draft not imported" },
+        { "logged": "${activityLog}", "text": "Imported 2, skipped 1" }
+      ],
+      "look": [ "Orders 1005 Mary Jackson and 1006 Margaret Hamilton at the end of the list." ],
+      "tools": [ { "openFile": "${suiteDir}\\data\\orders-to-import.csv", "label": "Imported file" } ] }
+  ]
+}

@@ -2,9 +2,8 @@
   "$schema": "../../../schema/macro.schema.json",
   "description": "Closes Order Desk, deletes its orders and starts it again, so a case doesn't depend on the ones before it.",
   "steps": [
-    { "closeApp": {}, "say": "Close Order Desk, if it is open" },
-    { "powershell": "Remove-Item -LiteralPath $args[0] -Recurse -Force -ErrorAction SilentlyContinue", "args": ["${dataDir}"],
-      "say": "Delete its orders, so this case starts with none" },
-    { "startApp": {}, "say": "Start Order Desk" }
+    { "closeApp": {} },
+    { "delete": "${dataDir}" },
+    { "startApp": {} }
   ]
 }

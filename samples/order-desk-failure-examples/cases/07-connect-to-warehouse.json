@@ -1,0 +1,14 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "Connect to the warehouse",
+  "needsNote": "Nothing",
+  "covers": "Connect to warehouse. Gets stuck: the warehouse never answers, and the wait runs out.",
+  "tags": ["warehouse"],
+  "steps": [
+    { "call": "startWithNoOrders" },
+    { "click": "connectToWarehouse" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Connected to the warehouse", "within": "10" } },
+    { "checkpoint": "Order Desk is connected",
+      "checks": [ { "says": "statusText", "startsWith": "Connected to the warehouse" } ] }
+  ]
+}

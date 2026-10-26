@@ -12,7 +12,7 @@ public class SampleSuiteTests
 
     [Theory]
     [InlineData("demo")]
-    [InlineData("order-desk-feature-tour")]
+    [InlineData("order-desk-tests")]
     [InlineData("order-desk-failure-examples")]
     public void A_sample_suite_has_no_mistakes(string name)
     {

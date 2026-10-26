@@ -1,0 +1,16 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "Change the delivery note",
+  "needsNote": "Nothing",
+  "covers": "Changing part of a note. Fails: the note has no \"back door\" to change.",
+  "tags": ["orders"],
+  "steps": [
+    { "call": "startWithNoOrders" },
+    { "type": "notes", "text": "Ring the bell twice" },
+    { "replaceText": "notes", "regex": "back door", "replacement": "front door" },
+    { "checkpoint": "The note says front door",
+      "checks": [
+        { "says": "notes", "contains": "front door" }
+      ] }
+  ]
+}

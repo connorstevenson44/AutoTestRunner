@@ -1,0 +1,17 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "Find a product in the catalogue",
+  "needs": ["take-an-order"],
+  "covers": "The Catalogue tab's 500 products, scrolled to one far down the list",
+  "tags": ["catalogue"],
+  "steps": [
+    { "tab": "Catalogue" },
+    { "hover": { "element": "catalogueProduct", "with": { "name": "Product 437" } }, "as": "product", "what": "Product 437 in the catalogue" },
+    { "tab": "Orders" },
+    { "checkpoint": "Product 437 is in the catalogue",
+      "checks": [
+        { "equals": "${product}", "to": "Product 437" },
+        { "selected": { "tabItem": "Orders" } }
+      ] }
+  ]
+}

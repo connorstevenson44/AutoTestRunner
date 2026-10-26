@@ -8,12 +8,12 @@
     "giftWrap": { "description": "yes to tick Gift wrap.", "default": "no" }
   },
   "steps": [
-    { "type": "customer", "text": "${customer}", "say": "Type ${customer} as the customer" },
-    { "choose": "product", "option": "${product}", "say": "Pick ${product}" },
-    { "type": "quantity", "text": "${quantity}", "say": "Make it ${quantity}" },
+    { "type": "customer", "text": "${customer}" },
+    { "choose": "product", "option": "${product}" },
+    { "type": "quantity", "text": "${quantity}" },
     { "if": { "equals": "${giftWrap}", "to": "yes" },
-      "steps": [ { "tick": "giftWrap", "say": "Tick Gift wrap" } ] },
-    { "click": "addOrder", "say": "Click Add order" },
+      "steps": [ { "tick": "giftWrap" } ] },
+    { "click": "addOrder" },
     { "call": "waitForStatusBar", "with": { "startsWith": "Added order" }, "as": "status" }
   ],
   "returns": "status"
