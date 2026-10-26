@@ -100,10 +100,20 @@ internal sealed class LauncherWindow : Window
         _start = Ui.LabelledButton(Icons.Play, "Start", Start, "MainButton");
         _start.IsDefault = true;
         _start.FontSize = 14;
+        // The logs folder, where anything that goes wrong in autotest itself is written: small, as it is seldom needed.
+        var logs = Ui.IconButton(Icons.Folder, $"Open the logs folder, where errors.log has anything that went wrong in AutoTestRunner itself\n{Crashes.Folder}", Crashes.OpenFolder, 12);
+        logs.Padding = new Thickness(4, 2, 4, 2);
+        logs.Margin = new Thickness(0, 0, 8, 0);
+        logs.VerticalAlignment = VerticalAlignment.Center;
+        AutomationProperties.SetName(logs, "Open the logs folder");
+        keys.VerticalAlignment = VerticalAlignment.Center;
         var go = new Grid { Margin = new Thickness(0, 14, 0, 0) };
+        go.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         go.ColumnDefinitions.Add(new ColumnDefinition());
         go.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        Grid.SetColumn(_start, 1);
+        Grid.SetColumn(keys, 1);
+        Grid.SetColumn(_start, 2);
+        go.Children.Add(logs);
         go.Children.Add(keys);
         go.Children.Add(_start);
         Grid.SetRow(go, 2);

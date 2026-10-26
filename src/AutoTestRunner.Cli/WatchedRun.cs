@@ -152,8 +152,9 @@ internal static class WatchedRun
                 catch (Exception ex)
                 {
                     results.Log("ERROR", ex.ToString());
+                    Crashes.Log(ex, $"Running {suite.Name}. Its run.log is in {folder}.");
                     runner.Capture("unhandled");
-                    panel.Tell("Something went wrong in the runner itself. It's in run.log:\n\n" + ex.Message);
+                    panel.Tell($"Something went wrong in the runner itself. It's in errors.log in {Crashes.Folder}:\n\n" + ex.Message);
                     code = ExitCode.ScriptError;
                 }
                 finally

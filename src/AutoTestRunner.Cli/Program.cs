@@ -25,6 +25,7 @@ public static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        Crashes.Watch();
         var commands = CommandLine.Commands(
             (folder, options) => Launch(folder, options, args is ["launch", ..] ? args : ["launch", .. args]),
             (command, folder, options) => SuiteCommand(command, folder, options, args),
@@ -201,6 +202,7 @@ public static class Program
             catch (Exception ex)
             {
                 results.Log("ERROR", ex.ToString());
+                Crashes.Log(ex, $"Running {suite.Name} unattended. Its run.log is in {resultsFolder}.");
                 runner.Capture("unhandled");
                 code = ExitCode.ScriptError;
             }
