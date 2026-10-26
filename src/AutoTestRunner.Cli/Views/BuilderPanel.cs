@@ -890,7 +890,8 @@ internal sealed partial class BuilderPanel : Window
         }
         else if (Detail(step) is { } detail)
             words.Children.Add(Ui.Words(detail, 11, Ui.Muted, wrap: false));
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Visibility = Visibility.Hidden };
+        // Drawn again under the mouse, as after Apply, the buttons stay: the mouse won't come onto the row again to show them.
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Visibility = row.IsMouseOver ? Visibility.Visible : Visibility.Hidden };
         var actions = new List<(string Glyph, string Tip, Action Act)>();
         if (played)
         {
