@@ -159,7 +159,7 @@ internal sealed class LauncherWindow : Window
         if (found.Suite?.App.RunAsAdmin == true && !Elevation.IsAdministrator)
         {
             var admin = Ui.Glyph(Icons.Admin, 13, Ui.Faint);
-            admin.ToolTip = "Asks for administrator when it starts";
+            admin.ToolTip = "Needs administrator rights, and asks for them when it starts";
             admin.VerticalAlignment = VerticalAlignment.Top;
             admin.Margin = new Thickness(6, 3, 0, 0);
             Grid.SetColumn(admin, 2);
@@ -240,7 +240,7 @@ internal sealed class LauncherWindow : Window
             BorderBrush = Ui.Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), MaxHeight = 420,
             Child = new ScrollViewer { Content = list, VerticalScrollBarVisibility = ScrollBarVisibility.Auto },
         });
-        panel.Children.Add(Ui.Words($"Fix them in {found.Folder}, and open the launcher again. autotest validate lists them too.", 12, Ui.Muted));
+        panel.Children.Add(Ui.Words($"Fix them in {found.Folder}, then reopen the launcher. autotest validate also lists them.", 12, Ui.Muted));
         ((FrameworkElement)panel.Children[^1]).Margin = new Thickness(0, 10, 0, 0);
         return panel;
     }
@@ -273,7 +273,7 @@ internal sealed class LauncherWindow : Window
         var content = (StackPanel)_start.Content;
         ((TextBlock)content.Children[0]).Text = NeedsElevating(_suite?.Suite) ? Icons.Admin : Icons.Play;
         ((TextBlock)content.Children[1]).Text = all ? "Start all" : $"Start {count}";
-        _start.ToolTip = NeedsElevating(_suite?.Suite) ? "Starts again as administrator, which this suite needs, then runs" : null;
+        _start.ToolTip = NeedsElevating(_suite?.Suite) ? "This suite needs administrator rights: AutoTestRunner restarts as administrator, then runs" : null;
         _start.IsEnabled = count > 0 && _suite?.Ready == true;
     }
 
@@ -322,7 +322,7 @@ internal sealed class LauncherWindow : Window
             Close();
         }
         else
-            MessageBox.Show(this, "This suite drives an app that runs as administrator, and starting as administrator was declined.", Title,
+            MessageBox.Show(this, "This suite's app runs as administrator, and administrator rights were declined, so it can't run.", Title,
                 MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 

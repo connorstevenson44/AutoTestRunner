@@ -11,6 +11,7 @@ Desk keeps its orders in `%LOCALAPPDATA%\OrderDesk`, and the suites delete that 
 
 | File | What it shows |
 | --- | --- |
+| `0 Open the test launcher.cmd` | Opens the launcher on all three suites, listed on the left. Pick one and Start, or use **New case** to build a case by using Order Desk, and the pencil on a case to change it. |
 | `1 Watch the feature tour.cmd` | Opens the launcher on the feature tour. Press Start, and watch each step in the panel beside Order Desk. |
 | `2 Step through the feature tour.cmd` | The same, a step at a time: press Enter for each step. |
 | `3 Watch tests fail.cmd` | The failure examples, holding at each checkpoint so you can read what failed. |

@@ -50,7 +50,7 @@ internal sealed class SuitePane : Grid
         _machine.Margin = new Thickness(0, 0, 8, 6);
         _clean = Ui.LabelledButton(Icons.Clean, "Clean up", CleanUp);
         _clean.Visibility = Visibility.Collapsed;
-        _clean.ToolTip = "Closes the app and runs the suite's reset script, so the machine is as the first case expects";
+        _clean.ToolTip = "Close the app and run the suite's reset script, so the machine is ready for case 1";
         state.Children.Add(_files);
         if (suite.Reset.Leftovers is not null)
             state.Children.Add(_machine);
@@ -58,12 +58,21 @@ internal sealed class SuitePane : Grid
         {
             var admin = Ui.Pill(Ui.IconText(Icons.Admin, "Asks for administrator when it starts", Ui.Muted), Ui.Surface, 12, new Thickness(10, 4, 12, 4));
             admin.Margin = new Thickness(0, 0, 8, 6);
-            admin.ToolTip = "The app runs as administrator, so autotest restarts itself as administrator to drive it";
+            admin.ToolTip = "The app runs as administrator, so AutoTestRunner restarts as administrator to control it";
             state.Children.Add(admin);
         }
         state.Children.Add(_clean);
         _cleaning = new ActivityFeed("Clean up");
-        _cleaningBox = new Border { Height = 170, Margin = new Thickness(0, 4, 0, 6), Child = _cleaning, Visibility = Visibility.Collapsed };
+        // At most so tall, so that folding the log away gives the space back to the cases.
+        var cleaningLog = new Grid();
+        cleaningLog.Children.Add(_cleaning);
+        var hide = Ui.IconButton(Icons.Cross, "Hide the clean up log", () => _cleaningBox!.Visibility = Visibility.Collapsed, 11);
+        hide.Padding = new Thickness(5, 3, 5, 3);
+        hide.HorizontalAlignment = HorizontalAlignment.Right;
+        hide.VerticalAlignment = VerticalAlignment.Top;
+        hide.Margin = new Thickness(0, 2, 22, 0);
+        cleaningLog.Children.Add(hide);
+        _cleaningBox = new Border { MaxHeight = 170, Margin = new Thickness(0, 4, 0, 6), Child = cleaningLog, Visibility = Visibility.Collapsed };
         var top = new StackPanel();
         top.Children.Add(title);
         top.Children.Add(state);
@@ -78,7 +87,7 @@ internal sealed class SuitePane : Grid
             pick.Children.Add(Ui.LabelledButton(Icons.Failed, "Didn't pass last time", () => Tick(item => _last.TryGetValue(item.Number, out var status) && status != CaseStatus.Passed),
                 glyphColor: Ui.Fail));
         var add = Ui.LabelledButton(Icons.Add, "New case", NewCase);
-        add.ToolTip = "Build a case by using the app: each click and bit of typing becomes a step";
+        add.ToolTip = "Record a new case: use the app, and each click and entry becomes a step";
         add.Margin = new Thickness(0, 0, 0, 6);
         DockPanel.SetDock(add, Dock.Right);
         pick.Children.Add(add);
@@ -89,7 +98,7 @@ internal sealed class SuitePane : Grid
         foreach (var item in suite.Cases)
             list.Children.Add(CaseRow(item));
         if (suite.Cases.Count == 0)
-            list.Children.Add(new TextBlock { Text = "No cases yet. New case builds one by using the app.", Foreground = Ui.Muted, Margin = new Thickness(10), TextWrapping = TextWrapping.Wrap });
+            list.Children.Add(new TextBlock { Text = "No cases yet. Click New case to record one.", Foreground = Ui.Muted, Margin = new Thickness(10), TextWrapping = TextWrapping.Wrap });
         var cases = new Border
         {
             BorderBrush = Ui.Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Margin = new Thickness(0, 4, 0, 0),
@@ -163,8 +172,16 @@ internal sealed class SuitePane : Grid
         var needs = Ui.Pill(new TextBlock(), Ui.Surface, 8, new Thickness(6, 1, 7, 1));
         needs.Margin = new Thickness(0, 0, 6, 0);
         needs.Visibility = item.Needs.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        needs.MouseLeftButtonUp += (_, e) =>
+        {
+            TickWithNeeds(item);
+            e.Handled = true;
+        };
+        needs.MouseEnter += (_, _) => needs.BorderBrush = Ui.Accent;
+        needs.MouseLeave += (_, _) => needs.BorderBrush = Brushes.Transparent;
+        (needs.BorderBrush, needs.BorderThickness, needs.Cursor) = (Brushes.Transparent, new Thickness(1), System.Windows.Input.Cursors.Hand);
         // The pencil shows while the mouse is over the row, as the app's own row buttons do.
-        var edit = Ui.IconButton(Icons.Edit, "Open this case to change it: the builder takes the app to where it starts, and plays its steps as far as you want", () => _build(new BuildRequest(_suite, item.Name, Edit: item)), 14);
+        var edit = Ui.IconButton(Icons.Edit, "Edit this case in the builder", () => _build(new BuildRequest(_suite, item.Name, Edit: item)), 14);
         edit.Padding = new Thickness(6, 3, 6, 3);
         edit.Visibility = Visibility.Hidden;
         var last = _last.TryGetValue(item.Number, out var status) ? Ui.Glyph(Icons.Of(status), 14, Ui.Of(status)) : new TextBlock();
@@ -196,7 +213,7 @@ internal sealed class SuitePane : Grid
         };
         row.MouseLeftButtonUp += (_, e) =>
         {
-            if (e.OriginalSource is not CheckBox && !edit.IsMouseOver && !review.IsMouseOver)
+            if (e.OriginalSource is not CheckBox && !edit.IsMouseOver && !review.IsMouseOver && !needs.IsMouseOver)
                 box.IsChecked = box.IsChecked != true;
         };
         _rows.Add((item, box, needs));
@@ -207,9 +224,9 @@ internal sealed class SuitePane : Grid
     private Button Review(Case item)
     {
         Button? warning = null;
-        warning = Ui.IconButton(Icons.Warning, $"Needs a look: {item.Review}\n\nClick once it has been checked, to take the warning off.", () =>
+        warning = Ui.IconButton(Icons.Warning, $"Needs checking: {item.Review}\n\nClick to clear this warning once the case has been checked.", () =>
         {
-            if (MessageBox.Show(Window.GetWindow(this), $"Take the warning off case {item.Number}, {item.Name}?\n\n{item.Review}", "Needs a look",
+            if (MessageBox.Show(Window.GetWindow(this), $"Clear the warning on case {item.Number}, {item.Name}?\n\n{item.Review}", "Needs checking",
                 MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                 return;
             try
@@ -219,7 +236,7 @@ internal sealed class SuitePane : Grid
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                MessageBox.Show(Window.GetWindow(this), ex.Message, "Needs a look", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show(Window.GetWindow(this), ex.Message, "Needs checking", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }, 14);
         ((TextBlock)warning.Content).Foreground = Ui.Hold;
@@ -236,6 +253,16 @@ internal sealed class SuitePane : Grid
         OnTicked();
     }
 
+    // Ticks a case and every case it runs after, from its needs pill.
+    private void TickWithNeeds(Case item)
+    {
+        var leading = _suite.Leading(item);
+        foreach (var (other, box, _) in _rows)
+            if (leading.Contains(other))
+                box.IsChecked = true;
+        OnTicked();
+    }
+
     // Each case's needs show what it runs after, in amber when that case isn't ticked, so the app may not be ready for it.
     private void OnTicked()
     {
@@ -248,8 +275,8 @@ internal sealed class SuitePane : Grid
             var ready = box.IsChecked != true || item.Needs.All(ticked.Contains);
             needs.Background = ready ? Ui.Surface : Ui.HoldSoft;
             needs.Child = Ui.IconText(Icons.Back, string.Join(", ", numbers.Select(other => other.Number)), ready ? Ui.Muted : Ui.Hold, 11);
-            needs.ToolTip = "Carries on from " + string.Join(" and ", numbers.Select(other => $"{other.Number}. {other.Name}"))
-                + (ready ? "" : ", which isn't ticked. The app needs to be as that case leaves it.");
+            needs.ToolTip = "Runs after " + string.Join(" and ", numbers.Select(other => $"{other.Number}. {other.Name}"))
+                + (ready ? "" : ", which isn't ticked, so the app may not be ready for it") + ".\nClick to tick this case and every case it needs.";
         }
         Changed?.Invoke();
     }
@@ -268,7 +295,7 @@ internal sealed class SuitePane : Grid
         _files.Background = _missing ? Ui.FailSoft : Ui.PassSoft;
         _files.Child = _missing
             ? Ui.IconText(Icons.Failed, "Can't find " + string.Join(", ", missing.Select(path => Path.GetFileName(path.TrimEnd('\\', '/')))), Ui.Fail)
-            : Ui.IconText(Icons.Passed, "The app and its files are here", Ui.Pass);
+            : Ui.IconText(Icons.Passed, "App and files found", Ui.Pass);
         _files.ToolTip = _missing ? string.Join("\n", missing) : globals.Expand(_suite.App.Exe);
         OnTicked();
     }
@@ -281,7 +308,7 @@ internal sealed class SuitePane : Grid
         _machine.Background = Ui.Surface;
         var checking = new StackPanel { Orientation = Orientation.Horizontal };
         checking.Children.Add(Ui.Spinner(12, Ui.Muted));
-        checking.Children.Add(new TextBlock { Text = "Looking for leftovers", Foreground = Ui.Muted, FontSize = 12, Margin = new Thickness(6, 0, 0, 0) });
+        checking.Children.Add(new TextBlock { Text = "Checking for leftovers from earlier runs", Foreground = Ui.Muted, FontSize = 12, Margin = new Thickness(6, 0, 0, 0) });
         _machine.Child = checking;
         _clean.Visibility = Visibility.Collapsed;
         Task.Run<(IReadOnlyList<string> Leftovers, string? Problem)>(() =>
@@ -299,10 +326,10 @@ internal sealed class SuitePane : Grid
             var (leftovers, problem) = task.Result;
             var clean = leftovers.Count == 0 && problem is null;
             _machine.Background = clean ? Ui.PassSoft : Ui.HoldSoft;
-            _machine.Child = problem is not null ? Ui.IconText(Icons.Warning, "Couldn't look for leftovers", Ui.Hold)
-                : clean ? Ui.IconText(Icons.Passed, "Nothing left over", Ui.Pass)
+            _machine.Child = problem is not null ? Ui.IconText(Icons.Warning, "Couldn't check for leftovers", Ui.Hold)
+                : clean ? Ui.IconText(Icons.Passed, "Machine is clean", Ui.Pass)
                 : Ui.IconText(Icons.Warning, "Left over: " + string.Join(", ", leftovers.Take(3)) + (leftovers.Count > 3 ? $" and {leftovers.Count - 3} more" : ""), Ui.Hold);
-            _machine.ToolTip = problem ?? (clean ? null : string.Join("\n", leftovers) + "\n\nStarting from case 1 cleans these up first.");
+            _machine.ToolTip = problem ?? (clean ? "Nothing left over from an earlier run" : string.Join("\n", leftovers) + "\n\nClean up removes these. Running from case 1 also does.");
             _clean.Visibility = clean ? Visibility.Collapsed : Visibility.Visible;
         }));
     }
