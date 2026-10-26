@@ -75,7 +75,7 @@ jobs:
       # Anything that went wrong in autotest itself, with where it happened.
       - name: Show autotest's errors.log
         if: failure()
-        run: Get-Content "$env:LOCALAPPDATA\AutoTestRunner\errors.log" -ErrorAction SilentlyContinue
+        run: Get-Content "$env:LOCALAPPDATA\AutoTestRunner\logs\errors.log" -ErrorAction SilentlyContinue
 
       # On the run's Summary page, which demos ended as they should, and what went wrong with any that didn't.
       - name: Show how each demo ended

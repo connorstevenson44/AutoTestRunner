@@ -119,7 +119,8 @@ internal sealed class BuildSession
         catch (Exception ex)
         {
             results.Log("ERROR", ex.ToString());
-            _panel.Tell("Something went wrong in the builder itself. It's in run.log:\n\n" + ex.Message);
+            Crashes.Log(ex, $"Building in {suite.Name}. The builder's run.log is in {results.Folder}.");
+            _panel.Tell($"Something went wrong in the builder itself. It's in errors.log in {Crashes.Folder}:\n\n" + ex.Message);
         }
         finally
         {

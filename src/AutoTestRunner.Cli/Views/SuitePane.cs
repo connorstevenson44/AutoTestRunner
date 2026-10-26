@@ -419,6 +419,7 @@ internal sealed class SuitePane : Grid
             }
             catch (Exception ex)
             {
+                Crashes.Log(ex, $"Checking {_suite.Name} for leftovers.");
                 return ([], ex.Message);
             }
         }).ContinueWith(task => Dispatcher.BeginInvoke(() =>
@@ -453,6 +454,7 @@ internal sealed class SuitePane : Grid
             }
             catch (Exception ex)
             {
+                Crashes.Log(ex, $"Cleaning up after {_suite.Name}.");
                 Dispatcher.BeginInvoke(() => _cleaning.Note("Clean up failed: " + ex.Message));
             }
             Dispatcher.BeginInvoke(() =>

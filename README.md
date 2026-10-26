@@ -52,7 +52,9 @@ expected and found; the next checkpoint is red too, and lists it.
 each checkpoint; `step-by-step` waits for Enter before every step. The keys belong to the test unless you clicked into a text box
 yourself. Results go in `<suite>\results\<date and time>`: `run.log`, `summary.txt`, `junit.xml`, and a screenshot and
 UI Automation dump of each point it got stuck. Something that goes wrong in autotest itself, rather than in a test, is
-written to `%LOCALAPPDATA%\AutoTestRunner\errors.log` with where it happened, for a bug report.
+written to `errors.log` in one logs folder, `%LOCALAPPDATA%\AutoTestRunner\logs`, with where it happened, for a bug
+report: a crash or mistake in the launcher, a run, the builder or a clean up, and the run.log to look at with it. The
+small folder button at the bottom left of the launcher opens it.
 
 Exit codes: 0 passed, 1 a case failed, 2 the app or something in `requires` is missing, 3 a script error, 4 the suite
 needs administrator and autotest isn't.

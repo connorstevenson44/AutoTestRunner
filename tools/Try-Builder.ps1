@@ -128,7 +128,7 @@ function Step-Button($panel, [string] $step, [string] $button) {
 function Assert-Open($process, [string] $while) {
     Start-Sleep -Milliseconds 800
     if (-not $process.HasExited) { return }
-    $log = Join-Path $env:LOCALAPPDATA 'AutoTestRunner\errors.log'
+    $log = Join-Path $env:LOCALAPPDATA 'AutoTestRunner\logs\errors.log'
     if (Test-Path -LiteralPath $log) { Get-Content -Raw -LiteralPath $log | Write-Host }
     Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = '.NET Runtime', 'Application Error'; StartTime = (Get-Date).AddMinutes(-10) } -ErrorAction SilentlyContinue |
         Select-Object -First 4 | ForEach-Object { Write-Host $_.Message }
@@ -394,6 +394,12 @@ if ($Parts -contains 'new-suite') {
     $problem = $null
     try {
         $window = Window-Of $launcher 'the launcher'
+        # The small button that opens the logs folder, made if nothing has been written to it yet.
+        Invoke (Wait-For { Find $window $ui::NameProperty 'Open the logs folder' } 'the logs folder button' 20)
+        Wait-For { Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA 'AutoTestRunner\logs') } 'the logs folder to be made' 10 | Out-Null
+        Assert-Open $launcher 'after the logs folder button was clicked'
+        $explorer = Wait-For { Window 'logs' } 'Explorer on the logs folder' 20
+        $explorer.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern).Close()
         Invoke (Wait-For { Named $window 'New suite:*' } 'the New suite button' 20)
         $form = Wait-For { $window.FindFirst([System.Windows.Automation.TreeScope]::Children,
             (New-Object System.Windows.Automation.PropertyCondition($ui::NameProperty, 'New suite'))) } 'the New suite window' 20
