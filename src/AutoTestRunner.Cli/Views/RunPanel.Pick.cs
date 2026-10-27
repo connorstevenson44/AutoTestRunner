@@ -27,7 +27,7 @@ internal sealed partial class RunPanel
             var hook = OnUi(() => new RecordingHook(
                 (x, y, _) =>
                 {
-                    if (!app.Contains(Desktop.ProcessOf(Desktop.WindowAt(x, y))))
+                    if (!app.Contains(Native.ProcessOf(Native.WindowAt(x, y))))
                         return false;
                     clicked.TrySetResult((x, y));
                     return true;

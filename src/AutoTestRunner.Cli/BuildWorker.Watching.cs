@@ -111,14 +111,14 @@ internal sealed partial class BuildWorker
     // is read as the mouse goes, and outlined with how a step would find it.
     private void FollowPointer(BuildMode mode)
     {
-        var at = Desktop.Cursor();
+        var at = Native.Cursor();
         var moved = at != _pointer;
         if (moved)
             (_pointer, _under, _read) = (at, null, false);
         var outlining = mode == BuildMode.Picking || RecordingHook.ControlHeld;
         if (!_read && (!moved || outlining))
         {
-            _under = _session.IsApp(Desktop.WindowAt(at.X, at.Y)) ? _inspector.At(at.X, at.Y) : null;
+            _under = _session.IsApp(Native.WindowAt(at.X, at.Y)) ? _inspector.At(at.X, at.Y) : null;
             _read = true;
         }
         if (outlining && _under is { } under)

@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using AutoTestRunner.Building;
 using AutoTestRunner.Cli.Views;
 using AutoTestRunner.Driving;
+using AutoTestRunner.FlaUI;
 using AutoTestRunner.Running;
 
 namespace AutoTestRunner.Cli;
@@ -94,7 +95,7 @@ internal sealed class BuildSession
     public void Watch(IReadOnlySet<int> processes) => _app = processes;
 
     /// <summary>Whether a window is the app's.</summary>
-    public bool IsApp(nint window) => _app.Contains(Desktop.ProcessOf(window));
+    public bool IsApp(nint window) => _app.Contains(Native.ProcessOf(window));
 
     // ===== The builder's thread =====
 
@@ -138,14 +139,14 @@ internal sealed class BuildSession
     private bool OnDown(int x, int y, bool ctrl)
     {
         var mode = _panel.Mode;
-        var window = Desktop.WindowAt(x, y);
+        var window = Native.WindowAt(x, y);
         if (mode == BuildMode.Paused || _inputs.IsAddingCompleted || !IsApp(window))
             return false;
         var pick = mode == BuildMode.Picking || ctrl;
         var passOn = false;
-        if (!pick && Desktop.IsDialog(window))
+        if (!pick && Native.IsDialog(window))
         {
-            if (!Desktop.IsButtonAt(x, y))
+            if (!Native.IsButtonAt(x, y))
                 return false;
             passOn = true;
         }
@@ -156,7 +157,7 @@ internal sealed class BuildSession
     // A right-click in the app while recording, which reaches the app: the menu it opens is recorded with it.
     private void OnRight(int x, int y)
     {
-        if (_panel.Mode == BuildMode.Recording && !_inputs.IsAddingCompleted && IsApp(Desktop.WindowAt(x, y)))
+        if (_panel.Mode == BuildMode.Recording && !_inputs.IsAddingCompleted && IsApp(Native.WindowAt(x, y)))
             _inputs.Add(new BuildInput(BuildInputKind.RightClick, x, y));
     }
 
@@ -165,7 +166,7 @@ internal sealed class BuildSession
     // clicks do.
     private bool OnKeys(string keys)
     {
-        var window = Desktop.Foreground();
+        var window = Native.Foreground();
         var inApp = IsApp(window);
         if (_inputs.IsAddingCompleted || !inApp && window != _panel.Handle)
             return false;
@@ -182,7 +183,7 @@ internal sealed class BuildSession
         }
         if (mode != BuildMode.Recording || !inApp)
             return false;
-        var passOn = keys is "Enter" or "Esc" && Desktop.IsDialog(window);
+        var passOn = keys is "Enter" or "Esc" && Native.IsDialog(window);
         _inputs.Add(new BuildInput(BuildInputKind.Key, Keys: keys, PassOn: passOn));
         return passOn;
     }

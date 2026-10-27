@@ -248,7 +248,7 @@ internal sealed partial class BuildWorker
             LeaveBox();
         // A second click where the last one was, quickly enough, makes that click a double-click.
         var now = Environment.TickCount64;
-        var doubled = hit is not null && now - _lastClick.At <= Desktop.DoubleClickTime && Math.Abs(click.X - _lastClick.X) <= 4 && Math.Abs(click.Y - _lastClick.Y) <= 4
+        var doubled = hit is not null && now - _lastClick.At <= Native.DoubleClickTime && Math.Abs(click.X - _lastClick.X) <= 4 && Math.Abs(click.Y - _lastClick.Y) <= 4
             && _recorder.Doubled(hit.Facts) is { } step ? step : null;
         _lastClick = doubled is null ? (now, click.X, click.Y) : (long.MinValue, 0, 0);
         if (doubled is not null)

@@ -92,7 +92,7 @@ internal sealed class AppSession : IDisposable
             hook = new RecordingHook(
                 (x, y, _) =>
                 {
-                    if (!app.Contains(Desktop.ProcessOf(Desktop.WindowAt(x, y))))
+                    if (!app.Contains(Native.ProcessOf(Native.WindowAt(x, y))))
                         return false;
                     _ui.BeginInvoke(() => Done((x, y)));
                     return true;
