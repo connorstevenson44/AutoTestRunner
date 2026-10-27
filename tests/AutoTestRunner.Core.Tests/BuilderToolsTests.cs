@@ -119,7 +119,7 @@ public sealed class BuilderToolsTests : IDisposable
         driver.Add("Pane", "Add", id: "AddPanel");
         var runner = new Runner(suite, driver, new FakeMachine(), new FakeRunView(), new RunControl(unattended: true) { TimeoutScale = 0.01 }, new Results(Path.Combine(_folder, "results"), console: null));
 
-        runner.Use(MacroMaker.Read("fillName", "fillName.json", macro));
+        runner.Use(Macro.From("fillName", "fillName.json", macro));
         runner.Play(new JsonArray(call), "The builder");
 
         Assert.Equal("Ada", box.Value);

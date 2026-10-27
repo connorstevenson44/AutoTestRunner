@@ -12,17 +12,6 @@ namespace AutoTestRunner.Building;
 /// </summary>
 public static class ElementUses
 {
-    private static readonly JsonDocumentOptions Lenient = new() { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
-    private static readonly JsonReaderOptions ReadOptions = new() { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
-
-    // The properties of a step, besides its own key, that are targets.
-    private static readonly Dictionary<string, string[]> TargetKeys = new(StringComparer.Ordinal)
-    {
-        ["drag"] = ["to"],
-        ["menu"] = ["on"],
-        ["expand"] = ["in"],
-        ["whileShows"] = ["untilText"],
-    };
 
     /// <summary>Each element's uses, as the file each is in relative to the suite folder, once for each use.</summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<string>> Find(Suite suite)
@@ -77,7 +66,7 @@ public static class ElementUses
     private static List<(string Path, string Name)> References(Suite suite, string file)
     {
         var found = new List<(string Path, string Name)>();
-        if (JsonNode.Parse(File.ReadAllText(file), documentOptions: Lenient) is not JsonObject root)
+        if (ScriptJson.ReadFile(file) is not JsonObject root)
             return found;
         switch (Path.GetFileName(file).ToLowerInvariant())
         {
@@ -113,7 +102,7 @@ public static class ElementUses
             var kind = ScriptVocabulary.KindOf(step);
             if (ScriptVocabulary.Steps.TryGetValue(kind, out var known) && known.Takes == Takes.Target)
                 Target(step[kind], $"{at}/{Escape(kind)}", found);
-            foreach (var key in TargetKeys.GetValueOrDefault(kind) ?? [])
+            if (ScriptVocabulary.SecondTargets.GetValueOrDefault(kind) is { } key)
                 Target(step[key], $"{at}/{key}", found);
             if (kind == "if" && step["if"] is JsonObject condition)
                 Check(condition, $"{at}/if", found);
@@ -174,7 +163,7 @@ public static class ElementUses
     private static string Edit(string text, HashSet<string> at, string from, string to, bool renameKey)
     {
         var bytes = Encoding.UTF8.GetBytes(text);
-        var reader = new Utf8JsonReader(bytes, ReadOptions);
+        var reader = new Utf8JsonReader(bytes, ScriptJson.Reader);
         var edits = new List<(int Start, int End)>();
         // Each open object or array: the property being read in it, or the index of the item being read.
         var frames = new List<(bool IsArray, int Index, string? Property)>();

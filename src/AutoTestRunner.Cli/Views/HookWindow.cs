@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 using AutoTestRunner.Scripting;
 
 namespace AutoTestRunner.Cli.Views;
@@ -17,12 +16,7 @@ internal static class HookWindow
     public static ClickHook? Ask(Window owner, Suite suite, string element)
     {
         ClickHook? hook = null;
-        var window = new Window
-        {
-            Title = $"After clicking {element}", Owner = owner, Topmost = true, SizeToContent = SizeToContent.Height, Width = 480, ResizeMode = ResizeMode.NoResize,
-            WindowStartupLocation = WindowStartupLocation.CenterScreen, Background = Brushes.White, FontFamily = Ui.Text, Foreground = Ui.Ink,
-        };
-        window.Resources.MergedDictionaries.Add(Ui.Theme);
+        var window = Ui.Dialog($"After clicking {element}", owner, 480, topmost: true, onScreen: true);
         var stack = new StackPanel { Margin = new Thickness(20, 16, 20, 16) };
         stack.Children.Add(Ui.Words($"While recording, each click on {element} is followed by a step that calls this macro.", 13, Ui.Ink));
         stack.Children.Add(Ui.Heading("Macro", top: 12));

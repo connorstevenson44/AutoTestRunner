@@ -13,9 +13,6 @@ namespace AutoTestRunner.Building;
 /// </summary>
 public static class TargetFixer
 {
-    private static readonly JsonDocumentOptions Lenient = new() { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
-    private static readonly JsonReaderOptions ReadOptions = new() { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
-
     /// <summary>Where the stuck step's control is written, or null when it is inside a repeat or an if, or uses no control.</summary>
     public static TargetFix? Where(Suite suite, StuckStep stuck)
     {
@@ -26,7 +23,7 @@ public static class TargetFixer
         var files = new[] { stuck.Case?.File }.Concat(suite.Macros.Values.Select(macro => macro.File)).OfType<string>();
         foreach (var file in files)
         {
-            var steps = JsonNode.Parse(File.ReadAllText(file), documentOptions: Lenient)?["steps"] as JsonArray ?? [];
+            var steps = ScriptJson.ReadFile(file)?["steps"] as JsonArray ?? [];
             for (var index = 0; index < steps.Count; index++)
                 if (JsonNode.DeepEquals(steps[index], stuck.Step))
                     return new TargetFix(file, null, index);
@@ -38,26 +35,26 @@ public static class TargetFixer
     public static void Save(Suite suite, StuckStep stuck, TargetFix fix, JsonNode target)
     {
         var text = File.ReadAllText(fix.File);
-        var newline = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        var newline = ScriptJson.NewLineOf(text);
         var bytes = Encoding.UTF8.GetBytes(text);
         if (fix.Element is { } element)
         {
             var (start, end) = ElementSpan(bytes, element) ?? throw new InvalidOperationException($"elements.json has no {element}.");
-            File.WriteAllText(fix.File, Replace(bytes, start, end, JsonLine.Write(target)));
+            File.WriteAllText(fix.File, JsonLine.Splice(bytes, start, end, JsonLine.Write(target)));
             suite.Redefine(element, target);
             return;
         }
         var (from, to) = StepSpan(bytes, fix.Step ?? -1) ?? throw new InvalidOperationException($"{Path.GetFileName(fix.File)} has no step {fix.Step + 1}.");
         var changed = stuck.Step.DeepClone().AsObject();
         changed[stuck.Kind] = target.DeepClone();
-        File.WriteAllText(fix.File, Replace(bytes, from, to, JsonLine.Step(changed, Indent(bytes, from), newline)));
+        File.WriteAllText(fix.File, JsonLine.Splice(bytes, from, to, JsonLine.Step(changed, JsonLine.IndentAt(bytes, from), newline)));
         stuck.Step[stuck.Kind] = target.DeepClone();
     }
 
     // Where an element's value is in elements.json.
     private static (int Start, int End)? ElementSpan(byte[] bytes, string element)
     {
-        var reader = new Utf8JsonReader(bytes, ReadOptions);
+        var reader = new Utf8JsonReader(bytes, ScriptJson.Reader);
         while (reader.Read())
         {
             if (reader.TokenType != JsonTokenType.PropertyName || reader.CurrentDepth != 1 || reader.GetString() != element)
@@ -77,7 +74,7 @@ public static class TargetFixer
     // Where a top-level step is in a case or macro file, by its place among the steps.
     private static (int Start, int End)? StepSpan(byte[] bytes, int index)
     {
-        var reader = new Utf8JsonReader(bytes, ReadOptions);
+        var reader = new Utf8JsonReader(bytes, ScriptJson.Reader);
         var inSteps = false;
         var count = 0;
         while (reader.Read())
@@ -93,19 +90,5 @@ public static class TargetFixer
             }
         }
         return null;
-    }
-
-    private static string Replace(byte[] bytes, int start, int end, string text) =>
-        Encoding.UTF8.GetString([.. bytes[..start], .. Encoding.UTF8.GetBytes(text), .. bytes[end..]]);
-
-    private static string Indent(byte[] bytes, int at)
-    {
-        var start = at;
-        while (start > 0 && bytes[start - 1] != (byte)'\n')
-            start--;
-        var end = start;
-        while (end < bytes.Length && bytes[end] is (byte)' ' or (byte)'\t')
-            end++;
-        return Encoding.UTF8.GetString(bytes[start..end]);
     }
 }

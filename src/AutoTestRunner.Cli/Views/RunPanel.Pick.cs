@@ -1,9 +1,7 @@
 using System.IO;
-using System.Runtime.InteropServices;
 using AutoTestRunner.Building;
 using AutoTestRunner.FlaUI;
 using AutoTestRunner.Running;
-using AutoTestRunner.Scripting;
 
 namespace AutoTestRunner.Cli.Views;
 
@@ -29,7 +27,7 @@ internal sealed partial class RunPanel
             var hook = OnUi(() => new RecordingHook(
                 (x, y, _) =>
                 {
-                    if (!app.Contains(Desktop.ProcessOf(Desktop.WindowAt(x, y))))
+                    if (!app.Contains(Native.ProcessOf(Native.WindowAt(x, y))))
                         return false;
                     clicked.TrySetResult((x, y));
                     return true;
@@ -50,17 +48,7 @@ internal sealed partial class RunPanel
             if (inspector.At(at.X, at.Y) is not { } hit)
                 continue;
             var facts = hit.Facts.Meant();
-            var choice = TargetSuggester.Suggest(facts, _suite.Elements, runner.Globals, node =>
-            {
-                try
-                {
-                    return driver.Count(Targets.Resolve(node, runner.Globals, _suite.Elements));
-                }
-                catch (Exception ex) when (ex is ScriptException or COMException or InvalidOperationException)
-                {
-                    return 0;
-                }
-            });
+            var choice = inspector.Suggest(facts, _suite.Elements, runner.Globals);
             var answer = OnUi(() => Ask(Ui.Accent, Icons.Pick, "Use this control?",
                 $"{facts.Type} \"{facts.Label}\", found by {choice.Shown}. {choice.Why}\n\nIt is saved in {fix.Shown}, and the step is tried again.",
                 [(Icons.Save, "Save and try again"), (Icons.Pick, "Pick again"), (Icons.Back, "Back")])).Result;

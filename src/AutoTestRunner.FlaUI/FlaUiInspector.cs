@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Text.Json.Nodes;
 using AutoTestRunner.Building;
 using AutoTestRunner.Driving;
 using AutoTestRunner.Scripting;
@@ -14,10 +15,8 @@ namespace AutoTestRunner.FlaUI;
 /// itself and the controls around it, what a box holds and whether a tick box is ticked. Only the app's own controls
 /// count, not the builder's or another program's.
 /// <para>
-/// Each question UI Automation answers is a call into the app, answered on the app's UI thread, so asking many makes
-/// the app stutter while the mouse is over it. A control and the controls around it are read with a cache request, as
-/// Microsoft advises: each comes with everything the builder wants of it in one call, rather than one call for each
-/// thing. https://learn.microsoft.com/windows/win32/winauto/uiauto-cachingforclients
+/// Each UI Automation call is answered on the app's UI thread, so many of them make it stutter: a control and those
+/// around it are read in one cache request. https://learn.microsoft.com/windows/win32/winauto/uiauto-cachingforclients
 /// </para>
 /// </summary>
 public sealed class FlaUiInspector(FlaUiDriver driver)
@@ -55,7 +54,7 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
             var element = driver.Automation.FromPoint(new Point(x, y));
             return element is null || !IsApp(element) ? null : Inspect(element);
         }
-        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or TimeoutException)
+        catch (Exception ex) when (FlaUiDriver.Gone(ex))
         {
             return null;
         }
@@ -70,7 +69,7 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
             var element = driver.Automation.FocusedElement();
             return element is null || !IsApp(element) ? null : Inspect(element);
         }
-        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or TimeoutException)
+        catch (Exception ex) when (FlaUiDriver.Gone(ex))
         {
             return null;
         }
@@ -92,7 +91,7 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
                 return null;
             return current is not null && current.Element.Equals(element) ? current : Inspect(element);
         }
-        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or TimeoutException)
+        catch (Exception ex) when (FlaUiDriver.Gone(ex))
         {
             return null;
         }
@@ -106,7 +105,7 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
             using var cached = _facts.Activate();
             return Inspect(control.Element, again: true);
         }
-        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or TimeoutException)
+        catch (Exception ex) when (FlaUiDriver.Gone(ex))
         {
             return control;
         }
@@ -119,11 +118,25 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
         {
             return control.Element.Patterns.Value.IsSupported ? control.Element.Patterns.Value.Pattern.Value.ValueOrDefault ?? "" : null;
         }
-        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or TimeoutException)
+        catch (Exception ex) when (FlaUiDriver.Gone(ex))
         {
             return null;
         }
     }
+
+    /// <summary>The best way to find a control, from how many controls in the app each way finds now.</summary>
+    public TargetChoice Suggest(ControlFacts control, IReadOnlyDictionary<string, JsonNode> elements, VariableScope globals) =>
+        TargetSuggester.Suggest(control, elements, globals, node =>
+        {
+            try
+            {
+                return driver.Count(Targets.Resolve(node, globals, elements));
+            }
+            catch (Exception ex) when (FlaUiDriver.Gone(ex) || ex is ScriptException)
+            {
+                return 0;
+            }
+        });
 
     /// <summary>Where a target's control is on the screen, to outline it, or null when it isn't there.</summary>
     public ScreenRect? Locate(Target target)
@@ -132,7 +145,7 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
         {
             return driver.TryFind(target) is FlaUiControl found && Rect(found.Element.BoundingRectangle) is { IsEmpty: false } box ? box : null;
         }
-        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or TimeoutException or StuckException or ScriptException)
+        catch (Exception ex) when (FlaUiDriver.Gone(ex) || ex is StuckException or ScriptException)
         {
             return null;
         }
@@ -163,7 +176,7 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
                 var window = new ControlFacts("Window", Native.Title(hwnd));
                 found.AddRange(driver.Automation.FromHandle(hwnd).FindAllDescendants().Select(element => Own(element) with { Ancestors = [window] }));
             }
-            catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or TimeoutException)
+            catch (Exception ex) when (FlaUiDriver.Gone(ex))
             {
                 // The window closed while it was read.
             }

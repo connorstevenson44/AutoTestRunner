@@ -6,11 +6,13 @@ namespace AutoTestRunner.FlaUI;
 /// <summary>
 /// The Win32 calls UI Automation doesn't cover: listing an app's top-level windows (message boxes and file pickers are
 /// Win32 windows of class #32770, not WPF) and the controls in a picker, placing the app's window, the screen's work
-/// area, and a click that leaves the mouse where it was.
+/// area, and a click that leaves the mouse where it was. And the quick questions the builder's hooks ask while Windows
+/// waits for them: which window is under a point or has the keyboard, and whose it is. They answer in microseconds.
 /// </summary>
-internal static class Native
+public static class Native
 {
     public const string DialogClass = "#32770";
+    private const uint RootWindow = 2;
 
     /// <summary>The visible top-level windows of these processes, in z-order, front first.</summary>
     public static List<nint> Windows(IReadOnlySet<int> processIds)
@@ -42,6 +44,30 @@ internal static class Native
         var copied = GetClassName(hwnd, text, text.Length);
         return new string(text, 0, copied);
     }
+
+    /// <summary>The top-level window under a point on the screen, in pixels.</summary>
+    public static nint WindowAt(int x, int y) => GetAncestor(WindowFromPoint(new Point { X = x, Y = y }), RootWindow);
+
+    /// <summary>The window that has the keyboard.</summary>
+    public static nint Foreground() => GetForegroundWindow();
+
+    /// <summary>How quickly a second click makes a double-click, in milliseconds, as set in Windows.</summary>
+    public static long DoubleClickTime => GetDoubleClickTime();
+
+    /// <summary>The id of the process a window belongs to, or 0 when there is no window.</summary>
+    public static int ProcessOf(nint hwnd) => hwnd != 0 && GetWindowThreadProcessId(hwnd, out var process) != 0 ? (int)process : 0;
+
+    /// <summary>Whether a window is a Windows message box or file picker.</summary>
+    public static bool IsDialog(nint hwnd) => ClassName(hwnd) == DialogClass;
+
+    /// <summary>
+    /// Whether the window under a point is a button of a Windows message box or file picker, such as OK, Open or
+    /// Cancel: those are Win32 buttons of their own, unlike the folders and files in a picker.
+    /// </summary>
+    public static bool IsButtonAt(int x, int y) => ClassName(WindowFromPoint(new Point { X = x, Y = y })) == "Button";
+
+    /// <summary>Where the mouse is, in pixels.</summary>
+    public static (int X, int Y) Cursor() => GetCursorPos(out var point) ? (point.X, point.Y) : (int.MinValue, int.MinValue);
 
     /// <summary>The desktop window, the parent of every top-level window.</summary>
     public static nint Desktop { get; } = GetDesktopWindow();
@@ -158,6 +184,18 @@ internal static class Native
 
     [DllImport("user32.dll")]
     private static extern nint GetDesktopWindow();
+
+    [DllImport("user32.dll")]
+    private static extern nint WindowFromPoint(Point point);
+
+    [DllImport("user32.dll")]
+    private static extern nint GetAncestor(nint hwnd, uint flags);
+
+    [DllImport("user32.dll")]
+    private static extern nint GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDoubleClickTime();
 
     [DllImport("user32.dll")]
     private static extern bool EnumChildWindows(nint parent, EnumWindowsProc callback, nint parameter);

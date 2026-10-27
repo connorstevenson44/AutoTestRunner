@@ -3,7 +3,6 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 using AutoTestRunner.Building;
 using AutoTestRunner.Scripting;
 
@@ -21,12 +20,7 @@ internal static partial class NewSuiteWindow
         string? made = null;
         JsonNode? status = null;
         var started = false;
-        var window = new Window
-        {
-            Title = "New suite", Owner = owner, SizeToContent = SizeToContent.Height, Width = 540, ResizeMode = ResizeMode.NoResize,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = Brushes.White, FontFamily = Ui.Text, Foreground = Ui.Ink,
-        };
-        window.Resources.MergedDictionaries.Add(Ui.Theme);
+        var window = Ui.Dialog("New suite", owner, 540);
         using var app = new AppSession(window.Dispatcher);
         var stack = new StackPanel { Margin = new Thickness(22, 16, 22, 18) };
         stack.Children.Add(Ui.IconText(Icons.NewFolder, "New suite", Ui.Ink, 15));

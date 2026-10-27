@@ -36,15 +36,17 @@ public sealed class ScriptFileTests : IDisposable
     }
 
     [Fact]
-    public void A_cs_script_step_runs_its_file_with_dotnet_run_and_its_args_after_two_dashes()
+    public void A_cs_script_step_runs_its_file_with_dotnet_run_and_its_args_after_two_dashes_from_the_suite_folder()
     {
-        var (view, results) = Run("""{ "script": "tools/Hello.cs", "args": ["Ada"], "as": "hello" }""", new FakeMachine());
+        var machine = new FakeMachine();
+        var (view, results) = Run("""{ "script": "tools/Hello.cs", "args": ["Ada"], "as": "hello" }""", machine);
 
         var file = Path.Combine(_folder, "suite", "tools", "Hello.cs");
         Assert.Equal(ActivityKind.Command, view.Kinds.Single());
         Assert.Equal($"start dotnet run --file {(file.Contains(' ', StringComparison.Ordinal) ? $"\"{file}\"" : file)} -v q -- Ada", view.Commands[0]);
         Assert.Equal("Run Hello.cs", view.Shown[1]);
         Assert.Equal(CaseStatus.Passed, results.Cases.Single().Status);
+        Assert.Equal(Path.Combine(_folder, "suite"), Path.GetFullPath(Assert.Single(machine.Folders)!));
     }
 
     [Fact]

@@ -151,9 +151,9 @@ public static partial class ElementMatcher
         {
             literal += Literal(template[index..part.Index], pattern);
             var expression = part.Groups["expression"].Value.Trim();
-            if (Identifier().IsMatch(expression) && with.TryGetValue(expression, out var bound))
+            if (ScriptVocabulary.IsName(expression) && with.TryGetValue(expression, out var bound))
                 literal += Literal(bound, pattern);
-            else if (Identifier().IsMatch(expression) && !globals.TryGet(expression, out _))
+            else if (ScriptVocabulary.IsName(expression) && !globals.TryGet(expression, out _))
             {
                 groups.Add(expression);
                 pattern.Append(CultureInfo.InvariantCulture, $"(?<p{groups.Count - 1}>.*?)");
@@ -202,6 +202,4 @@ public static partial class ElementMatcher
     [GeneratedRegex(@"(?<!\$)\$\{(?<expression>[^}]*)\}")]
     private static partial Regex Parameter();
 
-    [GeneratedRegex(@"^[A-Za-z_]\w*$")]
-    private static partial Regex Identifier();
 }

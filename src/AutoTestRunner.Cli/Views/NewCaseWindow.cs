@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 using AutoTestRunner.Scripting;
 
 namespace AutoTestRunner.Cli.Views;
@@ -14,13 +13,7 @@ internal static class NewCaseWindow
     public static BuildRequest? Ask(Window? owner, Suite suite)
     {
         BuildRequest? request = null;
-        var window = new Window
-        {
-            Title = "New case", Owner = owner, SizeToContent = SizeToContent.Height, Width = 520, ResizeMode = ResizeMode.NoResize,
-            WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
-            Background = Brushes.White, FontFamily = Ui.Text, Foreground = Ui.Ink,
-        };
-        window.Resources.MergedDictionaries.Add(Ui.Theme);
+        var window = Ui.Dialog("New case", owner, 520);
         var stack = new StackPanel { Margin = new Thickness(22, 18, 22, 18) };
         stack.Children.Add(Ui.Heading("Case name"));
         var name = new TextBox { FontSize = 14, Padding = new Thickness(6, 5, 6, 5), Text = "" };

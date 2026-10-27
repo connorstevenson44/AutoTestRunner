@@ -1,7 +1,5 @@
 using AutoTestRunner.Cli.Views;
-using AutoTestRunner.Driving;
 using AutoTestRunner.Running;
-using AutoTestRunner.Scripting;
 
 namespace AutoTestRunner.Cli;
 
@@ -29,30 +27,4 @@ internal sealed class BuilderView(BuilderPanel panel) : IRunView
         Problem = message;
         return false;
     }
-
-    public void CaseStarted(int index, int count, Case item) { }
-
-    public void CaseFinished(CaseResult result) { }
-
-    public void ShowWait(Activity what) { }
-
-    public void YourTurn(Activity? what) { }
-
-    public void Outline(ScreenRect? box) { }
-
-    public void Waited(Activity what, TimeSpan took) { }
-
-    public void CommandStarted(string line, string? script) { }
-
-    public void CommandOutput(string line, bool error) { }
-
-    public void CommandFinished(int exitCode, TimeSpan took) { }
-
-    public void ShowCheckpoint(string title, IReadOnlyList<CheckResult> checks, IReadOnlyList<string> look, IReadOnlyList<ToolButton> tools) { }
-
-    public void ShowCarryingOn(TimeSpan after) { }
-
-    public void KeepClear(ScreenRect rect) { }
-
-    public void Finished(string summary, string resultsFolder, bool allPassed) { }
 }

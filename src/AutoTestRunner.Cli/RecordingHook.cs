@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using static AutoTestRunner.Cli.HookThread;
 
 namespace AutoTestRunner.Cli;
 
@@ -6,15 +7,11 @@ namespace AutoTestRunner.Cli;
 /// The person's clicks and keys while a case is built, wherever they go. A click or key can be kept from the app, as
 /// a pick tool, Ctrl+click and the record key do, and as a message box's are while the builder reads it. While the
 /// builder plays steps itself, everything is let through unnoticed. Input another program sends counts as the
-/// person's, so a test can build a case as a person would. The callbacks must be quick, as Windows drops a hook that
-/// keeps it waiting and the mouse waits for it, so they only note what happened: the builder reads the app on a thread
-/// of its own. They are called on the hook's own thread, not the UI thread, so a busy panel never holds up the mouse.
+/// person's, so a test can build a case as a person would. The callbacks run on a <see cref="HookThread"/> and only
+/// note what happened: the builder reads the app on a thread of its own.
 /// </summary>
 internal sealed class RecordingHook : IDisposable
 {
-    private const int KeyDown = 0x0100, SystemKeyDown = 0x0104, LeftButtonDown = 0x0201, LeftButtonUp = 0x0202, RightButtonDown = 0x0204;
-    private const int LeftButton = 0x01, Control = 0x11, Shift = 0x10, Menu = 0x12;
-
     private readonly HookThread _hooks;
     private readonly Func<int, int, bool, bool> _onDown;
     private readonly Func<string, bool> _onKeys;
@@ -96,10 +93,5 @@ internal sealed class RecordingHook : IDisposable
         return (ctrl ? "Ctrl+" : "") + (alt ? "Alt+" : "") + (shift ? "Shift+" : "") + name;
     }
 
-    private static bool Held(int key) => (GetAsyncKeyState(key) & 0x8000) != 0;
-
     public void Dispose() => _hooks.Dispose();
-
-    [DllImport("user32.dll")]
-    private static extern short GetAsyncKeyState(int key);
 }
