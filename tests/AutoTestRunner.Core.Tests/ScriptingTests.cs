@@ -10,7 +10,7 @@ public class ScriptingTests
 
     private static VariableScope VariableScope()
     {
-        var scope = new VariableScope(helpers: new Dictionary<string, Helper> { ["logFile"] = new("logFile", new Regex("Log: (.+)$")) });
+        var scope = new VariableScope(helpers: new Dictionary<string, Helper> { ["logFile"] = new RegexHelper("logFile", new Regex("Log: (.+)$")) });
         scope.Set("name", "main");
         scope.Set("files", Value.Of("Files: 3 added", new Dictionary<string, string> { ["name"] = "Files: 3 added", ["helpText"] = "tip" }));
         scope.Set("status", @"Deploy finished. Log: C:\logs\1.log");

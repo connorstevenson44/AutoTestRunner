@@ -82,15 +82,43 @@
     },
     "helpers": {
       "type": "object",
+      "description": "${name(value)} picks something out of value. readFile is built in: ${name(readFile(path))} reads it out of a file, relative to the suite folder.",
+      "propertyNames": {
+        "not": {
+          "pattern": "^[Rr][Ee][Aa][Dd][Ff][Ii][Ll][Ee]$"
+        }
+      },
       "additionalProperties": {
         "type": "object",
-        "required": [
-          "regex"
+        "oneOf": [
+          {
+            "required": [
+              "regex"
+            ]
+          },
+          {
+            "required": [
+              "xPath"
+            ]
+          },
+          {
+            "required": [
+              "jsonPath"
+            ]
+          }
         ],
         "properties": {
           "regex": {
             "type": "string",
-            "description": "${name(value)} gives the regex's first group in value."
+            "description": "${name(value)} gives the regex's first group in value, or the whole match when it has no group."
+          },
+          "xPath": {
+            "type": "string",
+            "description": "${name(value)} gives what the XPath finds first in value, which is XML, such as //database/connectionString/text(). Namespaces are left out."
+          },
+          "jsonPath": {
+            "type": "string",
+            "description": "${name(value)} gives what the JSONPath finds first in value, which is JSON, such as $.ConnectionStrings.Orders."
           }
         },
         "additionalProperties": false
@@ -132,14 +160,22 @@
         ],
         "properties": {
           "kind": {
-            "enum": [
-              "sqlServer",
-              "postgres",
-              "oracle",
-              "mySql",
-              "sqlite"
+            "anyOf": [
+              {
+                "enum": [
+                  "sqlServer",
+                  "postgres",
+                  "oracle",
+                  "mySql",
+                  "sqlite"
+                ]
+              },
+              {
+                "type": "string",
+                "pattern": "\\$\\{"
+              }
             ],
-            "description": "sqlServer for SQL Server, Express and LocalDB; mySql for MySQL and MariaDB."
+            "description": "sqlServer for SQL Server, Express and LocalDB; mySql for MySQL and MariaDB. It can be a ${...}, such as one read from the app's .config file, which comes to one of them when it is used."
           },
           "connection": {
             "type": "string",

@@ -102,10 +102,16 @@ public sealed partial class Runner
     }
 
     /// <summary>A database by its name in suite.json, with its variables filled in.</summary>
-    private DatabaseSettings Database(string name, VariableScope scope) =>
-        _suite.Databases.TryGetValue(name, out var database)
-            ? database with { Connection = scope.Expand(database.Connection) }
-            : throw new ScriptException($"There is no database called {name} in suite.json.");
+    private DatabaseSettings Database(string name, VariableScope scope)
+    {
+        if (!_suite.Databases.TryGetValue(name, out var database))
+            throw new ScriptException($"There is no database called {name} in suite.json.");
+        // A kind read from the app's own settings may be written SqlServer or SQLITE.
+        var given = scope.Expand(database.Kind).Trim();
+        var kind = DatabaseSettings.Kinds.Keys.FirstOrDefault(each => string.Equals(each, given, StringComparison.OrdinalIgnoreCase))
+            ?? throw new ScriptException($"Database {name}'s kind, {database.Kind}, comes to \"{given}\", which isn't one of: {string.Join(", ", DatabaseSettings.Kinds.Keys)}.");
+        return database with { Kind = kind, Connection = scope.Expand(database.Connection) };
+    }
 
     /// <summary>A queue by its name in suite.json, with its variables filled in.</summary>
     private QueueSettings Queue(string name, VariableScope scope)

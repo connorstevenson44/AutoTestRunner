@@ -42,6 +42,25 @@ public static class KeyNames
         return Canonical(string.Join("+", held.Append(name)));
     }
 
+    /// <summary>
+    /// A Windows virtual key, with the keys held with it, as a key step is written by hand: Ctrl+S, Shift+PageDown, F5.
+    /// Null for a key with no name here, or one that is only ever held with another, such as Ctrl on its own.
+    /// </summary>
+    public static string? Written(int virtualKey, bool ctrl, bool alt, bool shift, bool win)
+    {
+        if (Name(virtualKey) is not { } name || Modifiers.Contains(name))
+            return null;
+        var held = new[] { (ctrl, "Ctrl"), (alt, "Alt"), (shift, "Shift"), (win, "Win") }.Where(modifier => modifier.Item1).Select(modifier => modifier.Item2);
+        var spelt = name switch
+        {
+            "PAGEUP" => "PageUp",
+            "PAGEDOWN" => "PageDown",
+            { Length: 1 } => name,
+            _ => name[0] + name[1..].ToLowerInvariant(),
+        };
+        return string.Join("+", held.Append(spelt));
+    }
+
     private static string? Name(int key) => key switch
     {
         0x08 => "BACKSPACE",

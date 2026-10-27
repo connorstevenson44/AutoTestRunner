@@ -119,7 +119,7 @@ public static class Forms
         ["useWindow"] = [new("useWindow", "Window title", FieldType.Text)],
         ["waitText"] = [Control("Control", "waitText"), new("startsWith", "Starts with", FieldType.Text), new("contains", "Has in it", FieldType.Text), new("equals", "Says exactly", FieldType.Text), new("matches", "Matches the regex", FieldType.Text), new("changes", "Any change", FieldType.YesNo), new("new", "A new text", FieldType.YesNo)],
         ["replaceText"] = [Control("Box", "replaceText"), new("regex", "Regex", FieldType.Text), new("replacement", "Replace with", FieldType.Text)],
-        ["key"] = [new("key", "Keys, such as Ctrl+S", FieldType.Text)],
+        ["key"] = [new("key", "Keys, such as Ctrl+S", FieldType.Keys)],
         ["answerDialog"] = [new("answerDialog", "Message box title", FieldType.Text), new("button", "Button", FieldType.Choice, ["OK", "Yes", "No", "Cancel"]), new("expect", "Message has", FieldType.Text)],
         ["pickFile"] = [new("pickFile", "Picker title", FieldType.Text), new("path", "File", FieldType.File)],
         ["pickFolder"] = [new("pickFolder", "Picker title", FieldType.Text), new("path", "Folder", FieldType.Folder)],
