@@ -104,7 +104,7 @@ internal sealed class BuildSession
     private void Work()
     {
         var suite = _request.Suite;
-        var results = new Results(Results.NewFolder(SuitePane.ResultsFolder(suite, _options)), Console.Out);
+        var results = new Results(Results.NewFolder(_options.ResultsFolder(suite)), Console.Out);
         var view = new BuilderView(_panel);
         try
         {

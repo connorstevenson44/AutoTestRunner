@@ -69,12 +69,37 @@ public static partial class ScriptVocabulary
     public static string KindOf(JsonObject step) => Kinds(step) is [var kind] ? kind : step.Select(pair => pair.Key).FirstOrDefault(Steps.ContainsKey) ?? "say";
 
     /// <summary>The step keys that could name what a step is: one for a well-formed step, none for narration.</summary>
-    public static IReadOnlyList<string> Kinds(JsonObject step)
+    public static IReadOnlyList<string> Kinds(JsonObject step) => Scripting.Kinds.Named(step, Steps.ContainsKey, kind => Steps[kind].Keys);
+
+    /// <summary>
+    /// Each place in a step that names a control: its own target, a second one such as a drag's "to", the control an
+    /// if or a checkpoint checks, and the same in the steps inside it. Each is the object it is in, its key, and its
+    /// path from the step's own, such as steps/2/steps/0/click.
+    /// </summary>
+    public static IEnumerable<(JsonObject Owner, string Key, string Path)> Targets(JsonObject step, string path)
     {
-        var found = step.Select(pair => pair.Key).Where(Steps.ContainsKey).ToList();
-        var named = found.Where(kind => found.All(other => other == kind || Steps[kind].Keys.Contains(other))).ToList();
-        return named.Count == 1 ? named : found;
+        var kind = KindOf(step);
+        if (Steps.TryGetValue(kind, out var known) && known.Takes == Takes.Target && step[kind] is not null)
+            yield return (step, kind, $"{path}/{kind}");
+        if (SecondTargets.GetValueOrDefault(kind) is { } second && step[second] is not null)
+            yield return (step, second, $"{path}/{second}");
+        if (kind == "if" && step["if"] is JsonObject condition && ControlCheckOf(condition) is { } subject)
+            yield return (condition, subject, $"{path}/if/{subject}");
+        if (kind == "checkpoint" && step["checks"] is JsonArray checks)
+            for (var index = 0; index < checks.Count; index++)
+                if (checks[index] is JsonObject check && ControlCheckOf(check) is { } each)
+                    yield return (check, each, $"{path}/checks/{index}/{each}");
+        foreach (var key in new[] { "steps", "else" })
+            if (step[key] is JsonArray inner)
+                for (var index = 0; index < inner.Count; index++)
+                    if (inner[index] is JsonObject child)
+                        foreach (var target in Targets(child, $"{path}/{key}/{index}"))
+                            yield return target;
     }
+
+    /// <summary>The kind of a check of a control in the app, whose key holds its target, or null for any other check.</summary>
+    public static string? ControlCheckOf(JsonObject check) =>
+        Scripting.Kinds.Of(check, Checks) is { } kind && ControlChecks.Contains(kind) && check[kind] is not null ? kind : null;
 
     /// <summary>Each check kind, by its key, and the other properties it takes. Every check can have a label and within.</summary>
     public static readonly IReadOnlyDictionary<string, string[]> Checks = new Dictionary<string, string[]>

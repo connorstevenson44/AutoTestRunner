@@ -1,4 +1,6 @@
 using System.Runtime.InteropServices;
+using AutoTestRunner.Driving;
+using AutoTestRunner.FlaUI;
 using static AutoTestRunner.Cli.HookThread;
 
 namespace AutoTestRunner.Cli;
@@ -28,6 +30,27 @@ internal sealed class RecordingHook : IDisposable
         (_onDown, _onKeys, _playing, _onRight) = (onDown, onKeys, playing, onRight);
         _hooks = new HookThread(OnKeyboard, OnMouse, "Recording hook");
     }
+
+    /// <summary>
+    /// Waits for one click in the app, whose processes these are, and keeps it from the app; or for Esc. Calls picked,
+    /// on the hook's thread, with where the click was and whether Shift was held to pick exactly what is under the
+    /// mouse, or with null for Esc.
+    /// </summary>
+    public static RecordingHook PickOnce(IReadOnlySet<int> app, Action<(int X, int Y, bool Exact)?> picked) => new(
+        (x, y, _) =>
+        {
+            if (!app.Contains(Native.ProcessOf(Native.WindowAt(x, y))))
+                return false;
+            picked((x, y, ShiftHeld));
+            return true;
+        },
+        keys =>
+        {
+            if (keys == "Esc")
+                picked(null);
+            return false;
+        },
+        () => false);
 
     /// <summary>Whether Ctrl is held down now.</summary>
     public static bool ControlHeld => Held(Control);
@@ -76,24 +99,16 @@ internal sealed class RecordingHook : IDisposable
     // typing, moving about, or editing in a box: those are recorded as what the box holds when it is left.
     private static string? Keys(int key)
     {
-        var ctrl = Held(Control);
-        var alt = Held(Menu);
-        var shift = Held(Shift);
-        var name = key switch
+        var (ctrl, alt) = (Held(Control), Held(Menu));
+        var recorded = key switch
         {
-            0x0D => "Enter",
-            0x1B => "Esc",
-            0x2E => "Delete",
-            >= 0x70 and <= 0x7B => $"F{key - 0x6F}",
-            >= 0x41 and <= 0x5A when ctrl || alt => ((char)key).ToString(),
-            >= 0x30 and <= 0x39 when ctrl || alt => ((char)key).ToString(),
-            _ => null,
+            // Enter, Esc, Delete and F1 to F12.
+            0x0D or 0x1B or 0x2E or (>= 0x70 and <= 0x7B) => true,
+            // Letters and digits only with Ctrl or Alt; copy, paste, cut, undo, redo and select all belong to typing in a box.
+            >= 0x30 and <= 0x39 or >= 0x41 and <= 0x5A => (ctrl || alt) && !(ctrl && !alt && (char)key is 'A' or 'C' or 'V' or 'X' or 'Z' or 'Y'),
+            _ => false,
         };
-        // Copy, paste, cut, undo, redo and select all belong to typing in a box.
-        if (name is null || ctrl && !alt && name is "A" or "C" or "V" or "X" or "Z" or "Y")
-            return null;
-        // Shift is kept with every key that gets here: letters and digits only do with Ctrl or Alt.
-        return (ctrl ? "Ctrl+" : "") + (alt ? "Alt+" : "") + (shift ? "Shift+" : "") + name;
+        return recorded ? KeyNames.Written(key, ctrl, alt, Held(Shift), win: false) : null;
     }
 
     public void Dispose() => _hooks.Dispose();

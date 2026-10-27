@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using AutoTestRunner.Running;
@@ -97,7 +98,7 @@ internal sealed class ActivityFeed : Grid
         if (_last?.Command is not null && _ran is { } ran)
         {
             // A command's row shows its exit code in red already.
-            ran.ToolTip = new ToolTip { Content = Ui.Words(failure.Message, 12, Ui.Ink), MaxWidth = 380 };
+            ran.ToolTip = Tip(failure.Message);
             return;
         }
         if (_step is null || !group.Body.Children.Contains(_step))
@@ -217,7 +218,7 @@ internal sealed class ActivityFeed : Grid
             Children.Add(time);
             if (step.Say is { } say)
             {
-                ToolTip = new ToolTip { Content = Ui.Words(say, 12, Ui.Ink), MaxWidth = 380 };
+                ToolTip = Tip(say);
                 ToolTipService.SetInitialShowDelay(this, 400);
             }
         }
@@ -230,7 +231,7 @@ internal sealed class ActivityFeed : Grid
             _words.Children.Add(failure.Expected is { } expected
                 ? Compare(expected, failure.Actual ?? "")
                 : Ui.Words(failure.Message, 11.5, Ui.Fail));
-            ToolTip = new ToolTip { Content = Ui.Words(failure.Message, 12, Ui.Ink), MaxWidth = 380 };
+            ToolTip = Tip(failure.Message);
             ToolTipService.SetInitialShowDelay(this, 150);
             ToolTipService.SetShowDuration(this, 60_000);
         }
@@ -246,7 +247,7 @@ internal sealed class ActivityFeed : Grid
         public Group(string? number, string name)
         {
             Margin = new Thickness(0, 6, 0, 2);
-            var header = new Grid { Cursor = System.Windows.Input.Cursors.Hand, Background = Brushes.Transparent };
+            var header = new Grid { Cursor = Cursors.Hand, Background = Brushes.Transparent };
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(18) });
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             header.ColumnDefinitions.Add(new ColumnDefinition());
@@ -319,7 +320,7 @@ internal sealed class ActivityFeed : Grid
         public CommandRow(string line, string? script, string? say)
         {
             Margin = new Thickness(0, 3, 0, 5);
-            var header = new Grid { Cursor = System.Windows.Input.Cursors.Hand, Background = Brushes.Transparent };
+            var header = new Grid { Cursor = Cursors.Hand, Background = Brushes.Transparent };
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(26) });
             header.ColumnDefinitions.Add(new ColumnDefinition());
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -373,7 +374,7 @@ internal sealed class ActivityFeed : Grid
             Children.Add(_terminal);
             header.MouseLeftButtonUp += (_, _) => Open(_terminal.Visibility != Visibility.Visible);
             if (say is not null)
-                header.ToolTip = new ToolTip { Content = Ui.Words(say, 12, Ui.Ink), MaxWidth = 380 };
+                header.ToolTip = Tip(say);
 
             _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
             _timer.Tick += (_, _) => _clock.Text = Ui.Took(DateTime.Now - _started);
@@ -582,4 +583,7 @@ internal sealed class ActivityFeed : Grid
             return row;
         }
     }
+
+    // A tooltip of a few lines of words, kept narrow enough to read.
+    private static ToolTip Tip(string text) => new() { Content = Ui.Words(text, 12, Ui.Ink), MaxWidth = 380 };
 }

@@ -237,7 +237,7 @@ public sealed partial class FlaUiDriver
 
     private AutomationElement WaitMenuItem(string name)
     {
-        var end = Environment.TickCount64 + (long)_control.Scale(TimeSpan.FromSeconds(10)).TotalMilliseconds;
+        var end = _control.Deadline(TimeSpan.FromSeconds(10));
         while (true)
         {
             _control.Gate();
@@ -354,7 +354,7 @@ public sealed partial class FlaUiDriver
         _control.Wait(_control.Pace);
         // A WPF drop-down's items are inside it, wherever its window is, even while its list shows in a popup.
         var condition = Conditions.ByControlType(ControlType.ListItem).And(Conditions.ByName(option));
-        var end = Environment.TickCount64 + (long)_control.Scale(TimeSpan.FromSeconds(10)).TotalMilliseconds;
+        var end = _control.Deadline(TimeSpan.FromSeconds(10));
         AutomationElement? item;
         while ((item = element.FindFirstDescendant(condition)) is null)
         {

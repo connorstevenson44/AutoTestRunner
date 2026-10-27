@@ -38,8 +38,7 @@ public static class KeyNames
     {
         if (Name(virtualKey) is not { } name)
             return null;
-        var held = new[] { (ctrl, "CTRL"), (alt, "ALT"), (shift, "SHIFT"), (win, "WIN") }.Where(modifier => modifier.Item1).Select(modifier => modifier.Item2);
-        return Canonical(string.Join("+", held.Append(name)));
+        return Canonical(string.Join("+", Held(ctrl, alt, shift, win).Append(name)));
     }
 
     /// <summary>
@@ -50,7 +49,6 @@ public static class KeyNames
     {
         if (Name(virtualKey) is not { } name || Modifiers.Contains(name))
             return null;
-        var held = new[] { (ctrl, "Ctrl"), (alt, "Alt"), (shift, "Shift"), (win, "Win") }.Where(modifier => modifier.Item1).Select(modifier => modifier.Item2);
         var spelt = name switch
         {
             "PAGEUP" => "PageUp",
@@ -58,8 +56,11 @@ public static class KeyNames
             { Length: 1 } => name,
             _ => name[0] + name[1..].ToLowerInvariant(),
         };
-        return string.Join("+", held.Append(spelt));
+        return string.Join("+", Held(ctrl, alt, shift, win).Append(spelt));
     }
+
+    private static IEnumerable<string> Held(bool ctrl, bool alt, bool shift, bool win) =>
+        new[] { (ctrl, "Ctrl"), (alt, "Alt"), (shift, "Shift"), (win, "Win") }.Where(modifier => modifier.Item1).Select(modifier => modifier.Item2);
 
     private static string? Name(int key) => key switch
     {

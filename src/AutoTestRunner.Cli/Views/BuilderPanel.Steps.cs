@@ -70,12 +70,11 @@ internal sealed partial class BuilderPanel
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
         grid.ColumnDefinitions.Add(new ColumnDefinition());
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var number = Ui.Words($"{_draft.Steps.IndexOf(step) + 1}", 11, Ui.Faint, wrap: false);
+        var number = Ui.Words($"{index + 1}", 11, Ui.Faint, wrap: false);
         number.VerticalAlignment = VerticalAlignment.Top;
         number.Margin = new Thickness(0, 2, 0, 0);
         var open = _open.Contains(step);
-        var chevron = Ui.IconButton(open ? Icons.Expand : Icons.Collapse, open ? "Fold the details away" : "Change this step's details", () => Fold(step), 9);
-        chevron.Padding = new Thickness(3);
+        var chevron = Ui.IconButton(open ? Icons.Expand : Icons.Collapse, open ? "Fold the details away" : "Change this step's details", () => Fold(step), 9, new Thickness(3));
         chevron.VerticalAlignment = VerticalAlignment.Top;
         var icon = Ui.Glyph(off ? Icons.Blocked : step.Waits ? Icons.Wait : step.Verb == "repeat" ? Icons.Repeat : step.Verb == "if" ? Icons.Branch : Icons.Of(step.Kind), 14,
             played && !off ? inReset ? Ui.Step : Ui.Accent : Ui.Faint);
@@ -126,11 +125,7 @@ internal sealed partial class BuilderPanel
         actions.Add((Icons.Down, "Move down", () => Move(step, 1)));
         actions.Add((Icons.Delete, "Delete this step", () => Remove(step)));
         foreach (var (glyph, tip, act) in actions)
-        {
-            var button = Ui.IconButton(glyph, tip, act, 12);
-            button.Padding = new Thickness(5, 3, 5, 3);
-            buttons.Children.Add(button);
-        }
+            buttons.Children.Add(Ui.IconButton(glyph, tip, act, 12, new Thickness(5, 3, 5, 3)));
         Grid.SetColumn(number, 1);
         Grid.SetColumn(icon, 2);
         Grid.SetColumn(words, 3);
@@ -169,8 +164,7 @@ internal sealed partial class BuilderPanel
             foreach (var each in _draft.Steps)
                 each.Reset = reset && each == step;
         _changes++;
-        foreach (var (each, row) in _rows)
-            Refresh(each, row);
+        Refresh();
     }
 
     // What a step without a control shows under it: the message box it answers, the file it picks, the wait.
@@ -276,12 +270,13 @@ internal sealed partial class BuilderPanel
 
     private void Move(DraftStep step, int by)
     {
-        var index = _draft.Steps.IndexOf(step);
-        var to = index + by;
-        if (index < 0 || to < 0 || to >= _draft.Steps.Count)
-            return;
+        int to;
         lock (_draft.Steps)
         {
+            var index = _draft.Steps.IndexOf(step);
+            to = index + by;
+            if (index < 0 || to < 0 || to >= _draft.Steps.Count)
+                return;
             _draft.Steps.RemoveAt(index);
             _draft.Steps.Insert(to, step);
         }
@@ -313,21 +308,24 @@ internal sealed partial class BuilderPanel
     // Numbers the steps again, and redraws them all when the case has a reset, whose band moves with its first step.
     private void Renumber()
     {
-        if (_draft.Steps.Any(step => step.Reset))
+        List<DraftStep> steps;
+        lock (_draft.Steps)
+            steps = [.. _draft.Steps];
+        if (steps.Any(step => step.Reset))
         {
-            foreach (var (step, row) in _rows)
-                Refresh(step, row);
+            Refresh();
             return;
         }
         foreach (var (step, row) in _rows)
             if (Line(row)?.Children[0] is TextBlock number)
-                number.Text = $"{_draft.Steps.IndexOf(step) + 1}";
+                number.Text = $"{steps.IndexOf(step) + 1}";
     }
 
     private void UpdateCount()
     {
-        _count.Text = _draft.Steps.Count == 1 ? "1 step" : $"{_draft.Steps.Count} steps";
-        _save.IsEnabled = !_saved && (_draft.Steps.Count > 0 || _draft.Editing is not null);
+        var count = _draft.Steps.Count;
+        _count.Text = count == 1 ? "1 step" : $"{count} steps";
+        _save.IsEnabled = !_saved && (count > 0 || _draft.Editing is not null);
     }
 
     private static void Mark(Border row, string? problem)

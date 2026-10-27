@@ -94,6 +94,19 @@ public sealed class CaseDraft
         return step;
     }
 
+    /// <summary>The name, or the name and a number, so that no other step keeps a value as it.</summary>
+    public string FreeName(string name)
+    {
+        lock (Steps)
+        {
+            var taken = Steps.Select(step => step.Json["as"]?.GetValue<string>()).OfType<string>().ToHashSet(StringComparer.Ordinal);
+            var free = name;
+            for (var copy = 2; taken.Contains(free); copy++)
+                free = $"{name}{copy}";
+            return free;
+        }
+    }
+
     /// <summary>The suite's elements and those named while building, as the steps can use them.</summary>
     public Dictionary<string, JsonNode> ElementsWith(IReadOnlyDictionary<string, JsonNode> elements)
     {

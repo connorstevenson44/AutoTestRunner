@@ -1,7 +1,6 @@
 using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using AutoTestRunner.Building;
 using AutoTestRunner.Running;
@@ -76,40 +75,16 @@ internal sealed partial class BuilderPanel
     }
 
     // The list of values under the steps heading: one clicked goes in the box typed in last, or onto the clipboard.
-    private void ShowValues()
+    private void ShowValues() => Ui.ValuesMenu(_count, ValuesNow(), text =>
     {
-        var menu = new ContextMenu { PlacementTarget = _count, Placement = PlacementMode.Bottom };
-        foreach (var (name, now) in ValuesNow())
+        if (_lastBox is { IsVisible: true } box)
+            Ui.InsertAtCaret(box, text);
+        else
         {
-            var header = new DockPanel { MinWidth = 300 };
-            var shown = Ui.Words(now.Length > 46 ? now[..46] + "…" : now, 11.5, Ui.Faint, wrap: false);
-            shown.Margin = new Thickness(16, 0, 0, 0);
-            DockPanel.SetDock(shown, Dock.Right);
-            header.Children.Add(shown);
-            header.Children.Add(new TextBlock { Text = "${" + name + "}", FontFamily = Ui.Mono, FontSize = 12 });
-            var item = new MenuItem { Header = header, ToolTip = now };
-            item.Click += (_, _) =>
-            {
-                var text = "${" + name + "}";
-                if (_lastBox is { IsVisible: true } box)
-                {
-                    var at = box.CaretIndex;
-                    box.Text = box.Text.Insert(at, text);
-                    box.CaretIndex = at + text.Length;
-                    box.Focus();
-                }
-                else
-                {
-                    Clipboard.SetText(text);
-                    Note($"Copied {text}. Paste it into a box.");
-                }
-            };
-            menu.Items.Add(item);
+            Clipboard.SetText(text);
+            Note($"Copied {text}. Paste it into a box.");
         }
-        if (menu.Items.Count == 0)
-            menu.Items.Add(new MenuItem { Header = "Nothing kept yet", IsEnabled = false });
-        menu.IsOpen = true;
-    }
+    });
 
     // ===== A step's details =====
 
@@ -117,8 +92,7 @@ internal sealed partial class BuilderPanel
     {
         if (!_open.Remove(step))
             _open.Add(step);
-        if (_rows.TryGetValue(step, out var row))
-            Refresh(step, row);
+        Refresh(step);
     }
 
     // The step's form, folded out under it, with Apply and Cancel.
@@ -145,8 +119,7 @@ internal sealed partial class BuilderPanel
             }
             Change(step, changed);
             _open.Remove(step);
-            if (_rows.TryGetValue(step, out var row))
-                Refresh(step, row);
+            Refresh(step);
         });
         apply.ToolTip = "Keep the changes. A step already played isn't played again: Roll back to here plays it as it is now.";
         buttons.Children.Add(apply);
@@ -180,8 +153,7 @@ internal sealed partial class BuilderPanel
         else
             changed.Remove("disabled");
         Change(step, changed);
-        if (_rows.TryGetValue(step, out var row))
-            Refresh(step, row);
+        Refresh(step);
     }
 
     /// <summary>Folds out a step's details and picks steps, as clicking them does: for the preview's pictures.</summary>
@@ -191,8 +163,7 @@ internal sealed partial class BuilderPanel
             Fold(folded);
         _selected.Clear();
         _selected.AddRange(picked);
-        foreach (var (each, row) in _rows)
-            Refresh(each, row);
+        Refresh();
         ShowSelection();
     }
 
@@ -224,8 +195,7 @@ internal sealed partial class BuilderPanel
                 _selected.Add(step);
             _anchor = step;
         }
-        foreach (var (each, row) in _rows)
-            Refresh(each, row);
+        Refresh();
         ShowSelection();
     }
 
@@ -242,8 +212,7 @@ internal sealed partial class BuilderPanel
     {
         _selected.Clear();
         _anchor = null;
-        foreach (var (each, row) in _rows)
-            Refresh(each, row);
+        Refresh();
         ShowSelection();
     }
 
@@ -279,9 +248,12 @@ internal sealed partial class BuilderPanel
     private List<DraftStep>? Picked()
     {
         List<DraftStep> steps;
+        List<int> places;
         lock (_draft.Steps)
+        {
             steps = [.. _draft.Steps.Where(_selected.Contains)];
-        var places = steps.Select(step => _draft.Steps.IndexOf(step)).ToList();
+            places = [.. steps.Select(step => _draft.Steps.IndexOf(step))];
+        }
         if (places.Count > 0 && places[^1] - places[0] == places.Count - 1)
             return steps;
         MessageBox.Show(this, "Pick steps that are next to each other: Shift+click the first and the last.", "Steps", MessageBoxButton.OK, MessageBoxImage.Information);

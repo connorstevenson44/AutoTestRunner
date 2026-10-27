@@ -79,7 +79,7 @@ public sealed partial class Runner
         var wanted = WantedText(step, scope, _driver.TryFind(target) is { } before ? TextOf(before) : null);
         var line = WaitingFor(target, wanted);
         _view.ShowWait(line);
-        var end = Environment.TickCount64 + (long)Control.Scale(within).TotalMilliseconds;
+        var end = Control.Deadline(within);
         while (true)
         {
             Control.Gate();
@@ -90,19 +90,13 @@ public sealed partial class Runner
                 Keep(step, scope, control!);
                 return (line with { Parts = [.. line.Parts.Select(part => part.Kind == PartKind.Control ? Part.Control(target, control) : part)] }, found);
             }
-            if (_driver.OtherWindow() is { } other)
-                throw new StuckException($"see \"{wanted.Expected}\" in {target.What}", $"The app is showing another window instead: {other}");
-            if (Environment.TickCount64 > end)
-                throw new StuckException($"see \"{wanted.Expected}\" in {target.What}", found is null ? null : $"It says: {found}");
-            Control.Wait(300);
+            WaitMore(end, $"see \"{wanted.Expected}\" in {target.What}", found is null ? null : $"It says: {found}");
         }
     }
 
-    /// <summary>
-    /// Runs steps each time a control shows, such as a window that asks about each step of a removal, until another
-    /// control's text says it is done. Another window showing up instead, or nothing happening for within, is stuck.
-    /// </summary>
-    // Goes round, and gives the wait's line and the text that said it was done.
+    // Runs steps each time a control shows, such as a window that asks about each step of a removal, until another
+    // control's text says it is done. Another window showing up instead, or nothing happening for within, is stuck.
+    // Gives the wait's line and the text that said it was done.
     private (Activity Line, string Found) WhileShows(JsonObject step, VariableScope scope, Target each, TimeSpan within)
     {
         var until = Targets.Resolve(step["untilText"] ?? throw new ScriptException("whileShows needs untilText: the control that says when it is done."),
@@ -110,7 +104,7 @@ public sealed partial class Runner
         var wanted = WantedText(step, scope, first: null);
         var line = WaitingFor(until, wanted);
         _view.ShowWait(line);
-        var end = Environment.TickCount64 + (long)Control.Scale(within).TotalMilliseconds;
+        var end = Control.Deadline(within);
         for (var rounds = 0; ;)
         {
             Control.Gate();
@@ -128,14 +122,10 @@ public sealed partial class Runner
                     throw new StuckException($"see \"{wanted.Expected}\" in {until.What}", $"{each.What} was still showing after {MaxRounds} rounds.");
                 Steps(step["steps"] as JsonArray ?? [], scope, "whileShows");
                 _view.ShowWait(line);
-                end = Environment.TickCount64 + (long)Control.Scale(within).TotalMilliseconds;
+                end = Control.Deadline(within);
                 continue;
             }
-            if (_driver.OtherWindow() is { } other)
-                throw new StuckException($"see \"{wanted.Expected}\" in {until.What}", $"The app is showing another window instead: {other}");
-            if (Environment.TickCount64 > end)
-                throw new StuckException($"see \"{wanted.Expected}\" in {until.What}", found is null ? null : $"It says: {found}");
-            Control.Wait(300);
+            WaitMore(end, $"see \"{wanted.Expected}\" in {until.What}", found is null ? null : $"It says: {found}");
         }
     }
 
@@ -173,19 +163,25 @@ public sealed partial class Runner
     private IControl WaitEnabled(Target target, TimeSpan within)
     {
         _view.ShowWait(Activity.Of(ActivityKind.Wait, Part.Verb("Wait"), Part.Control(target), Part.Word("usable")));
-        var end = Environment.TickCount64 + (long)Control.Scale(within).TotalMilliseconds;
+        var end = Control.Deadline(within);
         while (true)
         {
             Control.Gate();
             var control = _driver.TryFind(target);
             if (control is { IsEnabled: true })
                 return control;
-            if (_driver.OtherWindow() is { } other)
-                throw new StuckException($"see {target.What} become usable", $"The app is showing another window instead: {other}");
-            if (Environment.TickCount64 > end)
-                throw new StuckException($"see {target.What} become usable", control is null ? null : "It's still greyed out.");
-            Control.Wait(300);
+            WaitMore(end, $"see {target.What} become usable", control is null ? null : "It's still greyed out.");
         }
+    }
+
+    // Waits a moment more for what a step is waiting to do, unless the app shows another window or the time is up.
+    private void WaitMore(long end, string doing, string? seen)
+    {
+        if (_driver.OtherWindow() is { } other)
+            throw new StuckException(doing, $"The app is showing another window instead: {other}");
+        if (Environment.TickCount64 > end)
+            throw new StuckException(doing, seen);
+        Control.Wait(300);
     }
 
     // A control's text: what is typed in a text box or editor, or the name of anything else, such as a label.

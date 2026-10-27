@@ -12,6 +12,10 @@ public static class SuiteFinder
     // Build output, results and tools' folders never hold a suite, and can be big.
     private static readonly HashSet<string> Skipped = new(["bin", "obj", "results", "node_modules", "packages", "artifacts"], StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Whether two paths are of the same file or folder, however they are written.</summary>
+    public static bool SamePath(string one, string other) =>
+        string.Equals(Path.GetFullPath(one).TrimEnd('\\', '/'), Path.GetFullPath(other).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
+
     /// <summary>The suite folders in these places and up to depth folders below them, by path.</summary>
     public static IReadOnlyList<string> Find(IEnumerable<string> places, int depth = 3)
     {

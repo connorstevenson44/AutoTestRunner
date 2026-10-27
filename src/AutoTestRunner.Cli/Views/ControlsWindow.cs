@@ -134,8 +134,7 @@ internal sealed class ControlsWindow : Window
             var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
             void Button(string glyph, string tip, Action click)
             {
-                var button = Ui.IconButton(glyph, tip, click, 13);
-                button.Padding = new Thickness(6, 3, 6, 3);
+                var button = Ui.IconButton(glyph, tip, click, 13, new Thickness(6, 3, 6, 3));
                 buttons.Children.Add(button);
             }
             Button(Icons.Look, "Point it out in the app", () => PointOut(name));
@@ -186,7 +185,7 @@ internal sealed class ControlsWindow : Window
             return;
         try
         {
-            if (!System.Text.RegularExpressions.Regex.IsMatch(to, @"^[A-Za-z_]\w*$"))
+            if (!ScriptVocabulary.IsName(to))
                 throw new ArgumentException("A name is letters and digits, such as addOrder.");
             var files = ElementUses.Rename(_suite, name, to);
             _suite = Suite.Load(_suite.Folder);
@@ -233,10 +232,8 @@ internal sealed class ControlsWindow : Window
             dot.ToolTip = gap.Named ? "Only found by its words, which change with the language and the wording" : "Nothing to find it by but where it is";
             row.Children.Add(dot);
             var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
-            var copy = Ui.IconButton(Icons.Copy, "Copy the XAML", () => Clipboard.SetText(gap.Xaml), 13);
-            copy.Padding = new Thickness(6, 3, 6, 3);
-            var show = Ui.IconButton(Icons.Look, "Point it out in the app", () => _outline.Show(gap.Control.Bounds, gap.Control.Type, gap.Named ? TargetQuality.Wording : TargetQuality.Ambiguous), 13);
-            show.Padding = new Thickness(6, 3, 6, 3);
+            var copy = Ui.IconButton(Icons.Copy, "Copy the XAML", () => Clipboard.SetText(gap.Xaml), 13, new Thickness(6, 3, 6, 3));
+            var show = Ui.IconButton(Icons.Look, "Point it out in the app", () => _outline.Show(gap.Control.Bounds, gap.Control.Type, gap.Named ? TargetQuality.Wording : TargetQuality.Ambiguous), 13, new Thickness(6, 3, 6, 3));
             buttons.Children.Add(show);
             buttons.Children.Add(copy);
             DockPanel.SetDock(buttons, Dock.Right);

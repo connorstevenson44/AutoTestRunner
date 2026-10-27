@@ -72,6 +72,26 @@ public class ScriptingTests
     }
 
     [Fact]
+    public void Every_control_a_step_names_is_found_however_deep()
+    {
+        var step = (JsonObject)JsonNode.Parse("""
+            { "repeat": 2, "steps": [
+                { "menu": ["Delete"], "on": "orderRow" },
+                { "if": { "shows": "warning" }, "steps": [{ "click": "ok" }], "else": [{ "drag": "a", "to": "b" }] },
+                { "checkpoint": "Done", "checks": [{ "says": "status", "equals": "Saved" }, { "equals": "${kept}", "to": "Saved" }] }
+            ] }
+            """)!;
+
+        var found = ScriptVocabulary.Targets(step, "steps/0").Select(target => $"{target.Path}={target.Owner[target.Key]}");
+
+        Assert.Equal([
+            "steps/0/steps/0/on=orderRow", "steps/0/steps/1/if/shows=warning",
+            "steps/0/steps/1/steps/0/click=ok", "steps/0/steps/1/else/0/drag=a", "steps/0/steps/1/else/0/to=b",
+            "steps/0/steps/2/checks/0/says=status",
+        ], found);
+    }
+
+    [Fact]
     public void The_demo_suite_loads()
     {
         var suite = Suite.Load(Demo);

@@ -499,15 +499,8 @@ internal sealed partial class BuilderPanel
     }
 
     // A name for a kept value: the element's, else a word or two of what it says, not taken by another step.
-    private string Variable(TargetChoice choice, ControlFacts facts)
-    {
-        var name = choice.Json is JsonValue element ? element.GetValue<string>() : Camel(Regex.Replace(facts.Label, @"[^A-Za-z ]", " ").Trim() is { Length: > 0 } words ? words : "kept");
-        var taken = _draft.Steps.Select(step => step.Json["as"]?.GetValue<string>()).OfType<string>().ToHashSet();
-        var unique = name;
-        for (var copy = 2; taken.Contains(unique); copy++)
-            unique = $"{name}{copy}";
-        return unique;
-    }
+    private string Variable(TargetChoice choice, ControlFacts facts) => _draft.FreeName(
+        choice.Json is JsonValue element ? element.GetValue<string>() : Camel(Regex.Replace(facts.Label, @"[^A-Za-z ]", " ").Trim() is { Length: > 0 } words ? words : "kept"));
 
     private static string Camel(string text)
     {

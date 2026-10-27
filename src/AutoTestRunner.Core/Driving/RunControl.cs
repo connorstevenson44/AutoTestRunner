@@ -75,6 +75,9 @@ public sealed class RunControl
 
     public TimeSpan Scale(TimeSpan timeout) => timeout * TimeoutScale;
 
+    /// <summary>When a wait of this long, scaled, that starts now is up, in Environment.TickCount64's milliseconds.</summary>
+    public long Deadline(TimeSpan timeout) => Environment.TickCount64 + (long)Scale(timeout).TotalMilliseconds;
+
     /// <summary>Holds the run while it is waiting, and ends it once a stop was asked for.</summary>
     public void Gate()
     {

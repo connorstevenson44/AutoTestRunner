@@ -1,10 +1,8 @@
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
-using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using AutoTestRunner.Driving;
@@ -21,10 +19,8 @@ namespace AutoTestRunner.Cli.Views;
 /// command printed as it printed it.
 /// </summary>
 [SuppressMessage("Design", "CA1001", Justification = "The key hook and the timer are disposed when the window closes.")]
-internal sealed partial class RunPanel : Window, IRunView
+internal sealed partial class RunPanel : SidePanel, IRunView
 {
-    private const double PanelWidth = 460;
-
     private readonly RunControl _control;
     private readonly string _resultsFolder;
     private readonly bool _canRunAgain;
@@ -54,7 +50,6 @@ internal sealed partial class RunPanel : Window, IRunView
     // The step on show, and what a manual run is waiting for the person to do, while it waits.
     private Activity? _step, _yourTurn;
     private Timer? _typingPoll;
-    private nint _hwnd;
     private int _caseIndex;
     // Whether a step or check of the case running has failed, which a checkpoint's "Your turn" shows in red.
     private bool _caseFailed;
@@ -70,18 +65,9 @@ internal sealed partial class RunPanel : Window, IRunView
     private volatile bool _askingToStop;
 
     public RunPanel(Suite suite, IReadOnlyList<Case> cases, RunControl control, string resultsFolder, bool canRunAgain)
+        : base(suite.Name)
     {
         (_suite, _control, _resultsFolder, _canRunAgain) = (suite, control, resultsFolder, canRunAgain);
-        Resources.MergedDictionaries.Add(Ui.Theme);
-        Title = suite.Name;
-        Width = PanelWidth;
-        Topmost = true;
-        WindowStyle = WindowStyle.ToolWindow;
-        ResizeMode = ResizeMode.NoResize;
-        ShowActivated = false;
-        Background = Brushes.White;
-        FontFamily = Ui.Text;
-        Foreground = Ui.Ink;
 
         var root = new Grid { Margin = new Thickness(14, 12, 10, 0) };
         for (var row = 0; row < 6; row++)
@@ -232,15 +218,7 @@ internal sealed partial class RunPanel : Window, IRunView
             e.Cancel = true;
             RequestStop();
         };
-        SourceInitialized += (_, _) =>
-        {
-            _hwnd = new WindowInteropHelper(this).Handle;
-            var area = SystemParameters.WorkArea;
-            Left = area.Right - PanelWidth;
-            Top = area.Top;
-            Height = area.Height;
-            _hooks = new GlobalKeyHook(OnKey, OnClick, _control.Person);
-        };
+        SourceInitialized += (_, _) => _hooks = new GlobalKeyHook(OnKey, OnClick, _control.Person);
         Closed += (_, _) =>
         {
             _outline.Close();
@@ -273,9 +251,6 @@ internal sealed partial class RunPanel : Window, IRunView
         _hooks = null;
     });
 
-    /// <summary>Where the panel is on the screen, in pixels.</summary>
-    public ScreenRect? Bounds => _hwnd == 0 ? null : WindowBounds(_hwnd);
-
     // ===== Keys, buttons and state =====
 
     // Space, Enter and Esc belong to the run unless the person is typing: in a text box they clicked into themselves,
@@ -287,15 +262,14 @@ internal sealed partial class RunPanel : Window, IRunView
     {
         if (_answer is not null && !_askingToStop)
             return false;
-        var foreground = GetForegroundWindow();
-        if (_control.Manual && foreground != _hwnd)
+        var foreground = Native.Foreground();
+        if (_control.Manual && foreground != Handle)
             return false;
-        if (foreground != _hwnd)
+        if (foreground != Handle)
         {
             if (_control.Waiting == HoldReason.Stuck || _asking)
                 return false;
-            _ = GetWindowThreadProcessId(foreground, out var processId);
-            if (processId == Environment.ProcessId || _typing)
+            if (Native.ProcessOf(foreground) == Environment.ProcessId || _typing)
                 return false;
         }
         if (GlobalKeyHook.IsSpace(key))
@@ -309,7 +283,7 @@ internal sealed partial class RunPanel : Window, IRunView
 
     private void OnClick(int x, int y)
     {
-        if (Bounds is not { } panel || x < panel.Left || x > panel.Right || y < panel.Top || y > panel.Bottom)
+        if (Bounds is not { } panel || !panel.Contains(x, y))
             _youClicked = true;
     }
 
@@ -467,25 +441,4 @@ internal sealed partial class RunPanel : Window, IRunView
     private void OnUi(Action action) => Dispatcher.Invoke(action, DispatcherPriority.Normal);
 
     private T OnUi<T>(Func<T> function) => Dispatcher.Invoke(function, DispatcherPriority.Normal);
-
-    private static ScreenRect WindowBounds(nint hwnd)
-    {
-        GetWindowRect(hwnd, out var rect);
-        return new ScreenRect(rect.Left, rect.Top, rect.Right, rect.Bottom);
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct Rect
-    {
-        public int Left, Top, Right, Bottom;
-    }
-
-    [DllImport("user32.dll")]
-    private static extern bool GetWindowRect(nint hwnd, out Rect rect);
-
-    [DllImport("user32.dll")]
-    private static extern nint GetForegroundWindow();
-
-    [DllImport("user32.dll")]
-    private static extern uint GetWindowThreadProcessId(nint hwnd, out uint processId);
 }

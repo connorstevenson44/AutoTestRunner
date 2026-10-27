@@ -14,7 +14,6 @@ namespace AutoTestRunner.Cli.Views;
 /// </summary>
 internal sealed class TagPicker : ToggleButton
 {
-    private readonly HashSet<string> _on = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<CheckBox> _boxes = [];
     private readonly TextBlock _shown = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(7, 0, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
     private readonly TextBox _search = new() { Padding = new Thickness(4, 3, 4, 3), Margin = new Thickness(0, 0, 0, 4) };
@@ -43,10 +42,8 @@ internal sealed class TagPicker : ToggleButton
         foreach (var tag in tags)
         {
             var box = new CheckBox { Content = tag, Tag = tag, Margin = new Thickness(2, 3, 2, 3), IsChecked = on.Contains(tag, StringComparer.OrdinalIgnoreCase) };
-            if (box.IsChecked == true)
-                _on.Add(tag);
-            box.Checked += (_, _) => Turn(tag, true);
-            box.Unchecked += (_, _) => Turn(tag, false);
+            box.Checked += (_, _) => Turned();
+            box.Unchecked += (_, _) => Turned();
             _boxes.Add(box);
             list.Children.Add(box);
         }
@@ -93,24 +90,22 @@ internal sealed class TagPicker : ToggleButton
     }
 
     /// <summary>The tags ticked; none means every case.</summary>
-    public IReadOnlySet<string> On => _on;
+    public IReadOnlySet<string> On => Ticked().ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>A tag was ticked or unticked.</summary>
     public event Action? Changed;
 
-    private void Turn(string tag, bool on)
+    private IEnumerable<string> Ticked() => _boxes.Where(box => box.IsChecked == true).Select(box => (string)box.Tag);
+
+    private void Turned()
     {
-        if (on)
-            _on.Add(tag);
-        else
-            _on.Remove(tag);
         Show();
         Changed?.Invoke();
     }
 
     private void Show()
     {
-        var ticked = _boxes.Where(box => box.IsChecked == true).Select(box => (string)box.Tag).ToList();
+        var ticked = Ticked().ToList();
         _shown.Text = ticked.Count == 0 ? "Any tag" : string.Join(", ", ticked);
         _shown.Foreground = ticked.Count == 0 ? Ui.Muted : Ui.Ink;
     }
