@@ -29,13 +29,16 @@ public static class ScriptFile
         $"{Path.GetFileName(path)} failed with exit code {output.ExitCode}: {output.Output}"
         + (IsCSharp(path) && output.Output.Contains(NoSdk, StringComparison.Ordinal) ? $" {NeedsSdk}" : "");
 
-    /// <summary>Runs a script file, with a clear message when it is C# and dotnet isn't installed at all.</summary>
-    public static ProcessOutput Run(IMachine machine, string path, IReadOnlyList<string> arguments, TimeSpan? timeout = null)
+    /// <summary>
+    /// Runs a script file, from folder when given, with a clear message when it is C# and dotnet isn't installed at all.
+    /// </summary>
+    public static ProcessOutput Run(IMachine machine, string path, IReadOnlyList<string> arguments, TimeSpan? timeout = null,
+        Action<string, bool>? output = null, string? folder = null)
     {
         var (program, line) = Command(path, arguments);
         try
         {
-            return machine.Run(program, line, timeout: timeout);
+            return machine.Run(program, line, timeout: timeout, output: output, folder: folder);
         }
         catch (System.ComponentModel.Win32Exception) when (IsCSharp(path))
         {

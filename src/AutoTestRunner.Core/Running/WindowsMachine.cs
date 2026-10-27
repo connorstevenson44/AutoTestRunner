@@ -95,10 +95,11 @@ public sealed class WindowsMachine : IMachine
     }
 
     public ProcessOutput Run(string program, IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string>? environment = null, TimeSpan? timeout = null,
-        Action<string, bool>? output = null)
+        Action<string, bool>? output = null, string? folder = null)
     {
         var start = new ProcessStartInfo(program)
         {
+            WorkingDirectory = folder ?? "",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,

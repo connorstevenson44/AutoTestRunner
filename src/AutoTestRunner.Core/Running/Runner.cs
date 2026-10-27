@@ -124,7 +124,7 @@ public sealed partial class Runner
         if (suite.Reset.Leftovers is not { } script)
             return [];
         var path = SuitePath(suite, script);
-        var output = ScriptFile.IsCSharp(path) ? ScriptFile.Run(machine, path, []) : machine.PowerShell(File.ReadAllText(path), []);
+        var output = ScriptFile.IsCSharp(path) ? ScriptFile.Run(machine, path, [], folder: suite.Folder) : machine.PowerShell(File.ReadAllText(path), []);
         return output.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }
 
@@ -136,12 +136,12 @@ public sealed partial class Runner
         _driver.CloseAll(Exe);
         if (ScriptFile.IsCSharp(script))
         {
-            ScriptFile.Run(_machine, SuitePath(script), [], TimeSpan.FromMinutes(5));
+            ScriptFile.Run(_machine, SuitePath(script), [], TimeSpan.FromMinutes(5), folder: _suite.Folder);
             return;
         }
         // What it prints goes in the log, as OUTPUT. -Command rather than -File, so progress bars stay out of it.
         var path = SuitePath(script).Replace("'", "''");
-        _machine.Run("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $"$ProgressPreference = 'SilentlyContinue'; & '{path}'"], timeout: TimeSpan.FromMinutes(5));
+        _machine.Run("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $"$ProgressPreference = 'SilentlyContinue'; & '{path}'"], timeout: TimeSpan.FromMinutes(5), folder: _suite.Folder);
     }
 
     /// <summary>
@@ -791,7 +791,7 @@ public sealed partial class Runner
                 var arguments = (step["args"] as JsonArray ?? []).Select(arg => scope.Expand(arg!.ToString())).ToList();
                 var (program, line) = ScriptFile.Command(file, arguments);
                 ShowStep(Line(ActivityKind.Command, Part.Verb("Run"), Part.File(file)) with { Command = CommandReportingMachine.CommandLine(program, line, null) });
-                var output = ScriptFile.Run(_machine, file, arguments);
+                var output = ScriptFile.Run(_machine, file, arguments, folder: _suite.Folder);
                 if (output.ExitCode != 0)
                     FailStep(new StepFailure(ScriptFile.Failed(file, output), "exit 0", $"exit {output.ExitCode}"));
                 KeepOutput(step, scope, output);

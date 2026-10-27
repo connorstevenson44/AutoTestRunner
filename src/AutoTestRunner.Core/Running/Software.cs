@@ -74,9 +74,7 @@ public static class Software
         var local = scope.Child();
         local.Set("version", item.Version ?? "");
         var given = item.Args.Select(arg => local.Expand(arg)).ToList();
-        return ScriptFile.IsCSharp(path)
-            ? ScriptFile.Run(machine, path, given, InstallTimeout)
-            : machine.Run("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path, .. given], timeout: InstallTimeout, output: output);
+        return ScriptFile.Run(machine, path, given, InstallTimeout, output, suiteFolder);
     }
 
     /// <summary>The version winget says is installed, or null when it isn't; problem says why winget couldn't be asked.</summary>

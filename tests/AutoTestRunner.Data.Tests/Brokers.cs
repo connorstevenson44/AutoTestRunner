@@ -43,7 +43,7 @@ internal sealed class UnusedMachine : IMachine
     public string Clipboard() => throw new NotSupportedException();
     public (int Status, string Body) Get(string url) => throw new NotSupportedException();
     public ProcessOutput Run(string program, IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string>? environment = null, TimeSpan? timeout = null,
-        Action<string, bool>? output = null) => throw new NotSupportedException();
+        Action<string, bool>? output = null, string? folder = null) => throw new NotSupportedException();
     public ProcessOutput PowerShell(string script, IReadOnlyList<string> arguments, TimeSpan? timeout = null, Action<string, bool>? output = null) => throw new NotSupportedException();
     public void Open(string what, string path, IReadOnlyList<string>? arguments = null) => throw new NotSupportedException();
 }

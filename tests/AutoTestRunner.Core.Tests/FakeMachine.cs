@@ -46,17 +46,21 @@ internal sealed class FakeMachine : IMachine
     /// <summary>Each program run, with its arguments, as one line.</summary>
     public List<string> Ran { get; } = [];
 
+    /// <summary>The folder each program ran in, or null for this process's own.</summary>
+    public List<string?> Folders { get; } = [];
+
     /// <summary>Programs that aren't installed, so don't start.</summary>
     public HashSet<string> Missing { get; } = [];
 
     // A program prints its command line.
     public ProcessOutput Run(string program, IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string>? environment = null, TimeSpan? timeout = null,
-        Action<string, bool>? output = null)
+        Action<string, bool>? output = null, string? folder = null)
     {
         if (Missing.Contains(program))
             throw new System.ComponentModel.Win32Exception(2, $"{program} isn't installed.");
         var line = $"{program} {string.Join(" ", arguments)}";
         Ran.Add(line);
+        Folders.Add(folder);
         return Printed(arguments.Count > 0 && Programs.TryGetValue($"{program} {arguments[0]}", out var given) ? given : Programs.GetValueOrDefault(program, new(0, line)), output);
     }
 

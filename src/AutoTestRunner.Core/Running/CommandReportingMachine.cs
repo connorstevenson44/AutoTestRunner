@@ -26,8 +26,8 @@ public sealed class CommandReportingMachine(IMachine machine, IRunView view, Res
     public (int Status, string Body) Get(string url) => machine.Get(url);
 
     public ProcessOutput Run(string program, IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string>? environment = null, TimeSpan? timeout = null,
-        Action<string, bool>? output = null) =>
-        Shown(CommandLine(program, arguments, environment), null, output, shown => machine.Run(program, arguments, environment, timeout, shown));
+        Action<string, bool>? output = null, string? folder = null) =>
+        Shown(CommandLine(program, arguments, environment), null, output, shown => machine.Run(program, arguments, environment, timeout, shown, folder));
 
     public ProcessOutput PowerShell(string script, IReadOnlyList<string> arguments, TimeSpan? timeout = null, Action<string, bool>? output = null) =>
         Shown(CommandLine("powershell", arguments, null), script, output, shown => machine.PowerShell(script, arguments, timeout, shown));
