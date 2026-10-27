@@ -80,6 +80,7 @@ internal static class Icons
         ActivityKind.Check => CheckList,
         ActivityKind.Database => Database,
         ActivityKind.Queue => Mail,
+        ActivityKind.Reset => Reset,
         _ => Info,
     };
 

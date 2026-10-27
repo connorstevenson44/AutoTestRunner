@@ -44,6 +44,14 @@
     },
     "steps": {
       "$ref": "#/definitions/steps"
+    },
+    "reset": {
+      "$ref": "#/definitions/steps",
+      "description": "Steps that take the app back to where this case leaves it, such as going to the home screen after signing in. They play after its checkpoint, and again before each case that starts after its reset, instead of starting the app again. No checkpoint."
+    },
+    "afterReset": {
+      "type": "string",
+      "description": "The id of the case this one starts after the reset of, such as log-in: once that case has run, its reset steps take the app back there. When it hasn't run, the run plays it first. Not with needs."
     }
   },
   "additionalProperties": false,

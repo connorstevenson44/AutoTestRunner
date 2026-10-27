@@ -144,6 +144,8 @@ internal static class PreviewUi
         view.CaseFinished(Ended(cases[1], CaseStatus.Failed, 41.7));
 
         view.CaseStarted(3, cases.Count, cases[2]);
+        // It starts after case 1's reset, which takes the app back to where case 1 left it.
+        view.ShowStep(Activity.Of(ActivityKind.Reset, Part.Verb("Reset"), Part.Word("to after"), Part.Value($"1. {cases[0].Name}")));
         // What the app wrote to its database and sent on its queues: a query's rows, a message sent and one received.
         var orders = new Part(PartKind.Database, "orders", "SQL Server\nServer=.\\SQLEXPRESS;Database=Orders;User Id=qa;Password=•••");
         var invoices = new Part(PartKind.Queue, "invoices", "RabbitMQ\namqp://qa:•••@localhost:5672/\ninvoices.out");
@@ -285,6 +287,15 @@ internal static class PreviewUi
         // A step's details folded out, and two steps picked to make a macro of or repeat.
         panel.Dispatcher.Invoke(() => panel.Show(steps[3], [steps[4], steps[5]]));
         Shot("12-builder-details-and-picked");
+
+        // The last steps marked as the case's reset, which the cases after it play instead of starting the app again.
+        DraftStep[] reset = [StepMaker.Key("Escape"), StepMaker.Tab("Packages")];
+        foreach (var each in steps.Concat(reset))
+            each.State = DraftStepState.Played;
+        draft.Steps.AddRange(reset);
+        panel.Add(reset);
+        panel.Dispatcher.Invoke(() => panel.ShowReset(reset[0]));
+        Shot("14-builder-reset");
         if (shots is null)
             return;
         // The made-up steps aren't kept, so closing asks nothing.

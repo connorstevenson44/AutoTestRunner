@@ -168,10 +168,17 @@ internal sealed class BuildWorker
         : _request.After is { } after ? _suite.Leading(after)
         : [];
 
+    // Each case's reset plays after its steps when a case after them starts after it, as in a run.
     private void PlayBefore()
     {
-        foreach (var item in Before())
+        var before = Before();
+        var resets = before.Select(item => item.AfterReset).Append(_draft.AfterReset).OfType<string>().ToHashSet(StringComparer.Ordinal);
+        foreach (var item in before)
+        {
             _runner.Play(item.Steps, Path.GetFileName(item.File));
+            if (resets.Contains(item.Id))
+                _runner.Play(item.Reset, Path.GetFileName(item.File) + ", reset");
+        }
     }
 
     // Takes the app to just after a step: plays the steps not played yet up to it, or starts again from where the

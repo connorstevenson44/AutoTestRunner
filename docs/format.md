@@ -53,6 +53,27 @@ the scripts never turn into a programming language that a person can't read as a
 | `tags` | Words to pick it by, such as `["smoke"]`. The launcher filters by them; `autotest run --tags smoke` runs only those cases. |
 | `review` | Why it needs looking at again, such as a change to a case it carries on from. The builder writes it; the launcher shows a warning until the case is changed, or the warning is clicked away. |
 | `steps` | The steps |
+| `reset` | Steps that take the app back to where the case leaves it, such as closing what is open and going to the home screen after signing in. They play after its checkpoint, and again before each case that starts after its reset. No checkpoint in them. |
+| `afterReset` | The id of the case it starts after the reset of, instead of `needs`: see below |
+
+### Starting after another case's reset
+
+A case that signs in, then goes back to the home screen, can let every case after it start from there instead of
+starting the app again. Mark its last steps as its `reset`, and give the cases after it `"afterReset": "log-in"`:
+
+```json
+{
+  "name": "Log in",
+  "steps": [ { "startApp": {} }, { "type": "user", "text": "ada" }, { "click": "signIn" }, { "checkpoint": "Signed in" } ],
+  "reset": [ { "key": "Escape" }, { "click": "home" } ]
+}
+```
+
+In a run, the reset plays once the case is done; a case after it starts straight away, and each one after that first
+plays the reset, shown as ↻ Reset to after 1. Log in. Each starts with what the case kept, such as `${user}`. When the
+reset gets stuck or a step of it fails, the run starts the app again and plays the case, without its checkpoint, then
+its reset. When the case wasn't picked, the run plays it first in the same way; when it failed, the cases after its
+reset are skipped.
 
 ## Steps
 

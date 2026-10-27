@@ -146,9 +146,11 @@ public static class Program
         BuildRequest request;
         try
         {
-            if (options.Edit is not null && options.After is not null)
-                throw new SuiteException(["--edit changes a case, and --after starts a new one: give one of them."]);
-            request = new BuildRequest(suite, options.Name ?? "New case", Named(options.After, "--after"), Named(options.Edit, "--edit"));
+            if (new[] { options.Edit, options.After, options.AfterReset }.Count(given => given is not null) > 1)
+                throw new SuiteException(["--edit changes a case, and --after and --after-reset start a new one: give one of them."]);
+            request = options.AfterReset is { } setup
+                ? new BuildRequest(suite, options.Name ?? "New case", Named(setup, "--after-reset"), Reset: true)
+                : new BuildRequest(suite, options.Name ?? "New case", Named(options.After, "--after"), Named(options.Edit, "--edit"));
         }
         catch (SuiteException ex)
         {
@@ -160,7 +162,7 @@ public static class Program
         var found = SuiteFinder.Find(SuiteFinder.Places(AppContext.BaseDirectory, Environment.CurrentDirectory, suite.Folder)).Select(FoundSuite.Load).ToList();
         if (!found.Any(each => SamePath(each.Folder, suite.Folder)))
             found.Insert(0, FoundSuite.Load(suite.Folder));
-        return WatchedRun.Launch(found, found.First(each => SamePath(each.Folder, suite.Folder)), options with { Edit = null, After = null, Name = null }, request);
+        return WatchedRun.Launch(found, found.First(each => SamePath(each.Folder, suite.Folder)), options with { Edit = null, After = null, AfterReset = null, Name = null }, request);
     }
 
     // A suite that installs services needs administrator, and so does driving an app that runs as administrator.

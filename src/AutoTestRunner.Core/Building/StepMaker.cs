@@ -10,8 +10,8 @@ namespace AutoTestRunner.Building;
 /// </summary>
 public static class StepMaker
 {
-    /// <summary>A step of a case opened to change it, at this place in its file, not played yet.</summary>
-    public static DraftStep Written(JsonObject json, int source)
+    /// <summary>A step of a case opened to change it, at this place among its steps, or null for a reset step; not played yet.</summary>
+    public static DraftStep Written(JsonObject json, int? source)
     {
         var verb = ScriptVocabulary.KindOf(json);
         var target = ScriptVocabulary.Steps.TryGetValue(verb, out var kind) && kind.Takes == Takes.Target && json[verb] is { } node

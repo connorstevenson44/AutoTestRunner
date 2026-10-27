@@ -105,6 +105,8 @@ public sealed class Suite
             {
                 Review = item["review"]?.GetValue<string>(),
                 Tags = (item["tags"] as JsonArray ?? []).Select(tag => tag!.GetValue<string>()).ToList(),
+                Reset = item["reset"] as JsonArray ?? [],
+                AfterReset = item["afterReset"]?.GetValue<string>(),
             });
         }
 
@@ -279,7 +281,7 @@ public sealed class Suite
         {
             if (!ids.Add(item.Id))
                 continue;
-            foreach (var need in item.Needs)
+            foreach (var need in item.Needs.Append(item.AfterReset).OfType<string>())
                 if (Find(need) is { } needed)
                     waiting.Push(needed);
         }
@@ -294,7 +296,7 @@ public sealed class Suite
         {
             grew = false;
             foreach (var item in Cases)
-                if (!after.Contains(item.Id) && item.Needs.Any(after.Contains))
+                if (!after.Contains(item.Id) && (item.Needs.Any(after.Contains) || item.AfterReset is { } setup && after.Contains(setup)))
                     grew = after.Add(item.Id) || grew;
         }
         return [.. Cases.Where(item => item != first && after.Contains(item.Id))];
@@ -366,7 +368,22 @@ public sealed class Suite
                 else if (Find(need) is { } needed && needed.Number >= item.Number)
                     problems.Add($"{Path.GetFileName(item.File)}: needs {need}, which runs after it. Cases run in file order, so give it a lower number.");
             }
+            if (item.AfterReset is { } setup)
+            {
+                var file = Path.GetFileName(item.File);
+                if (Find(setup) is not { } from || int.TryParse(setup, out _))
+                    problems.Add($"{file}: afterReset is {setup}, and there is no case with that id.");
+                else if (from.Number >= item.Number)
+                    problems.Add($"{file}: afterReset is {setup}, which runs after it. Cases run in file order, so give it a lower number.");
+                else if (from.Reset.Count == 0)
+                    problems.Add($"{file}: afterReset is {setup}, which has no reset steps to take the app back.");
+                if (item.Needs.Count > 0)
+                    problems.Add($"{file}: has needs and afterReset. A case starts at the end of others, or after a reset, not both.");
+            }
             CheckSteps(item.Steps, Path.GetFileName(item.File), problems);
+            CheckSteps(item.Reset, Path.GetFileName(item.File) + ", reset", problems);
+            if (item.Reset.Any(step => step?["checkpoint"] is not null))
+                problems.Add($"{Path.GetFileName(item.File)}: a reset step can't be a checkpoint. The case's checkpoint goes at the end of its steps.");
         }
         foreach (var macro in Macros.Values)
             CheckSteps(macro.Steps, Path.GetFileName(macro.File), problems);

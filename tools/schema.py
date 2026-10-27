@@ -150,7 +150,9 @@ case = {"$schema":S,"$id":"case.schema.json","title":"AutoTestRunner case","desc
  "needsNote":text("What it needs, in words, for the launcher's Run after column, such as Any time."),
  "covers":text("What it tries, for the launcher."),
  "tags":{"type":"array","items":{"type":"string"},"description":"Words to pick cases by, such as smoke: the launcher filters by them, and autotest run --tags runs only those cases."},
- "review":text("Why the case needs looking at again, such as a change to a case it carries on from. The launcher shows a warning on it until it is changed, or the warning is cleared."),"steps":{"$ref":"#/definitions/steps"}},"additionalProperties":False,"definitions":defs}
+ "review":text("Why the case needs looking at again, such as a change to a case it carries on from. The launcher shows a warning on it until it is changed, or the warning is cleared."),"steps":{"$ref":"#/definitions/steps"},
+ "reset":{"$ref":"#/definitions/steps","description":"Steps that take the app back to where this case leaves it, such as going to the home screen after signing in. They play after its checkpoint, and again before each case that starts after its reset, instead of starting the app again. No checkpoint."},
+ "afterReset":text("The id of the case this one starts after the reset of, such as log-in: once that case has run, its reset steps take the app back there. When it hasn't run, the run plays it first. Not with needs.")},"additionalProperties":False,"definitions":defs}
 macro = {"$schema":S,"$id":"macro.schema.json","title":"AutoTestRunner macro","description":"Reusable steps with parameters, run with { \"call\": name }.",
  "type":"object","required":["steps"],"properties":{"$schema":{"type":"string"},"name":text("Its name, if not the file's."),"description":text("What it does."),
  "params":{"type":"object","additionalProperties":{"type":"object","properties":{"description":{"type":"string"},"default":{"type":["string","number","boolean"]}},"additionalProperties":False}},

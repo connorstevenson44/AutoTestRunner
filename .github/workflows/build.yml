@@ -126,7 +126,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $shots = @(Get-ChildItem artifacts/shots -Filter *.png)
           "$($shots.Count) pictures: $($shots.Name -join ', ')"
-          if ($shots.Count -lt 13) { throw "autotest preview-ui saved $($shots.Count) of 13 pictures." }
+          if ($shots.Count -lt 14) { throw "autotest preview-ui saved $($shots.Count) of 14 pictures." }
 
       - uses: actions/upload-artifact@v4
         if: always()

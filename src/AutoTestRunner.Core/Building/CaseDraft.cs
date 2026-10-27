@@ -15,8 +15,11 @@ public sealed class CaseDraft
     /// <summary>The ids of the cases it carries on from.</summary>
     public List<string> Needs { get; } = [];
 
+    /// <summary>The id of the case it starts after the reset of, or null.</summary>
+    public string? AfterReset { get; set; }
+
     /// <summary>
-    /// The steps, in order. The builder records on one thread and the panel edits on another, so the list is changed
+    /// The steps, in order: the case's own, then its reset, from the first step marked as where it starts. The builder records on one thread and the panel edits on another, so the list is changed
     /// under a lock on it.
     /// </summary>
     public List<DraftStep> Steps { get; } = [];
@@ -49,12 +52,30 @@ public sealed class CaseDraft
     /// <summary>A case opened to change it: its steps up to its checkpoint, none of them played yet.</summary>
     public static CaseDraft Load(Case item)
     {
-        var draft = new CaseDraft { Editing = item, Name = item.Name };
+        var draft = new CaseDraft { Editing = item, Name = item.Name, AfterReset = item.AfterReset };
         draft.Needs.AddRange(item.Needs);
         for (var index = 0; index < item.Steps.Count; index++)
             if (item.Steps[index] is JsonObject step && (index < item.Steps.Count - 1 || step["checkpoint"] is null))
                 draft.Steps.Add(StepMaker.Written(step.DeepClone().AsObject(), index));
+        for (var index = 0; index < item.Reset.Count; index++)
+        {
+            if (item.Reset[index] is not JsonObject step)
+                continue;
+            var written = StepMaker.Written(step.DeepClone().AsObject(), null);
+            written.Reset = index == 0;
+            draft.Steps.Add(written);
+        }
         return draft;
+    }
+
+    /// <summary>The case's own steps, and its reset steps: those from the first marked as where the reset starts.</summary>
+    public (List<DraftStep> Own, List<DraftStep> Reset) Split()
+    {
+        lock (Steps)
+        {
+            var at = Steps.FindIndex(step => step.Reset);
+            return at < 0 ? ([.. Steps], []) : ([.. Steps.Take(at)], [.. Steps.Skip(at)]);
+        }
     }
 
     /// <summary>The checkpoint step it ends at, or null when nothing was said about one.</summary>

@@ -196,6 +196,15 @@ internal sealed partial class BuilderPanel
         ShowSelection();
     }
 
+    /// <summary>For preview-ui: the steps from this one marked as the case's reset, with nothing folded out or picked.</summary>
+    internal void ShowReset(DraftStep from)
+    {
+        _open.Clear();
+        _selected.Clear();
+        MarkReset(from, true);
+        ShowSelection();
+    }
+
     // ===== Steps picked with Shift+click =====
 
     private void Select(DraftStep step, bool range)

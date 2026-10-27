@@ -36,8 +36,10 @@ internal sealed class BuildSession
     {
         (_request, _options, _ended) = (request, options, ended);
         _draft = request.Edit is { } editing ? CaseDraft.Load(editing) : new CaseDraft { Name = request.Name };
-        if (request.After is { } after)
-            _draft.Needs.Add(after.Id);
+        if (request.After is { } after && request.Reset)
+            _draft.AfterReset = after.Id;
+        else if (request.After is { } before)
+            _draft.Needs.Add(before.Id);
         _panel = new BuilderPanel(request, _draft);
         _panel.Play += (step, add) => Post(new BuildInput(BuildInputKind.Play, Step: step, Add: add));
         _panel.Locate += step => Post(new BuildInput(BuildInputKind.Locate, Step: step));

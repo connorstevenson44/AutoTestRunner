@@ -218,11 +218,18 @@ internal sealed class SuitePane : Grid
         number.HorizontalAlignment = HorizontalAlignment.Left;
         var name = Ui.Words(item.Name, 13.5, Ui.Ink, wrap: false);
         name.Margin = new Thickness(0, 6, 8, 6);
+        if (item.Reset.Count > 0)
+        {
+            name.Inlines.Add(new System.Windows.Documents.Run("  "));
+            var reset = Ui.GlyphInline(Icons.Reset, 11, Ui.Faint);
+            reset.ToolTip = $"Has {(item.Reset.Count == 1 ? "a reset step" : $"{item.Reset.Count} reset steps")}: the cases that start after it go back to where it leaves the app, without starting it again.";
+            name.Inlines.Add(reset);
+        }
         if (item.Tags.Count > 0)
             name.Inlines.Add(new System.Windows.Documents.Run("   " + string.Join("  ", item.Tags.Select(tag => "#" + tag))) { Foreground = Ui.Faint, FontSize = 11.5 });
         var needs = Ui.Pill(new TextBlock(), Ui.Surface, 8, new Thickness(6, 1, 7, 1));
         needs.Margin = new Thickness(0, 0, 6, 0);
-        needs.Visibility = item.Needs.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        needs.Visibility = item.Needs.Count > 0 || item.AfterReset is not null ? Visibility.Visible : Visibility.Collapsed;
         needs.MouseLeftButtonUp += (_, e) =>
         {
             TickWithNeeds(item);
@@ -369,6 +376,15 @@ internal sealed class SuitePane : Grid
         var ticked = _rows.Where(row => row.Box.IsChecked == true).Select(row => row.Case.Id).ToHashSet();
         foreach (var (item, box, needs) in _rows)
         {
+            // A case after another's reset is always ready: when that case isn't ticked, the run plays it first.
+            if (item.AfterReset is { } id && _suite.Cases.FirstOrDefault(other => other.Id == id) is { } setup)
+            {
+                needs.Background = Ui.Surface;
+                needs.Child = Ui.IconText(Icons.Reset, $"{setup.Number}", Ui.Muted, 11);
+                needs.ToolTip = $"Starts after the reset of {setup.Number}. {setup.Name}, without starting the app again"
+                    + (ticked.Contains(id) ? "." : ". It isn't ticked, so the run plays it first.") + "\nClick to tick it too.";
+                continue;
+            }
             if (item.Needs.Count == 0)
                 continue;
             var numbers = item.Needs.Select(id => _suite.Cases.FirstOrDefault(other => other.Id == id)).OfType<Case>().ToList();

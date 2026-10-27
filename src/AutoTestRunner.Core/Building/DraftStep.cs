@@ -22,6 +22,12 @@ public sealed class DraftStep(JsonObject json, ActivityKind kind, TargetChoice? 
     /// <summary>Its place among the steps in the case file, for a step of a case opened to change it; else null.</summary>
     public int? Source { get; init; }
 
+    /// <summary>
+    /// Whether the case's reset starts at it: it and the steps after it take the app back to where the case leaves
+    /// it, for the cases that start after its reset.
+    /// </summary>
+    public bool Reset { get; set; }
+
     /// <summary>Whether it was done in the app. Set by the builder's thread, read by the panel.</summary>
     public DraftStepState State { get; set; }
 
