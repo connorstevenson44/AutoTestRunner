@@ -26,8 +26,6 @@ using System.Runtime.InteropServices;
 public static class Pointer
 {
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
-    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr hwnd);
-    [DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, System.IntPtr extra);
     [DllImport("user32.dll")] public static extern void mouse_event(uint flags, int x, int y, uint data, System.IntPtr extra);
 }
 '@
@@ -450,16 +448,18 @@ if ($Parts -contains 'new-suite') {
         Keys 'clerk-demo'
         Invoke (Wait-For { $button = Find $signIn $ui::AutomationIdProperty 'SignInButton'; if ($button.Current.IsEnabled) { $button } } 'Sign in to be enabled' 10)
         $app = Wait-For { Window 'Order Desk' } 'the Order Desk window, signed in' 30
-        # The main window opens where Windows puts it, and here behind the launcher, as signing in wasn't a click:
-        # brought to the front, as a person would before pointing at it. Windows lets a script do that just after a
-        # key press, so Alt is pressed and let go first.
-        [Pointer]::keybd_event(0x12, 0, 0, [System.IntPtr]::Zero)
-        [Pointer]::keybd_event(0x12, 0, 2, [System.IntPtr]::Zero)
-        [Pointer]::SetForegroundWindow([System.IntPtr]$app.Current.NativeWindowHandle) | Out-Null
-        Start-Sleep -Milliseconds 500
+        # The main window opens in the middle of the screen, under the launcher, as signing in wasn't a click. As a
+        # person would, it is moved to the left edge, where the launcher doesn't reach, and its status bar clicked there.
         Invoke (Find $form $ui::NameProperty 'Point at it')
         Start-Sleep -Seconds 1
-        Click (Find $app $ui::AutomationIdProperty 'StatusText')
+        $app.GetCurrentPattern([System.Windows.Automation.TransformPattern]::Pattern).Move(0, $app.Current.BoundingRectangle.Y)
+        Start-Sleep -Milliseconds 500
+        $bar = (Find $app $ui::AutomationIdProperty 'StatusText').Current.BoundingRectangle
+        [Pointer]::SetCursorPos([int]($bar.X + 20), [int]($bar.Y + $bar.Height / 2)) | Out-Null
+        Start-Sleep -Milliseconds 500
+        [Pointer]::mouse_event(0x2, 0, 0, 0, [System.IntPtr]::Zero)
+        Start-Sleep -Milliseconds 80
+        [Pointer]::mouse_event(0x4, 0, 0, 0, [System.IntPtr]::Zero)
         try { Saying $form '*found by*' 'the status bar to be picked' 20 }
         catch {
             # What the window says instead, such as why the pick didn't take, as the screenshot can't be read here.
