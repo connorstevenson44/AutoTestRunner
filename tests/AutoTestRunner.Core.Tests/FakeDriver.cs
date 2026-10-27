@@ -45,8 +45,6 @@ internal sealed class FakeDriver : IDriver
 
     public void Point(IControl control, string what) => Done.Add($"point {control.Name}");
 
-    public void Outline(IControl control, string what) { }
-
     public void Click(IControl control, ClickHow how)
     {
         Done.Add(how switch { ClickHow.Right => $"right-click {control.Name}", ClickHow.Double => $"double-click {control.Name}", _ => $"click {control.Name}" });

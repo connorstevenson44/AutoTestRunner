@@ -26,6 +26,12 @@ public interface IRunView
     /// </summary>
     void YourTurn(Activity? what);
 
+    /// <summary>
+    /// Keeps an outline around a place on the screen, in a manual run, for the person to find what to use: until it is
+    /// moved, or taken away with null. The mouse goes straight through it to the app.
+    /// </summary>
+    void Outline(ScreenRect? box);
+
     /// <summary>A wait step is over: what it waited for, what it saw, and how long it took.</summary>
     void Waited(Activity what, TimeSpan took);
 

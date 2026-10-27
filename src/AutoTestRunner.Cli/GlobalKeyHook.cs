@@ -46,7 +46,7 @@ internal sealed class GlobalKeyHook : IDisposable
         {
             var key = Marshal.ReadInt32(data);
             var flags = (uint)Marshal.ReadInt32(data, 8);
-            if ((flags & Injected) == 0 && message is KeyDown or SystemKeyDown
+            if ((flags & Injected) == 0 && message is KeyDown or SystemKeyDown && _person.Noting
                 && KeyNames.Of(key, Held(Control), Held(Menu), Held(Shift), Held(LeftWindows) || Held(RightWindows)) is { } keys)
                 _person.Note(PersonEvent.Pressed(keys));
             if ((flags & Injected) == 0 && key is Space or Enter or Escape)

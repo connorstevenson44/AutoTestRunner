@@ -458,11 +458,10 @@ public sealed class FlaUiDriver : IDriver
         BringIntoView(element);
         var box = Rect(element.BoundingRectangle);
         _keepClear(box);
+        // The person's mouse, in a manual run, and the run's view keeps the outline: FlaUI's outline is four windows
+        // made and thrown away each time, which under a mouse that is moving makes it flicker.
         if (_control.Manual)
-        {
-            Outline(control, what);
             return;
-        }
         Mouse.MovePixelsPerMillisecond = _control.MouseSpeed == 0 ? 10_000 : 30.0 / _control.MouseSpeed;
         Mouse.MoveTo(Middle(box));
         if (_control.Unattended)
@@ -476,19 +475,6 @@ public sealed class FlaUiDriver : IDriver
             // The outline is a courtesy; the step goes on without it.
         }
         _control.Wait(_control.Pace);
-    }
-
-    // A little longer than a manual run waits between outlines, so the outline doesn't flicker.
-    public void Outline(IControl control, string what)
-    {
-        try
-        {
-            ((FlaUiControl)control).Element.DrawHighlight(false, Color.DarkOrange, TimeSpan.FromMilliseconds(1500));
-        }
-        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or global::FlaUI.Core.Exceptions.FlaUIException)
-        {
-            // The outline is a courtesy, and the control may have gone as the person used the app.
-        }
     }
 
     // Scrolls the lists a control is in until all of it is in view, or its middle when it is taller than the list.

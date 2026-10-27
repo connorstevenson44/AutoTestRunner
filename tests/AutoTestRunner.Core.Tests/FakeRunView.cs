@@ -47,6 +47,15 @@ internal sealed class FakeRunView(StuckAnswer answer = StuckAnswer.Stop) : IRunV
             Turns.Add(what.Text);
     }
 
+    /// <summary>Each place a manual run outlined, or null when it took the outline away.</summary>
+    public List<ScreenRect?> Outlines { get; } = [];
+
+    public void Outline(ScreenRect? box)
+    {
+        lock (Outlines)
+            Outlines.Add(box);
+    }
+
     void IRunView.Waited(Activity what, TimeSpan took) => Waited.Add(what);
     public void CommandStarted(string line, string? script) => Commands.Add("start " + line);
     public void CommandOutput(string line, bool error) => Commands.Add((error ? "err " : "out ") + line);

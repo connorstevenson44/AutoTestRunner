@@ -89,7 +89,7 @@ tried again.
 With the speed set to **Manual**, in the launcher, the panel or with `--speed Manual`, you do every click, key and
 drag yourself, and autotest never moves the mouse or presses a key. It still does everything else: starts and closes
 the app, runs commands and scripts, copies files, waits for the app and makes the checks. For a step in the app, the
-panel says **Your turn** with what to do, such as Type `Ada` in [customer], and the control is outlined in orange; it
+panel says **Your turn** with what to do, such as Type `Ada` in [customer], and the control is outlined in amber, with the mouse going straight through the outline; it
 carries on by itself once the step is done:
 
 - Typing, ticking, picking from a drop-down and setting a value are done once the control holds what the step says,

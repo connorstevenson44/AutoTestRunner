@@ -79,6 +79,23 @@ public sealed class ManualRunTests : IDisposable
 
         await run.WaitAsync(Soon, TestContext.Current.CancellationToken);
         Assert.DoesNotContain("click Save", _app.Done);
+        // Outlined once, and taken away once it was done: never drawn again while it stayed put.
+        Assert.Equal([save.Bounds, null], _view.Outlines);
+    }
+
+    [Fact]
+    public async Task The_outline_follows_a_control_that_moves()
+    {
+        var save = _app.Add("Button", "Save");
+        save.Bounds = new ScreenRect(100, 100, 200, 130);
+
+        var run = await Play("""[{ "click": { "button": "Save" } }]""");
+        save.Bounds = new ScreenRect(100, 300, 200, 330);
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+        Click(150, 315);
+
+        await run.WaitAsync(Soon, TestContext.Current.CancellationToken);
+        Assert.Equal([new ScreenRect(100, 100, 200, 130), new ScreenRect(100, 300, 200, 330), null], _view.Outlines);
     }
 
     [Fact]

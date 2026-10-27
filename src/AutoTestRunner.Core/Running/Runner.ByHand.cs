@@ -14,8 +14,9 @@ namespace AutoTestRunner.Running;
 /// </summary>
 public sealed partial class Runner
 {
-    // How often a manual run looks at the app, and outlines what to use again.
-    private const int LookEvery = 200, OutlineEvery = 1000;
+    // How often a manual run looks at the app. A look reads the controls it found before, which is cheap; finding one
+    // again walks the app's window on its UI thread, so that is done at most every FindEvery.
+    private const int LookEvery = 250, FindEvery = 500;
 
     // Text has to stay what the step wants this long, so a box isn't taken half way through typing.
     private const int Settled = 600;
@@ -38,7 +39,7 @@ public sealed partial class Runner
         {
             var control = followed.Look(_driver);
             selected = tab && control is { IsSelected: true };
-            focused = control is { HasFocus: true };
+            focused = how is ClickHow.Invoke or ClickHow.Mouse && control is { HasFocus: true };
             return control;
         }, events =>
         {
@@ -90,12 +91,18 @@ public sealed partial class Runner
     {
         var opener = on is null ? null : new Followed(on);
         ScreenRect? last = null;
+        List<(string Name, IControl Item)> shown = [];
+        long nextScan = 0;
         return ByHand(line, on is null ? "Open the menu, and pick the outlined items in turn." : "Right-click the outlined control, and pick the outlined items in turn.", () =>
         {
-            var shown = _driver.MenuItems();
+            if (Environment.TickCount64 >= nextScan)
+            {
+                shown = [.. _driver.MenuItems().Select(item => (Read(() => item.Name) ?? "", item))];
+                nextScan = Environment.TickCount64 + FindEvery;
+            }
             for (var index = path.Count - 1; index >= 0; index--)
             {
-                if (shown.FirstOrDefault(item => item.Name == path[index]) is not { } item)
+                if (shown.FirstOrDefault(each => each.Name == path[index]).Item is not { } item)
                     continue;
                 if (index == path.Count - 1 && item.Bounds is { } bounds)
                     last = bounds;
@@ -112,14 +119,15 @@ public sealed partial class Runner
         var targets = new List<Target>();
         foreach (var name in path)
             targets.Add(Target.Of(new Selector(Type: "TreeItem", Name: name, Within: targets.Count == 0 ? parent : targets[^1])));
+        var items = targets.Select(target => new Followed(target)).ToList();
         IControl? picked = null;
         var done = ByHand(line, "Open the outlined items in turn, and pick the last.", () =>
         {
-            for (var index = targets.Count - 1; index >= 0; index--)
+            for (var index = items.Count - 1; index >= 0; index--)
             {
-                if (_driver.TryFind(targets[index]) is not { } item)
+                if (items[index].Look(_driver) is not { } item)
                     continue;
-                picked = index == targets.Count - 1 && item.IsSelected ? item : null;
+                picked = index == items.Count - 1 && item.IsSelected ? item : null;
                 return item;
             }
             return null;
@@ -167,14 +175,14 @@ public sealed partial class Runner
     private bool ChooseByHand(Activity line, Target target, string option)
     {
         // While the drop-down is open, its option is what to outline.
-        var item = Target.Of(new Selector(Type: "ListItem", Name: option, Within: target));
+        var item = new Followed(Target.Of(new Selector(Type: "ListItem", Name: option, Within: target)));
         var followed = new Followed(target);
         var picked = false;
         return ByHand(line, "Pick this in the outlined drop-down.", () =>
         {
             var control = followed.Look(_driver);
             picked = control?.Selection == option;
-            return picked ? control : _driver.TryFind(item) ?? control;
+            return picked ? control : item.Look(_driver) ?? control;
         }, _ => picked);
     }
 
@@ -207,14 +215,15 @@ public sealed partial class Runner
     // A message box is done once it closes. Closed with another of its buttons, the step fails and the case carries on.
     private bool AnswerByHand(string title, DialogButton button)
     {
-        var window = Target.Of(new Selector(Type: "Window", Name: title));
-        var followed = new Followed(new Target([new Selector(Id: ((int)button).ToString(CultureInfo.InvariantCulture), Type: "Button", Within: window)], $"the {button} button"));
+        var dialog = Target.Of(new Selector(Type: "Window", Name: title));
+        var window = new Followed(dialog);
+        var followed = new Followed(new Target([new Selector(Id: ((int)button).ToString(CultureInfo.InvariantCulture), Type: "Button", Within: dialog)], $"the {button} button"));
         bool open = true, focused = false, pressed = false;
         var line = Activity.Of(ActivityKind.Dialog, Part.Verb("Press"), Part.Key(button.ToString()), Part.Word("in"), Part.Window(title));
         var done = ByHand(line, "Press the outlined button.", () =>
         {
             var control = followed.Look(_driver);
-            open = control is not null || _driver.TryFind(window) is not null;
+            open = control is not null || window.Look(_driver) is not null;
             focused = control is { HasFocus: true };
             return control;
         }, events =>
@@ -234,20 +243,21 @@ public sealed partial class Runner
         if (!Control.Manual)
             return false;
         _driver.WaitDialog(title, Control.Scale(TimeSpan.FromSeconds(30)));
-        var window = Target.Of(new Selector(Type: "Window", Name: title));
-        var box = new Followed(new Target([new Selector(Id: folder ? "1152" : "1148", Type: "Edit", Within: window)], "the name box"));
-        var open = new Target([new Selector(Id: "1", Type: "Button", Within: window)], "Open");
+        var picker = Target.Of(new Selector(Type: "Window", Name: title));
+        var window = new Followed(picker);
+        var box = new Followed(new Target([new Selector(Id: folder ? "1152" : "1148", Type: "Edit", Within: picker)], "the name box"));
+        var open = new Followed(new Target([new Selector(Id: "1", Type: "Button", Within: picker)], "Open"));
         string? first = null, named = null;
         var showing = true;
         var done = ByHand(line, $"Pick {path} in the picker, by browsing to it or typing it in the outlined box, then open it.", () =>
         {
             var control = box.Look(_driver);
-            showing = control is not null || _driver.TryFind(window) is not null;
+            showing = control is not null || window.Look(_driver) is not null;
             if (control is null)
                 return null;
             named = control.Value;
             first ??= named;
-            return SamePick(named, path) ? _driver.TryFind(open) ?? control : control;
+            return SamePick(named, path) ? open.Look(_driver) ?? control : control;
         }, _ => !showing);
         // A file opened with a double-click can close the picker between two looks, so a name box that never changed
         // says nothing about what was picked.
@@ -293,13 +303,24 @@ public sealed partial class Runner
             return false;
         _view.YourTurn(line with { Detail = hint });
         var started = Environment.TickCount64;
+        ScreenRect? outlined = null;
+        // The view's outline is moved only when what to use has moved, so nothing is redrawn while the person works.
+        void Outline(IControl? shown)
+        {
+            var box = shown is null ? null : Read(() => shown.Bounds);
+            if (box == outlined)
+                return;
+            outlined = box;
+            _view.Outline(box);
+        }
         try
         {
             _ = Control.Person.Take();
-            var shown = Look(look);
+            var shown = Read(look);
+            // Scrolled into view first, if it is in a list, without the mouse.
             if (shown is not null)
                 Read(() => _driver.Point(shown, line.Text));
-            var outlined = Environment.TickCount64;
+            Outline(shown);
             while (true)
             {
                 Control.Wait(LookEvery);
@@ -312,23 +333,17 @@ public sealed partial class Runner
                     _results.Log("MANUAL", $"{line.Text}: done ({(Environment.TickCount64 - started) / 1000.0:0.0} s)");
                     return true;
                 }
-                shown = Look(look);
-                if (shown is not null && Environment.TickCount64 - outlined >= OutlineEvery)
-                {
-                    Read(() => _driver.Outline(shown, line.Text));
-                    outlined = Environment.TickCount64;
-                }
+                Outline(Read(look));
             }
         }
         finally
         {
+            _view.Outline(null);
             _view.YourTurn(null);
         }
     }
 
     // The app can change under a look, as the person uses it: a control that goes as it is read wasn't seen.
-    private static IControl? Look(Func<IControl?> look) => Read(look);
-
     private static T? Read<T>(Func<T?> read)
     {
         try
@@ -348,11 +363,15 @@ public sealed partial class Runner
     });
 
     /// <summary>
-    /// A control the person is to use, found again at each look, as it may be built again or scrolled. Where it was
-    /// last seen, and whether it could be used then, stay when it goes, so a click that takes it away still counts.
+    /// A control the person is to use. Each look reads the one found before, which is cheap, and finds it again only
+    /// once it has gone or takes no room, as it may be built again: at most every FindEvery, as finding walks the
+    /// app's window. Where it was last seen, and whether it could be used then, stay when it goes, so a click that
+    /// takes it away still counts.
     /// </summary>
     private sealed class Followed(Target target)
     {
+        private long _nextFind;
+
         public IControl? Control { get; private set; }
 
         public ScreenRect? Bounds { get; private set; }
@@ -361,9 +380,15 @@ public sealed partial class Runner
 
         public IControl? Look(IDriver driver)
         {
-            Control = driver.TryFind(target);
-            if (Control is { } control && control.Bounds is { } bounds)
-                (Bounds, Enabled) = (bounds, control.IsEnabled);
+            var bounds = Control?.Bounds;
+            if (bounds is null && Environment.TickCount64 >= _nextFind)
+            {
+                Control = driver.TryFind(target);
+                _nextFind = Environment.TickCount64 + FindEvery;
+                bounds = Control?.Bounds;
+            }
+            if (Control is { } control && bounds is { } seen)
+                (Bounds, Enabled) = (seen, control.IsEnabled);
             return Control;
         }
 
