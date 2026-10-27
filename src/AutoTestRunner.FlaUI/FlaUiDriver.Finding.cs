@@ -85,7 +85,7 @@ public sealed partial class FlaUiDriver
         {
             if (selector.Type == "Window")
                 return pick(AppWindows().Where(hwnd => hwnd != _main && (selector.Name is null || selector.NameMatches(Native.Title(hwnd))))
-                    .Select(hwnd => _automation.FromHandle(hwnd)));
+                    .Select(_automation.FromHandle));
 
             AutomationElement root;
             if (selector.Within is { } within)

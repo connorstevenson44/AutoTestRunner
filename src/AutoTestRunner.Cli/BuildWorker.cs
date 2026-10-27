@@ -275,7 +275,7 @@ internal sealed partial class BuildWorker
         else if (hit is not null)
         {
             _panel.Add(_recorder.Clicked(Ticked(hit)));
-            _menuSince = Environment.TickCount64;
+            _menuSince = now;
         }
         if (click.PassOn)
             Quietly(() => FlaUiInspector.Pass(click.X, click.Y));
@@ -435,18 +435,12 @@ internal sealed partial class BuildWorker
     // it is found instead.
     private JsonObject Inline(DraftStep step) => Inline(step.Json);
 
-    // The same for a step in a repeat or an if, and an if's check.
+    // The same for any step, with every control it and the steps inside it name.
     private JsonObject Inline(JsonObject step)
     {
         var copy = step.DeepClone().AsObject();
-        var verb = ScriptVocabulary.KindOf(copy);
-        if (ScriptVocabulary.Steps.TryGetValue(verb, out var kind) && kind.Takes == Takes.Target && copy[verb] is { } target)
-            copy[verb] = Inline(target);
-        if (verb == "if" && copy["if"] is JsonObject condition)
-            copy["if"] = InlineCheck(condition);
-        foreach (var key in new[] { "steps", "else" })
-            if (copy[key] is JsonArray inner)
-                copy[key] = new JsonArray([.. inner.OfType<JsonObject>().Select(Inline)]);
+        foreach (var (owner, key, _) in ScriptVocabulary.Targets(copy, "").ToList())
+            owner[key] = Inline(owner[key]!);
         return copy;
     }
 
@@ -454,8 +448,8 @@ internal sealed partial class BuildWorker
     private JsonObject InlineCheck(JsonObject check)
     {
         var copy = check.DeepClone().AsObject();
-        if (Kinds.Of(copy, ScriptVocabulary.Checks) is { } kind && ScriptVocabulary.ControlChecks.Contains(kind) && copy[kind] is { } target)
-            copy[kind] = Inline(target);
+        if (ScriptVocabulary.ControlCheckOf(copy) is { } kind)
+            copy[kind] = Inline(copy[kind]!);
         return copy;
     }
 
@@ -469,8 +463,7 @@ internal sealed partial class BuildWorker
     {
         try
         {
-            var elements = Elements();
-            return _driver.TryFind(Targets.Resolve(element, _runner.Globals, elements)) is { } control ? control.Value ?? control.Name : null;
+            return _driver.TryFind(Targets.Resolve(element, _runner.Globals, Elements())) is { } control ? control.Value ?? control.Name : null;
         }
         catch (Exception ex) when (ex is StuckException or ScriptException || FlaUiDriver.Gone(ex))
         {

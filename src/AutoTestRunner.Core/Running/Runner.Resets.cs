@@ -14,7 +14,7 @@ public sealed partial class Runner
     /// </summary>
     private VariableScope Ready(Case item)
     {
-        if (item.AfterReset is not { } id || _suite.Cases.FirstOrDefault(other => other.Id == id) is not { } setup)
+        if (item.AfterReset is not { } id || _suite.WithId(id) is not { } setup)
             return _globals.Child();
         var hasRun = _setups.TryGetValue(id, out var ran);
         if (hasRun)

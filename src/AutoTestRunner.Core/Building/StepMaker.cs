@@ -11,23 +11,16 @@ namespace AutoTestRunner.Building;
 public static class StepMaker
 {
     /// <summary>A step of a case opened to change it, at this place among its steps, or null for a reset step; not played yet.</summary>
-    public static DraftStep Written(JsonObject json, int? source)
-    {
-        var verb = ScriptVocabulary.KindOf(json);
-        var target = ScriptVocabulary.Steps.TryGetValue(verb, out var kind) && kind.Takes == Takes.Target && json[verb] is { } node
-            ? TargetSuggester.Describe(node)
-            : null;
-        return new DraftStep(json, KindOf(verb), target) { Source = source, State = DraftStepState.NotPlayed };
-    }
+    public static DraftStep Written(JsonObject json, int? source) => FromJson(json, DraftStepState.NotPlayed, source);
 
     /// <summary>A step made in the panel from its JSON, such as a macro's call or a repeat, with how it finds its control.</summary>
-    public static DraftStep FromJson(JsonObject json, DraftStepState state)
+    public static DraftStep FromJson(JsonObject json, DraftStepState state, int? source = null)
     {
         var verb = ScriptVocabulary.KindOf(json);
         var target = ScriptVocabulary.Steps.TryGetValue(verb, out var kind) && kind.Takes == Takes.Target && json[verb] is { } node
             ? TargetSuggester.Describe(node)
             : null;
-        return new DraftStep(json, KindOf(verb), target) { State = state };
+        return new DraftStep(json, KindOf(verb), target) { Source = source, State = state };
     }
 
     /// <summary>Runs a .ps1 or .cs file in the suite, given relative to its folder.</summary>

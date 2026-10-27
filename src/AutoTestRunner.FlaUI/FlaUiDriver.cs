@@ -51,7 +51,7 @@ public sealed partial class FlaUiDriver : IDriver
         _windowTitle = app.StartWindow ?? app.Window;
         StartProcess(exe, app.Arguments);
 
-        var end = Environment.TickCount64 + (long)_control.Scale(TimeSpan.FromSeconds(60)).TotalMilliseconds;
+        var end = _control.Deadline(TimeSpan.FromSeconds(60));
         while ((_main = AppWindows().FirstOrDefault(hwnd => Native.Title(hwnd) == _windowTitle)) == 0)
         {
             if (Environment.TickCount64 > end)

@@ -401,7 +401,7 @@ internal sealed class SuitePane : Grid
         {
             // A case after another's reset still runs when that case isn't ticked, as the run plays it first; it is amber
             // all the same, as the needs are, so a case left out shows.
-            if (item.AfterReset is { } id && _suite.Cases.FirstOrDefault(other => other.Id == id) is { } setup)
+            if (item.AfterReset is { } id && _suite.WithId(id) is { } setup)
             {
                 var leftOut = box.IsChecked == true && !ticked.Contains(id);
                 needs.Background = leftOut ? Ui.HoldSoft : Ui.Surface;
@@ -412,7 +412,7 @@ internal sealed class SuitePane : Grid
             }
             if (item.Needs.Count == 0)
                 continue;
-            var numbers = item.Needs.Select(id => _suite.Cases.FirstOrDefault(other => other.Id == id)).OfType<Case>().ToList();
+            var numbers = item.Needs.Select(_suite.WithId).OfType<Case>().ToList();
             var ready = box.IsChecked != true || item.Needs.All(ticked.Contains);
             needs.Background = ready ? Ui.Surface : Ui.HoldSoft;
             needs.Child = Ui.IconText(Icons.Back, string.Join(", ", numbers.Select(other => other.Number)), ready ? Ui.Muted : Ui.Hold, 11);

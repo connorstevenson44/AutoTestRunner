@@ -73,7 +73,7 @@ public static class Software
         var path = Path.GetFullPath(Path.Combine(suiteFolder, scope.Expand(item.Script!)));
         var local = scope.Child();
         local.Set("version", item.Version ?? "");
-        var given = item.Args.Select(arg => local.Expand(arg)).ToList();
+        var given = item.Args.Select(local.Expand).ToList();
         return ScriptFile.Run(machine, path, given, InstallTimeout, output, suiteFolder);
     }
 

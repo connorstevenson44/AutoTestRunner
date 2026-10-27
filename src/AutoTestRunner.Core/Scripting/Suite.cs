@@ -49,9 +49,10 @@ public sealed partial class Suite
 
     /// <summary>The case with this id, such as "open-package", or this number.</summary>
     public Case? Find(string idOrNumber) =>
-        int.TryParse(idOrNumber, out var number)
-            ? Cases.FirstOrDefault(item => item.Number == number)
-            : Cases.FirstOrDefault(item => item.Id == idOrNumber);
+        int.TryParse(idOrNumber, out var number) ? Cases.FirstOrDefault(item => item.Number == number) : WithId(idOrNumber);
+
+    /// <summary>The case with this id, as needs and afterReset name it.</summary>
+    public Case? WithId(string id) => Cases.FirstOrDefault(item => item.Id == id);
 
     /// <summary>Picks cases by number or id, such as "1-5,8" or "open-package". Empty picks them all.</summary>
     public IReadOnlyList<Case> Select(string? spec)
@@ -90,7 +91,7 @@ public sealed partial class Suite
             if (!ids.Add(item.Id))
                 continue;
             foreach (var need in item.Needs.Append(item.AfterReset).OfType<string>())
-                if (Find(need) is { } needed)
+                if (WithId(need) is { } needed)
                     waiting.Push(needed);
         }
         return [.. Cases.Where(item => ids.Contains(item.Id))];

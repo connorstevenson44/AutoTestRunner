@@ -68,7 +68,7 @@ public sealed partial class Runner
     // Waits for a check to pass, for things that take a moment, such as a service's next heartbeat.
     private Seen Evaluate(Check check)
     {
-        var end = Environment.TickCount64 + (long)Control.Scale(check.Within).TotalMilliseconds;
+        var end = Control.Deadline(check.Within);
         while (true)
         {
             var seen = check.Try();

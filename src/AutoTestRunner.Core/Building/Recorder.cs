@@ -160,7 +160,7 @@ public sealed class Recorder(Suite suite, CaseDraft draft, Func<ControlFacts, Ta
     {
         if (!_mayChangeStatus || _waited.Contains(hook.Element))
             return [];
-        var keep = hook.Check ? KeepAs(hook.Element) : null;
+        var keep = hook.Check ? draft.FreeName(hook.Element) : null;
         var steps = StepMaker.WatchWait(suite, hook, text, keep);
         if (steps.Count == 0)
             return [];
@@ -217,19 +217,6 @@ public sealed class Recorder(Suite suite, CaseDraft draft, Func<ControlFacts, Ta
         JsonObject selector when selector.Count <= 2 && selector["element"] is JsonValue element => element.GetValue<string>(),
         _ => null,
     };
-
-    // A name for a watched control's words, not taken by another step.
-    private string KeepAs(string element)
-    {
-        lock (draft.Steps)
-        {
-            var taken = draft.Steps.Select(step => step.Json["as"]?.GetValue<string>()).OfType<string>().ToHashSet(StringComparer.Ordinal);
-            var name = element;
-            for (var copy = 2; taken.Contains(name); copy++)
-                name = $"{element}{copy}";
-            return name;
-        }
-    }
 
     // The control a click means: the one hit, or the button, item or tab around the text or picture that was hit.
     private static ControlFacts? Actionable(ControlFacts hit)

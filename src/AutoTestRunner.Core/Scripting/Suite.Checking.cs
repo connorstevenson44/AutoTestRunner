@@ -21,21 +21,20 @@ public sealed partial class Suite
         }
         foreach (var (name, definition) in Elements)
             CheckTarget(definition, $"elements.json, {name}", problems);
-        var ids = Cases.Select(item => item.Id).ToHashSet();
         foreach (var item in Cases)
         {
             foreach (var need in item.Needs)
             {
                 // Cases run in file order, so the case it carries on from must come before it.
-                if (!ids.Contains(need))
+                if (WithId(need) is not { } needed)
                     problems.Add($"{Path.GetFileName(item.File)}: needs {need}, and there is no case with that id.");
-                else if (Find(need) is { } needed && needed.Number >= item.Number)
+                else if (needed.Number >= item.Number)
                     problems.Add($"{Path.GetFileName(item.File)}: needs {need}, which runs after it. Cases run in file order, so give it a lower number.");
             }
             if (item.AfterReset is { } setup)
             {
                 var file = Path.GetFileName(item.File);
-                if (Find(setup) is not { } from || int.TryParse(setup, out _))
+                if (WithId(setup) is not { } from)
                     problems.Add($"{file}: afterReset is {setup}, and there is no case with that id.");
                 else if (from.Number >= item.Number)
                     problems.Add($"{file}: afterReset is {setup}, which runs after it. Cases run in file order, so give it a lower number.");

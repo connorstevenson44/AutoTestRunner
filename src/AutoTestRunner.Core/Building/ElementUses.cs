@@ -12,7 +12,6 @@ namespace AutoTestRunner.Building;
 /// </summary>
 public static class ElementUses
 {
-
     /// <summary>Each element's uses, as the file each is in relative to the suite folder, once for each use.</summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<string>> Find(Suite suite)
     {
@@ -20,7 +19,7 @@ public static class ElementUses
         foreach (var file in Files(suite))
         {
             var relative = Path.GetRelativePath(suite.Folder, file).Replace('\\', '/');
-            foreach (var (_, name) in References(suite, file))
+            foreach (var (_, name) in References(file))
                 if (uses.TryGetValue(name, out var list))
                     list.Add(relative);
         }
@@ -37,7 +36,7 @@ public static class ElementUses
         var changed = new List<string>();
         foreach (var file in Files(suite))
         {
-            var at = References(suite, file).Where(reference => reference.Name == from).Select(reference => reference.Path).ToHashSet(StringComparer.Ordinal);
+            var at = References(file).Where(reference => reference.Name == from).Select(reference => reference.Path).ToHashSet(StringComparer.Ordinal);
             var isElements = Path.GetFileName(file).Equals("elements.json", StringComparison.OrdinalIgnoreCase);
             var text = File.ReadAllText(file);
             var edited = Edit(text, at, from, to, renameKey: isElements);
@@ -63,7 +62,7 @@ public static class ElementUses
     }
 
     // The places in a file that name an element, each as its path from the root, such as steps/2/click, with the name.
-    private static List<(string Path, string Name)> References(Suite suite, string file)
+    private static List<(string Path, string Name)> References(string file)
     {
         var found = new List<(string Path, string Name)>();
         if (ScriptJson.ReadFile(file) is not JsonObject root)
@@ -84,41 +83,14 @@ public static class ElementUses
                         Inside(element, Escape(name), found);
                 break;
             default:
-                Steps(root["steps"], "steps", found);
+                if (root["steps"] is JsonArray steps)
+                    for (var index = 0; index < steps.Count; index++)
+                        if (steps[index] is JsonObject step)
+                            foreach (var (owner, key, path) in ScriptVocabulary.Targets(step, $"steps/{index}"))
+                                Target(owner[key], path, found);
                 break;
         }
         return found;
-    }
-
-    private static void Steps(JsonNode? steps, string path, List<(string, string)> found)
-    {
-        if (steps is not JsonArray list)
-            return;
-        for (var index = 0; index < list.Count; index++)
-        {
-            if (list[index] is not JsonObject step)
-                continue;
-            var at = $"{path}/{index}";
-            var kind = ScriptVocabulary.KindOf(step);
-            if (ScriptVocabulary.Steps.TryGetValue(kind, out var known) && known.Takes == Takes.Target)
-                Target(step[kind], $"{at}/{Escape(kind)}", found);
-            if (ScriptVocabulary.SecondTargets.GetValueOrDefault(kind) is { } key)
-                Target(step[key], $"{at}/{key}", found);
-            if (kind == "if" && step["if"] is JsonObject condition)
-                Check(condition, $"{at}/if", found);
-            if (kind == "checkpoint" && step["checks"] is JsonArray checks)
-                for (var check = 0; check < checks.Count; check++)
-                    if (checks[check] is JsonObject each)
-                        Check(each, $"{at}/checks/{check}", found);
-            Steps(step["steps"], $"{at}/steps", found);
-            Steps(step["else"], $"{at}/else", found);
-        }
-    }
-
-    private static void Check(JsonObject check, string path, List<(string, string)> found)
-    {
-        if (Kinds.Of(check, ScriptVocabulary.Checks) is { } kind && ScriptVocabulary.ControlChecks.Contains(kind))
-            Target(check[kind], $"{path}/{Escape(kind)}", found);
     }
 
     // A target: a name, a selector whose element, within and sameRowAs can name one, or a list of either.

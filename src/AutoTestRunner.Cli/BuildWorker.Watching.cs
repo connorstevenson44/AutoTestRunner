@@ -147,10 +147,10 @@ internal sealed partial class BuildWorker
     // driven from then on, and the case does the same, so its steps find their controls there when it runs.
     private void FollowWindow(nint window)
     {
-        if (Native.IsDialog(window) || Native.Title(window).Length == 0 || !_driver.Follow(window))
+        if (Native.IsDialog(window) || Native.Title(window) is not { Length: > 0 } title || !_driver.Follow(window))
             return;
         LeaveBox();
-        _panel.Add(_recorder.Add(StepMaker.UseWindow(Native.Title(window)), changesStatus: false));
+        _panel.Add(_recorder.Add(StepMaker.UseWindow(title), changesStatus: false));
     }
 
     // Whether two reads are of the same control, as far as how a step finds it goes.
