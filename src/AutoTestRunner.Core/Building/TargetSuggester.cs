@@ -13,6 +13,43 @@ public static class TargetSuggester
 {
     private const string GiveItAnId = "Giving the control an x:Name or AutomationId in the app keeps the test working when its words change.";
 
+    // How far up from a control no way finds a control around it is looked for that a step can find.
+    private const int MostOwnerLevels = 4;
+
+    // Controls a person uses, whose look is made of parts that can be pointed at but not found: a text box's scrolling
+    // area, PART_ContentHost, or a border or picture in a button or a list's row.
+    private static readonly HashSet<string> Owners = new(
+        ["Button", "CheckBox", "RadioButton", "ComboBox", "Edit", "Document", "ListItem", "DataItem", "TreeItem", "TabItem", "MenuItem", "Hyperlink",
+            "SplitButton", "Slider", "Spinner", "HeaderItem"],
+        StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The control a person means by pointing at one, and how a step finds it. When no way finds the control under the
+    /// mouse by itself, or it is a part of a control's template, named PART_ by WPF, it is the nearest control around
+    /// it that a person uses and a step can find: the text box whose PART_ContentHost is under the mouse, say, which
+    /// every text box has. exact keeps to the control under the mouse, as holding Shift does.
+    /// </summary>
+    public static (ControlFacts Control, TargetChoice Choice) Pick(
+        ControlFacts pointed, IReadOnlyDictionary<string, JsonNode> elements, VariableScope globals, Func<JsonNode, int> count, bool exact = false)
+    {
+        var meant = pointed.Meant();
+        var choice = Suggest(meant, elements, globals, count);
+        if (exact || choice.Quality != TargetQuality.Ambiguous && meant.Id?.StartsWith("PART_", StringComparison.Ordinal) != true)
+            return (meant, choice);
+        for (var index = 0; index < Math.Min(meant.Ancestors.Count, MostOwnerLevels); index++)
+        {
+            var around = meant.Up(index);
+            if (around.Type == "Window")
+                break;
+            if (!Owners.Contains(around.Type))
+                continue;
+            var found = Suggest(around, elements, globals, count);
+            if (found.Quality != TargetQuality.Ambiguous)
+                return (around, found);
+        }
+        return (meant, choice);
+    }
+
     public static TargetChoice Suggest(ControlFacts control, IReadOnlyDictionary<string, JsonNode> elements, VariableScope globals, Func<JsonNode, int> count)
     {
         var named = ElementMatcher.Matches(control, elements, globals);

@@ -41,6 +41,20 @@ public class RunControlTests
     }
 
     [Fact]
+    public async Task The_builders_stop_ends_a_wait_and_lets_steps_play_again_after()
+    {
+        var control = new RunControl(unattended: false);
+        var waiting = Task.Run(() => control.Wait(10_000), TestContext.Current.CancellationToken);
+        control.StopPlaying();
+        var stopped = await Assert.ThrowsAsync<StopRunException>(() => waiting.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken));
+        Assert.Equal("You stopped it.", stopped.Message);
+        Assert.False(control.StopRequested);
+
+        control.PlayAgain();
+        control.Wait(10);
+    }
+
+    [Fact]
     public void Keys_do_nothing_while_stuck()
     {
         var control = new RunControl(unattended: false);

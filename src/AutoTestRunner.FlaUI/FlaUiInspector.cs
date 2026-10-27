@@ -126,17 +126,27 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
 
     /// <summary>The best way to find a control, from how many controls in the app each way finds now.</summary>
     public TargetChoice Suggest(ControlFacts control, IReadOnlyDictionary<string, JsonNode> elements, VariableScope globals) =>
-        TargetSuggester.Suggest(control, elements, globals, node =>
+        TargetSuggester.Suggest(control, elements, globals, node => Count(node, elements, globals));
+
+    /// <summary>
+    /// The control a person means by pointing at one, and the best way to find it: the control around it, such as a
+    /// text box, when no way finds the one under the mouse. exact keeps to the control under the mouse.
+    /// </summary>
+    public (ControlFacts Control, TargetChoice Choice) Pick(ControlFacts pointed, IReadOnlyDictionary<string, JsonNode> elements, VariableScope globals, bool exact) =>
+        TargetSuggester.Pick(pointed, elements, globals, node => Count(node, elements, globals), exact);
+
+    private int Count(JsonNode target, IReadOnlyDictionary<string, JsonNode> elements, VariableScope globals)
+    {
+        try
         {
-            try
-            {
-                return driver.Count(Targets.Resolve(node, globals, elements));
-            }
-            catch (Exception ex) when (FlaUiDriver.Gone(ex) || ex is ScriptException)
-            {
-                return 0;
-            }
-        });
+            return driver.Count(Targets.Resolve(target, globals, elements));
+        }
+        // The window driven can close while a control is named, as a sign-in window does once it is clicked.
+        catch (Exception ex) when (FlaUiDriver.Gone(ex) || ex is StuckException or ScriptException)
+        {
+            return 0;
+        }
+    }
 
     /// <summary>Where a target's control is on the screen, to outline it, or null when it isn't there.</summary>
     public ScreenRect? Locate(Target target)
@@ -251,9 +261,12 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
         }
     }
 
-    // The drop-down open in the main window, if any: UI Automation looks for it in the app, in one call.
+    // The drop-down open in the main window, if any: UI Automation looks for it in the app, in one call. The window
+    // driven may have closed, as a sign-in window does once it opens the main one.
     private AutomationElement? OpenDropDown()
     {
+        if (!Native.Exists(driver.Main))
+            return null;
         var cf = driver.Automation.ConditionFactory;
         var expanded = new PropertyCondition(driver.Automation.PropertyLibrary.ExpandCollapse.ExpandCollapseState, (int)ExpandCollapseState.Expanded);
         return driver.Automation.FromHandle(driver.Main).FindFirstDescendant(cf.ByControlType(ControlType.ComboBox).And(expanded));

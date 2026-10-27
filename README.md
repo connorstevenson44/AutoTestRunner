@@ -128,6 +128,13 @@ buttons still pause, step and stop. Changing the speed from Manual while a step 
   used), **Keep its text**, **Check it** › (it shows, its text, can be used, greyed out, ticked, selected, has the
   keyboard, says, rows), **Name it**, and in **In the app** › **Set its value…**, **Watch it** and **After clicking
   it…**. Esc puts a tool down. Once one has been used, Ctrl+click while recording uses it again.
+- A part of a control that no step could find by itself, such as the `PART_ContentHost` inside every text box, is
+  picked as the control around it: the box, button or row a step can find. Hold Shift to pick exactly what is under
+  the mouse instead.
+- While the builder plays steps, **Stop** beside what it is doing ends them, such as a click waiting for a control
+  that isn't there, and the builder carries on from where the app is.
+- When the window it drives closes, as a sign-in window does, the builder drives the app's window the mouse goes to
+  next, and adds a `useWindow` step for it, so the case does the same.
 - Each step shows how it finds its control, with a dot: green for a name in `elements.json` or an AutomationId, amber
   for what it says, red when more than one control matches. **Name it** adds a red or amber one to `elements.json`
   and has the steps use the name. Over a step, ▶ tries it in the app, the arrows move it, and the bin takes it out;

@@ -32,6 +32,7 @@ internal sealed partial class BuilderPanel : Window
     private readonly Button _save;
     private readonly TextBlock _nowIcon, _nowText;
     private readonly TextBlock _spinner;
+    private readonly Button _stop;
     private readonly StackPanel _steps = new();
     private readonly ScrollViewer _stepsScroll;
     private readonly TextBlock _count;
@@ -114,6 +115,7 @@ internal sealed partial class BuilderPanel : Window
         var now = new Grid();
         now.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         now.ColumnDefinitions.Add(new ColumnDefinition());
+        now.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         _nowIcon = Ui.Glyph(Icons.Info, 16, Ui.Accent);
         _nowIcon.HorizontalAlignment = HorizontalAlignment.Center;
         _spinner = Ui.Spinner(15, Ui.Accent);
@@ -127,6 +129,15 @@ internal sealed partial class BuilderPanel : Window
         Grid.SetColumn(_nowText, 1);
         now.Children.Add(circle);
         now.Children.Add(_nowText);
+        // While steps play: a step waiting for a control that isn't there would otherwise hold the builder until it
+        // gives up.
+        _stop = Ui.LabelledButton(Icons.Stop, "Stop", () => Stop?.Invoke());
+        _stop.ToolTip = "Stop the step playing now. The builder carries on from where the app is.";
+        _stop.VerticalAlignment = VerticalAlignment.Top;
+        _stop.Margin = new Thickness(8, 0, 0, 0);
+        _stop.Visibility = Visibility.Collapsed;
+        Grid.SetColumn(_stop, 2);
+        now.Children.Add(_stop);
         var nowCard = new Border { Background = Ui.Surface, CornerRadius = new CornerRadius(8), Padding = new Thickness(10, 8, 10, 8), Child = now, Margin = new Thickness(0, 0, 4, 0) };
         Grid.SetRow(nowCard, 2);
         root.Children.Add(nowCard);
@@ -252,6 +263,9 @@ internal sealed partial class BuilderPanel : Window
         set => _values = value;
     }
 
+    /// <summary>Stop was pressed while steps play: asks for them to end. Raised on the UI thread.</summary>
+    public event Action? Stop;
+
     /// <summary>Asks for the steps not played yet to be played, up to and including this one.</summary>
     public event Action<DraftStep>? RunTo;
 
@@ -317,6 +331,7 @@ internal sealed partial class BuilderPanel : Window
     {
         _nowIcon.Visibility = Visibility.Hidden;
         _spinner.Visibility = Visibility.Visible;
+        _stop.Visibility = Visibility.Visible;
         _nowText.Text = text;
         EnableTools(false);
         _mode = (int)BuildMode.Paused;
@@ -373,6 +388,7 @@ internal sealed partial class BuilderPanel : Window
     {
         _ready = true;
         _spinner.Visibility = Visibility.Collapsed;
+        _stop.Visibility = Visibility.Collapsed;
         _nowIcon.Visibility = Visibility.Visible;
         _nowIcon.Text = Icons.Warning;
         _nowIcon.Foreground = Ui.Fail;
@@ -459,14 +475,15 @@ internal sealed partial class BuilderPanel : Window
         _mode = (int)mode;
         _record.IsChecked = _recordOn && !_saved;
         _spinner.Visibility = Visibility.Collapsed;
+        _stop.Visibility = Visibility.Collapsed;
         _nowIcon.Visibility = Visibility.Visible;
         _nowIcon.Foreground = problem is not null ? Ui.Fail : mode == BuildMode.Picking ? Ui.AmberInk : Ui.Accent;
         var app = _suite.App.Window;
         (_nowIcon.Text, _nowText.Text) = (problem, mode) switch
         {
             ({ } why, _) => (Icons.Warning, why),
-            (_, BuildMode.Picking) when _pickInto is not null => (Icons.Pick, $"Click the control in {app}. It goes in the form."),
-            (_, BuildMode.Picking) => (Icons.Pick, $"Click a control in {app} to {_armed!.Doing}. Esc puts the tool down."),
+            (_, BuildMode.Picking) when _pickInto is not null => (Icons.Pick, $"Click the control in {app}. It goes in the form. {ExactHow}"),
+            (_, BuildMode.Picking) => (Icons.Pick, $"Click a control in {app} to {_armed!.Doing}. {ExactHow} Esc puts the tool down."),
             (_, BuildMode.Recording) => (Icons.Record,
                 $"Recording. Use {app} as normal: each click, choice and entry becomes a step. {RecordKey} pauses.{(_lastTool is null ? "" : $" Ctrl+click to {_lastTool.Doing} again.")}"),
             _ when _saved => (Icons.Passed, "Saved."),
@@ -476,6 +493,9 @@ internal sealed partial class BuilderPanel : Window
         if (mode != BuildMode.Picking)
             _outline.Hide();
     }
+
+    // A control no step can find by itself, such as the inside of a text box, is picked as the control around it.
+    private const string ExactHow = "Hold Shift to pick exactly what is under the mouse.";
 
     private string BehindText()
     {

@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
-using System.Runtime.InteropServices;
 using System.Windows.Threading;
 using AutoTestRunner.Building;
 using AutoTestRunner.Driving;
@@ -52,8 +51,7 @@ internal sealed class AppSession : IDisposable
             catch (Exception ex)
             {
                 // Anything else would end the thread, and with it autotest: the window says what went wrong instead.
-                if (ex is not (StuckException or ScriptException or COMException or InvalidOperationException or TimeoutException
-                    or System.ComponentModel.Win32Exception or System.IO.IOException))
+                if (!FlaUiDriver.Gone(ex) && ex is not (StuckException or ScriptException or System.ComponentModel.Win32Exception or System.IO.IOException))
                     Crashes.Log(ex);
                 _ui.BeginInvoke(() => failed(ex.Message));
             }
@@ -69,7 +67,7 @@ internal sealed class AppSession : IDisposable
         Do((_, inspector) => inspector.Processes(), app =>
         {
             RecordingHook? hook = null;
-            void Done((int X, int Y)? at)
+            void Done((int X, int Y, bool Exact)? at)
             {
                 // A second click, or Esc, can come before the hook has gone: only the first counts.
                 if (hook is null)
@@ -88,8 +86,7 @@ internal sealed class AppSession : IDisposable
                     driver.Follow(window);
                     if (inspector.At(point.X, point.Y) is not { } hit)
                         return ((ControlFacts?)null, (TargetChoice?)null);
-                    var facts = hit.Facts.Meant();
-                    return (facts, inspector.Suggest(facts, elements, globals));
+                    return inspector.Pick(hit.Facts, elements, globals, point.Exact);
                 }, found => then(found.Item1, found.Item2), failed);
             }
             hook = new RecordingHook(
@@ -97,7 +94,8 @@ internal sealed class AppSession : IDisposable
                 {
                     if (!app.Contains(Native.ProcessOf(Native.WindowAt(x, y))))
                         return false;
-                    _ui.BeginInvoke(() => Done((x, y)));
+                    var exact = RecordingHook.ShiftHeld;
+                    _ui.BeginInvoke(() => Done((x, y, exact)));
                     return true;
                 },
                 keys =>
