@@ -45,6 +45,8 @@ internal sealed class FakeDriver : IDriver
 
     public void Point(IControl control, string what) => Done.Add($"point {control.Name}");
 
+    public void Outline(IControl control, string what) { }
+
     public void Click(IControl control, ClickHow how)
     {
         Done.Add(how switch { ClickHow.Right => $"right-click {control.Name}", ClickHow.Double => $"double-click {control.Name}", _ => $"click {control.Name}" });
@@ -81,6 +83,8 @@ internal sealed class FakeDriver : IDriver
             reaction();
     }
 
+    public IReadOnlyList<IControl> MenuItems() => [.. Controls.Where(control => control.Type == "MenuItem")];
+
     public void Expand(IControl control) => Done.Add($"expand {control.Name}");
 
     public void SetValue(IControl control, string value)
@@ -88,6 +92,8 @@ internal sealed class FakeDriver : IDriver
         ((FakeControl)control).Value = value;
         Done.Add($"set {control.Name} {value}");
     }
+
+    public string? ValueOf(IControl control) => control.Value;
 
     public int Rows(IControl control) => ((FakeControl)control).Rows;
 

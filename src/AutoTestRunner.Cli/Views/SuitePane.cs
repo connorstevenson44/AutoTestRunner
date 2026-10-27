@@ -477,6 +477,7 @@ internal sealed class SuitePane : Grid
         public void CaseFinished(CaseResult result) { }
         public void ShowStep(Activity step) { }
         public void ShowWait(Activity what) { }
+        public void YourTurn(Activity? what) { }
         public void Waited(Activity what, TimeSpan took) { }
         public void CommandStarted(string line, string? script) => dispatcher.BeginInvoke(DispatcherPriority.Normal, () => feed.CommandStarted(line, script));
         public void CommandOutput(string line, bool error) => dispatcher.BeginInvoke(DispatcherPriority.Normal, () => feed.CommandOutput(line, error));

@@ -49,7 +49,8 @@ step that fails while the case carries on, such as a message box that says somet
 expected and found; the next checkpoint is red too, and lists it.
 
 `--mode auto` (the default) shows each checkpoint for a few seconds and carries on; `pause-at-checkpoints` waits at
-each checkpoint; `step-by-step` waits for Enter before every step. The keys belong to the test unless you clicked into a text box
+each checkpoint; `step-by-step` waits for Enter before every step. `--speed` is `Slow`, `Modest` (the default) or `Fast`, or
+`Manual`: see [Running by hand](#running-by-hand). The keys belong to the test unless you clicked into a text box
 yourself. Results go in `<suite>\results\<date and time>`: `run.log`, `summary.txt`, `junit.xml`, and a screenshot and
 UI Automation dump of each point it got stuck. Something that goes wrong in autotest itself, rather than in a test, is
 written to `errors.log` in one logs folder, `%LOCALAPPDATA%\AutoTestRunner\logs`, with where it happened, for a bug
@@ -82,6 +83,28 @@ from what it did, marked as needing a look. The icons beside the suite's name op
 When a watched run is stuck on a step that uses a control, **Pick it** lets you click the control the step should
 use. It is saved in `elements.json` when the step names an element, else in the step's own file, and the step is
 tried again.
+
+### Running by hand
+
+With the speed set to **Manual**, in the launcher, the panel or with `--speed Manual`, you do every click, key and
+drag yourself, and autotest never moves the mouse or presses a key. It still does everything else: starts and closes
+the app, runs commands and scripts, copies files, waits for the app and makes the checks. For a step in the app, the
+panel says **Your turn** with what to do, such as Type `Ada` in [customer], and the control is outlined in orange; it
+carries on by itself once the step is done:
+
+- Typing, ticking, picking from a drop-down and setting a value are done once the control holds what the step says,
+  however it got there: pasted, typed with mistakes put right, or picked with the keyboard. A password box can't be
+  read, so it is done once you leave it or press Enter in it.
+- A click, right-click or double-click is done once you click the control while it can be used; opening a tab, once the
+  tab is open; pointing at one, once the mouse is over it. A key step is done once you press those keys, in any window. A menu outlines each item in turn, and is
+  done once you click the last. Expanding a tree is done once the last item is picked, and a drag once you drop the
+  control on the other one.
+- A message box is done once it closes, and a file picker once it closes with the file named in it. Closed another way,
+  such as with Cancel, the step fails and the case carries on, as there is no going back to it.
+
+Anything else you do meanwhile is yours: a wrong click or a detour doesn't fail the step, it just isn't the step, so the
+run goes on waiting. Space, Enter and Esc belong to the app, unless the panel itself has the focus; the panel's
+buttons still pause, step and stop. Changing the speed from Manual while a step waits has autotest do that step itself.
 
 ## Building a case
 
@@ -203,7 +226,7 @@ keys on the UI thread, and `BuildWorker` makes steps of them on a thread of its 
 `TargetSuggester` in `Core/Building`. Its windows are in `Views/`: `LauncherWindow` lists the suites and `SuitePane`
 picks the cases, `RunPanel` is the panel, `ActivityFeed` is the panel's list of everything done so far, and
 `BuilderPanel` and `OutlineWindow` are the builder's. In `AutoTestRunner.Core`, whose
-folders are `Scripting/` (the format), `Running/` (the runner) and `Driving/` (what a driver does), `Runner` plays the steps, `RunControl` holds the pace and pauses,
+folders are `Scripting/` (the format), `Running/` (the runner) and `Driving/` (what a driver does), `Runner` plays the steps, and waits for the person's in a manual run (`Runner.ByHand.cs`), `RunControl` holds the pace and pauses,
 `CommandReportingMachine` shows each command and its output as it runs, and `IRunView` is what a run reports to: the
 panel when watched, the console when unattended.
 

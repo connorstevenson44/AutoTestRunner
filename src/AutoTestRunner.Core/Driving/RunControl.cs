@@ -15,11 +15,14 @@ public sealed class RunControl
         [Speed.Slow] = (1800, 25, 110),
         [Speed.Modest] = (1100, 15, 60),
         [Speed.Fast] = (450, 5, 20),
+        // The person does the clicks and keys, so there is only the pace of what the run does by itself.
+        [Speed.Manual] = (400, 0, 0),
     };
 
     public RunControl(bool unattended, Speed speed = Speed.Modest)
     {
         Unattended = unattended;
+        Person = new PersonInput(() => Manual);
         if (unattended)
             (Pace, MouseSpeed, KeyDelay, TimeoutScale) = (150, 0, 10, 3);
         else
@@ -41,6 +44,12 @@ public sealed class RunControl
     public double TimeoutScale { get; set; } = 1;
 
     public Speed Speed { get; private set; } = Speed.Modest;
+
+    /// <summary>Whether the person does the clicks and keys, and the run shows them what and waits. Never unattended.</summary>
+    public bool Manual => !Unattended && Speed == Speed.Manual;
+
+    /// <summary>The person's clicks and keys, which a manual run waits on.</summary>
+    public PersonInput Person { get; }
 
     /// <summary>Waits at every checkpoint until the person carries on.</summary>
     public bool StopAtCheckpoints { get; set; }

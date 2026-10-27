@@ -13,9 +13,10 @@ namespace AutoTestRunner.Running;
 /// <summary>
 /// Runs a suite's cases: each step in turn at a pace a person can follow, holding when the run is paused or step by
 /// step, ending each case at its checkpoint. When something can't be found, a watched run asks the person what to do,
-/// and an unattended run stops with a screenshot and a UI Automation dump.
+/// and an unattended run stops with a screenshot and a UI Automation dump. In a manual run the person does the clicks
+/// and keys, and the run waits for each: see Runner.ByHand.cs.
 /// </summary>
-public sealed class Runner
+public sealed partial class Runner
 {
     private static readonly TimeSpan FindTimeout = TimeSpan.FromSeconds(20);
     private static readonly TimeSpan GoneTimeout = TimeSpan.FromSeconds(10);
@@ -317,10 +318,13 @@ public sealed class Runner
                 var line = Line(ActivityKind.Click, Part.Verb(verb), Part.Control(target, control));
                 ShowStep(line);
                 Mark();
-                _driver.Point(control, line.Text);
-                if (!control.IsEnabled)
-                    throw new StuckException(Lower(line.Text), "It's greyed out, so it can't be used yet.");
-                _driver.Click(control, how);
+                if (!ClickByHand(line, target, how, tab: kind == "tab"))
+                {
+                    _driver.Point(control, line.Text);
+                    if (!control.IsEnabled)
+                        throw new StuckException(Lower(line.Text), "It's greyed out, so it can't be used yet.");
+                    _driver.Click(control, how);
+                }
                 Control.Wait(Control.Pace / 2);
                 Keep(step, scope, control);
                 break;
@@ -334,8 +338,11 @@ public sealed class Runner
                 var line = Line(ActivityKind.Point, Part.Verb("Drag"), Part.Control(from, control), Part.Word("onto"), Part.Control(to, onto));
                 ShowStep(line);
                 Mark();
-                _driver.Point(control, line.Text);
-                _driver.Drag(control, onto);
+                if (!DragByHand(line, from, to))
+                {
+                    _driver.Point(control, line.Text);
+                    _driver.Drag(control, onto);
+                }
                 Control.Wait(Control.Pace / 2);
                 Keep(step, scope, control);
                 break;
@@ -345,23 +352,23 @@ public sealed class Runner
             {
                 var path = ListOf("menu");
                 var items = path.SelectMany((item, index) => index == 0 ? [Part.Value(item)] : new[] { Part.Word("›"), Part.Value(item) });
-                if (step["on"] is not null)
+                var on = step["on"] is null ? null : TargetOf("on");
+                var opener = on is null ? null : Find(on);
+                var line = on is null
+                    ? Line(ActivityKind.Click, [Part.Verb("Menu"), .. items])
+                    : Line(ActivityKind.Click, [Part.Verb("Right-click"), Part.Control(on, opener), Part.Word("›"), .. items]);
+                ShowStep(line);
+                Mark();
+                if (!MenuByHand(line, on, path))
                 {
-                    var target = TargetOf("on");
-                    var on = Find(target);
-                    var line = Line(ActivityKind.Click, [Part.Verb("Right-click"), Part.Control(target, on), Part.Word("›"), .. items]);
-                    ShowStep(line);
-                    Mark();
-                    _driver.Point(on, line.Text);
-                    _driver.Click(on, ClickHow.Right);
-                    Control.Wait(300);
+                    if (opener is not null)
+                    {
+                        _driver.Point(opener, line.Text);
+                        _driver.Click(opener, ClickHow.Right);
+                        Control.Wait(300);
+                    }
+                    _driver.Menu(path);
                 }
-                else
-                {
-                    ShowStep(Line(ActivityKind.Click, [Part.Verb("Menu"), .. items]));
-                    Mark();
-                }
-                _driver.Menu(path);
                 Control.Wait(Control.Pace / 2);
                 break;
             }
@@ -369,8 +376,15 @@ public sealed class Runner
             case "expand":
             {
                 var path = ListOf("expand");
-                ShowStep(Line(ActivityKind.Choose, Part.Verb("Expand"), Part.Value(string.Join(" › ", path))));
+                var line = Line(ActivityKind.Choose, Part.Verb("Expand"), Part.Value(string.Join(" › ", path)));
+                ShowStep(line);
                 var parent = step["in"] is null ? null : TargetOf("in");
+                if (ExpandByHand(line, parent, path) is { } expanded)
+                {
+                    Control.Wait(Control.Pace / 2);
+                    Keep(step, scope, expanded);
+                    break;
+                }
                 IControl? item = null;
                 for (var index = 0; index < path.Count; index++)
                 {
@@ -396,8 +410,11 @@ public sealed class Runner
                 var value = Required("to");
                 var line = Line(ActivityKind.Type, Part.Verb("Set"), Part.Control(target, control), Part.Word("to"), Part.Value(value));
                 ShowStep(line);
-                _driver.Point(control, line.Text);
-                _driver.SetValue(control, value);
+                if (!SetValueByHand(line, target, value))
+                {
+                    _driver.Point(control, line.Text);
+                    _driver.SetValue(control, value);
+                }
                 Control.Wait(Control.Pace / 2);
                 Keep(step, scope, control);
                 break;
@@ -411,8 +428,11 @@ public sealed class Runner
                 var secret = step["secret"]?.GetValue<bool>() ?? false;
                 var line = Line(ActivityKind.Type, Part.Verb("Type"), Part.Value(secret ? "••••••" : value), Part.Word("in"), Part.Control(target, control));
                 ShowStep(line);
-                _driver.Point(control, line.Text);
-                _driver.Type(control, value, secret);
+                if (!TypeByHand(line, target, value, secret))
+                {
+                    _driver.Point(control, line.Text);
+                    _driver.Type(control, value, secret);
+                }
                 Control.Wait(Control.Pace / 2);
                 Keep(step, scope, control);
                 break;
@@ -425,8 +445,11 @@ public sealed class Runner
                 var option = Text("option") ?? throw new ScriptException("choose needs the option to pick.");
                 var line = Line(ActivityKind.Choose, Part.Verb("Pick"), Part.Value(option), Part.Word("in"), Part.Control(target, control));
                 ShowStep(line);
-                _driver.Point(control, line.Text);
-                _driver.Choose(control, option);
+                if (!ChooseByHand(line, target, option))
+                {
+                    _driver.Point(control, line.Text);
+                    _driver.Choose(control, option);
+                }
                 Control.Wait(Control.Pace / 2);
                 Keep(step, scope, control);
                 break;
@@ -439,8 +462,11 @@ public sealed class Runner
                 var isChecked = step["checked"]?.GetValue<bool>() ?? true;
                 var line = Line(ActivityKind.Choose, Part.Verb(isChecked ? "Tick" : "Clear"), Part.Control(target, control));
                 ShowStep(line);
-                _driver.Point(control, line.Text);
-                _driver.SetChecked(control, isChecked);
+                if (!TickByHand(line, target, isChecked))
+                {
+                    _driver.Point(control, line.Text);
+                    _driver.SetChecked(control, isChecked);
+                }
                 Control.Wait(Control.Pace / 2);
                 Keep(step, scope, control);
                 break;
@@ -452,7 +478,8 @@ public sealed class Runner
                 var control = Find(target);
                 var line = Line(ActivityKind.Point, Part.Verb("Point at"), Part.Control(target, control));
                 ShowStep(line);
-                _driver.Point(control, line.Text);
+                if (!HoverByHand(line, target))
+                    _driver.Point(control, line.Text);
                 Control.Wait(300);
                 Keep(step, scope, control);
                 break;
@@ -513,18 +540,24 @@ public sealed class Runner
                 var replacement = Text("replacement") ?? "";
                 var line = Line(ActivityKind.Type, Part.Verb("Replace"), Part.Value(pattern), Part.Word("with"), Part.Value(replacement), Part.Word("in"), Part.Control(target, control));
                 ShowStep(line);
-                _driver.Point(control, line.Text);
-                if (!_driver.ReplaceText(control, pattern, replacement))
+                var replaced = ReplaceByHand(line, target, control, pattern, replacement);
+                if (replaced is null)
+                    _driver.Point(control, line.Text);
+                if (!(replaced ?? _driver.ReplaceText(control, pattern, replacement)))
                     FailStep(new StepFailure($"The text has nothing matching {pattern}, so I couldn't {Lower(line.Text)}", $"matches {pattern}", "no match"));
                 Control.Wait(Control.Pace);
                 break;
             }
 
             case "key":
-                ShowStep(Line(ActivityKind.Key, Part.Verb("Press"), Part.Key(Text("key")!)));
-                _driver.Key(Text("key")!);
+            {
+                var line = Line(ActivityKind.Key, Part.Verb("Press"), Part.Key(Text("key")!));
+                ShowStep(line);
+                if (!KeyByHand(line, Text("key")!))
+                    _driver.Key(Text("key")!);
                 Control.Wait(Control.Pace / 2);
                 break;
+            }
 
             case "answerDialog":
             {
@@ -536,7 +569,8 @@ public sealed class Runner
                 if (Text("expect") is { } expect && !message.Contains(expect, StringComparison.Ordinal))
                     FailStep(new StepFailure($"The \"{title}\" message was \"{message}\", expected \"{expect}\"", $"contains \"{expect}\"", message));
                 Mark();
-                _driver.PressDialogButton(title, button);
+                if (!AnswerByHand(title, button))
+                    _driver.PressDialogButton(title, button);
                 Control.Wait(Control.Pace / 2);
                 if (step["as"] is { } name)
                     scope.Set(name.GetValue<string>(), message);
@@ -547,9 +581,11 @@ public sealed class Runner
             case "pickFolder":
             {
                 var path = Text("path") ?? throw new ScriptException($"{kind} needs the path to pick.");
-                ShowStep(Line(ActivityKind.File, Part.Verb("Pick"), Part.File(path), Part.Word("in"), Part.Window(Text(kind)!)));
+                var line = Line(ActivityKind.File, Part.Verb("Pick"), Part.File(path), Part.Word("in"), Part.Window(Text(kind)!));
+                ShowStep(line);
                 Mark();
-                _driver.PickFile(Text(kind)!, path, kind == "pickFolder");
+                if (!PickByHand(line, Text(kind)!, path, kind == "pickFolder"))
+                    _driver.PickFile(Text(kind)!, path, kind == "pickFolder");
                 Control.Wait(Control.Pace / 2);
                 break;
             }
@@ -972,8 +1008,11 @@ public sealed class Runner
             var line = new Activity(ActivityKind.Click, [Part.Verb("Click"), Part.Control(target, control)]) { Say = say };
             ShowStep(line);
             Mark();
-            _driver.Point(control, line.Text);
-            _driver.Click(control, how);
+            if (!ClickByHand(line, target, how, tab: false))
+            {
+                _driver.Point(control, line.Text);
+                _driver.Click(control, how);
+            }
             Control.Wait(Math.Max(Control.Pace / 2, 300));
         }
     }

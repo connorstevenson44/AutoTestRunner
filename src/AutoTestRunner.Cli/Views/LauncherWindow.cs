@@ -80,9 +80,15 @@ internal sealed class LauncherWindow : Window
         foreach (var toggle in _modes)
             toggle.Click += (_, _) => Only(_modes, toggle);
         var speeds = new StackPanel { Orientation = Orientation.Horizontal };
-        _speeds = [.. new[] { (Icons.SpeedSlow, "Slow"), (Icons.SpeedModest, "Modest"), (Icons.SpeedFast, "Fast") }.Select((speed, index) =>
+        _speeds = [.. new[]
         {
-            var toggle = Tile(speed.Item1, speed.Item2, null);
+            (Icons.SpeedSlow, "Slow", null),
+            (Icons.SpeedModest, "Modest", null),
+            (Icons.SpeedFast, "Fast", null),
+            (Icons.SpeedManual, "Manual", "You click and type: it outlines what to use, says what to do, and carries on once it's done. It still starts the app, runs scripts and makes the checks."),
+        }.Select((speed, index) =>
+        {
+            var toggle = Tile(speed.Item1, speed.Item2, speed.Item3);
             toggle.IsChecked = (int)options.Speed == index;
             speeds.Children.Add(toggle);
             return toggle;

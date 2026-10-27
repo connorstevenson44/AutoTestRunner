@@ -12,7 +12,7 @@ internal static class Icons
     public static readonly FontFamily Font = new("Segoe Fluent Icons, Segoe MDL2 Assets");
 
     public const string Play = "", Pause = "", Stop = "", Next = "";
-    public const string SpeedSlow = "", SpeedModest = "", SpeedFast = "";
+    public const string SpeedSlow = "", SpeedModest = "", SpeedFast = "", SpeedManual = "";
     public const string CheckList = "", Note = "", Folder = "", Document = "", Console = "";
     public const string App = "", Pointer = "", Keyboard = "", Choose = "", Look = "";
     public const string Key = "", Message = "", Info = "", Wait = "";

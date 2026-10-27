@@ -36,6 +36,8 @@ internal sealed class BuilderView(BuilderPanel panel) : IRunView
 
     public void ShowWait(Activity what) { }
 
+    public void YourTurn(Activity? what) { }
+
     public void Waited(Activity what, TimeSpan took) { }
 
     public void CommandStarted(string line, string? script) { }
