@@ -448,6 +448,10 @@ if ($Parts -contains 'new-suite') {
         Keys 'clerk-demo'
         Invoke (Wait-For { $button = Find $signIn $ui::AutomationIdProperty 'SignInButton'; if ($button.Current.IsEnabled) { $button } } 'Sign in to be enabled' 10)
         $app = Wait-For { Window 'Order Desk' } 'the Order Desk window, signed in' 30
+        # The main window opens where Windows puts it, not beside the launcher as the window started was: brought to
+        # the front, as a person would before pointing at it.
+        $app.SetFocus()
+        Start-Sleep -Milliseconds 500
         Invoke (Find $form $ui::NameProperty 'Point at it')
         Start-Sleep -Seconds 1
         Click (Find $app $ui::AutomationIdProperty 'StatusText')
@@ -459,7 +463,9 @@ if ($Parts -contains 'new-suite') {
                 ForEach-Object { $_.Current.Name } | Where-Object { $_ })
             $under = [System.Windows.Forms.Cursor]::Position
             $bar = (Find $app $ui::AutomationIdProperty 'StatusText').Current.BoundingRectangle
-            throw "$_ The New suite window says: $($said -join ' | '). The status bar is at $bar, and the mouse at $under."
+            $hit = $ui::FromPoint((New-Object System.Windows.Point($under.X, $under.Y)))
+            $owner = (Get-Process -Id $hit.Current.ProcessId -ErrorAction SilentlyContinue).ProcessName
+            throw "$_ The New suite window says: $($said -join ' | '). The status bar is at $bar, and the mouse at $under, over '$($hit.Current.Name)' of $owner."
         }
         Assert-Open $launcher 'after the status bar was pointed at'
         Save-Screen 'new-suite.png'
