@@ -17,7 +17,7 @@ using AutoTestRunner.Scripting;
 namespace AutoTestRunner.Cli.Views;
 
 /// <summary>
-/// The builder's panel beside the app: the case's name and Save, the toolbars (BuilderPanel.Toolbar.cs), what the
+/// The builder's panel beside the app: the case's name and Save, the toolbar (BuilderPanel.Toolbar.cs), what the
 /// builder is doing, the steps so far (BuilderPanel.Steps.cs), and the checkpoint the case ends at.
 /// </summary>
 [SuppressMessage("Design", "CA1001", Justification = "The outline and the timer go when the window closes.")]
@@ -104,11 +104,11 @@ internal sealed partial class BuilderPanel : Window
         header.Children.Add(_save);
         root.Children.Add(header);
 
-        // ===== The steps toolbar, with Record, and the pick tools =====
+        // ===== The toolbar, with Record and the pick tools =====
         _record = RecordButton();
-        var toolbars = Toolbars();
-        Grid.SetRow(toolbars, 1);
-        root.Children.Add(toolbars);
+        var toolbar = Toolbar();
+        Grid.SetRow(toolbar, 1);
+        root.Children.Add(toolbar);
 
         // ===== What is happening, or what to do =====
         var now = new Grid();

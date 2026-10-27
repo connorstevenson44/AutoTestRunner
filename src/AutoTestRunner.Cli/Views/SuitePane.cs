@@ -114,17 +114,15 @@ internal sealed class SuitePane : Grid
         if (_last.Values.Any(status => status != CaseStatus.Passed))
             pick.Children.Add(Ui.LabelledButton(Icons.Failed, "Didn't pass last time", () => Tick(item => _last.TryGetValue(item.Number, out var status) && status != CaseStatus.Passed),
                 glyphColor: Ui.Fail));
+        if (suite.Tags.Count > 0)
+            pick.Children.Add(TagFilter(suite.Tags));
         var add = Ui.LabelledButton(Icons.Add, "New case", NewCase);
         add.ToolTip = "Record a new case: use the app, and each click and entry becomes a step";
         add.Margin = new Thickness(0, 0, 0, 6);
         DockPanel.SetDock(add, Dock.Right);
         pick.Children.Add(add);
-        var picking = new StackPanel();
-        picking.Children.Add(pick);
-        if (suite.Tags.Count > 0)
-            picking.Children.Add(TagChips(suite.Tags));
-        SetRow(picking, 1);
-        Children.Add(picking);
+        SetRow(pick, 1);
+        Children.Add(pick);
 
         var list = new StackPanel();
         foreach (var item in suite.Cases)
@@ -188,28 +186,12 @@ internal sealed class SuitePane : Grid
         return found;
     }
 
-    // A chip for each tag in the suite: those turned on tick the cases with any of them, as --tags picks them.
-    private WrapPanel TagChips(IReadOnlyList<string> tags)
+    // The tags chosen tick the cases with any of them, as --tags picks them.
+    private TagPicker TagFilter(IReadOnlyList<string> tags)
     {
-        var chips = new WrapPanel { Margin = new Thickness(0, 0, 0, 2) };
-        var on = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var tag in tags)
-        {
-            var chip = Ui.Chip(Icons.Tag, tag, $"Tick the cases tagged {tag}");
-            chip.IsChecked = _options.Tags.Contains(tag, StringComparer.OrdinalIgnoreCase);
-            if (chip.IsChecked == true)
-                on.Add(tag);
-            chip.Click += (_, _) =>
-            {
-                if (chip.IsChecked == true)
-                    on.Add(tag);
-                else
-                    on.Remove(tag);
-                Tick(item => on.Count == 0 || item.Tags.Any(on.Contains));
-            };
-            chips.Children.Add(chip);
-        }
-        return chips;
+        var picker = new TagPicker(tags, _options.Tags);
+        picker.Changed += () => Tick(item => picker.On.Count == 0 || item.Tags.Any(picker.On.Contains));
+        return picker;
     }
 
     private Grid CaseRow(Case item)
@@ -387,11 +369,13 @@ internal sealed class SuitePane : Grid
         var ticked = _rows.Where(row => row.Box.IsChecked == true).Select(row => row.Case.Id).ToHashSet();
         foreach (var (item, box, needs) in _rows)
         {
-            // A case after another's reset is always ready: when that case isn't ticked, the run plays it first.
+            // A case after another's reset still runs when that case isn't ticked, as the run plays it first; it is amber
+            // all the same, as the needs are, so a case left out shows.
             if (item.AfterReset is { } id && _suite.Cases.FirstOrDefault(other => other.Id == id) is { } setup)
             {
-                needs.Background = Ui.Surface;
-                needs.Child = Ui.IconText(Icons.Reset, $"{setup.Number}", Ui.Muted, 11);
+                var leftOut = box.IsChecked == true && !ticked.Contains(id);
+                needs.Background = leftOut ? Ui.HoldSoft : Ui.Surface;
+                needs.Child = Ui.IconText(Icons.Reset, $"{setup.Number}", leftOut ? Ui.Hold : Ui.Muted, 11);
                 needs.ToolTip = $"Starts after the reset of {setup.Number}. {setup.Name}, without starting the app again"
                     + (ticked.Contains(id) ? "." : ". It isn't ticked, so the run plays it first.") + "\nClick to tick it too.";
                 continue;

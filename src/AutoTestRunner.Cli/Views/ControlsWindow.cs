@@ -96,11 +96,12 @@ internal sealed class ControlsWindow : Window
 
     private string Exe() => Runner.SuitePath(_suite, Globals().Expand(_suite.App.Exe));
 
-    // Uses the app when it is open already. What the app's thread needs is read here, as a rename can change the suite.
+    // Uses the app when it is open already, at its sign-in or after. What the app's thread needs is read here, as a
+    // rename can change the suite.
     private void Attach()
     {
-        var (exe, window) = (Exe(), _suite.App.Window);
-        _app.Do((driver, _) => driver.Attach(exe, window), open => _appState.Text = open ? $"{window} is open." : $"{window} isn't open.", Say);
+        var (exe, app) = (Exe(), _suite.App);
+        _app.Do((driver, _) => driver.Attach(exe, app), open => _appState.Text = open ? $"{app.Window} is open." : $"{app.Window} isn't open.", Say);
     }
 
     private void OpenApp()
@@ -161,9 +162,9 @@ internal sealed class ControlsWindow : Window
 
     private void PointOut(string name)
     {
-        var elements = _suite.Elements;
-        var globals = Globals();
-        _app.Do((_, inspector) => inspector.Locate(Targets.Resolve(name, globals, elements)), box =>
+        var (exe, app, elements, globals) = (Exe(), _suite.App, _suite.Elements, Globals());
+        // Attached again, as a sign-in window may have given way to the main one since.
+        _app.Do((driver, inspector) => driver.Attach(exe, app) ? inspector.Locate(Targets.Resolve(name, globals, elements)) : null, box =>
         {
             if (box is { } found)
             {
@@ -205,8 +206,8 @@ internal sealed class ControlsWindow : Window
     {
         _gaps.Children.Clear();
         _gaps.Children.Add(Ui.Spinner(16, Ui.Accent));
-        var (exe, window) = (Exe(), _suite.App.Window);
-        _app.Do((driver, inspector) => driver.Attach(exe, window) ? IdReport.Gaps(inspector.Survey()) : null, ShowGaps, why =>
+        var (exe, app) = (Exe(), _suite.App);
+        _app.Do((driver, inspector) => driver.Attach(exe, app) ? IdReport.Gaps(inspector.Survey()) : null, ShowGaps, why =>
         {
             _gaps.Children.Clear();
             Say(why);

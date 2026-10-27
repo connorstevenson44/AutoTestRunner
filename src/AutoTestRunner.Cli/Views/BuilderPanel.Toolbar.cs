@@ -12,11 +12,12 @@ using AutoTestRunner.Scripting;
 namespace AutoTestRunner.Cli.Views;
 
 /// <summary>
-/// The builder panel's toolbars. The first adds steps: Record, which <see cref="RecordKey"/> also turns on and off
-/// from the app; the steps used most, a button each; and the rest in a menu each, one level deep. Under it, in amber
-/// as the outline round a control, the pick tools: the tool is chosen first and the control clicked in the app next,
-/// so a step about a control takes two clicks. A tool that can't be used on a control says why on its outline, and a
-/// click there does nothing. Ctrl+click while recording uses the last tool again.
+/// The builder panel's toolbar: Record, which <see cref="RecordKey"/> also turns on and off from the app, then its
+/// tools side by side by what they do: using the app, waiting and checking, then the rest. The tools used most are a
+/// button each, and the others in a menu each, one level deep. A pick tool is amber, as the outline round a control, on
+/// its button or as its item in a menu: the tool is chosen first and the control clicked in the app next, so a step
+/// about a control takes two clicks. A tool that can't be used on a control says why on its outline, and a click there
+/// does nothing. Ctrl+click while recording uses the last tool again.
 /// </summary>
 internal sealed partial class BuilderPanel
 {
@@ -57,8 +58,8 @@ internal sealed partial class BuilderPanel
         ("purge", "Empty a queue", "Take every message off a queue"),
     ];
 
-    // Every button of both toolbars, to turn off while the builder is busy; and each pick tool's button, with the tools
-    // it offers, to show which is waiting for a control.
+    // Every button of the toolbar, to turn off while the builder is busy; and each button that offers pick tools, with
+    // the tools it offers, to show which is waiting for a control.
     private readonly List<ButtonBase> _tools = [];
     private readonly List<(ToggleButton Button, PickTool[] Tools)> _pickButtons = [];
 
@@ -68,53 +69,60 @@ internal sealed partial class BuilderPanel
     // The tool a click in the app is for now: the one waiting, or while recording the last one, for Ctrl+click.
     private PickTool? ToolNow => _armed ?? (Mode == BuildMode.Recording ? _lastTool : null);
 
-    // ===== The toolbars =====
+    // ===== The toolbar =====
 
-    private StackPanel Toolbars()
+    private Border Toolbar()
     {
-        var steps = new WrapPanel();
-        steps.Children.Add(_record);
-        steps.Children.Add(new Border { Width = 1, Background = Ui.Line, Margin = new Thickness(4, 6, 6, 6) });
-        steps.Children.Add(StepTool(Icons.Keyboard, "Press keys", "Press a key or a shortcut, such as Ctrl+S.", () => NewStep("key", "Press keys", Icons.Keyboard)));
-        steps.Children.Add(StepTool(Icons.Menu, "Pick from a menu", "Pick each item of a menu in turn, such as File then Export.", () => NewStep("menu", "Pick from a menu", Icons.Menu)));
-        steps.Children.Add(StepTool(Icons.Clock, "Wait", "Wait a number of seconds. Where the app shows something to wait for, an amber Wait tool is more reliable.", WaitAWhile));
-        steps.Children.Add(StepTool(Icons.Message, "Show a message", "A step that only shows the tester a message, such as what to notice.", SaySomething));
-        steps.Children.Add(MenuTool(Icons.Console, "Script", "Run a PowerShell or C# script, or write a new one.", menu =>
+        var bar = new WrapPanel();
+        void Gap() => bar.Children.Add(new Border { Width = 1, Background = Ui.Line, Margin = new Thickness(4, 6, 4, 6) });
+        bar.Children.Add(_record);
+        Gap();
+
+        // Using the app.
+        bar.Children.Add(PickButton(Icons.Pointer, "Click", PickTools.Click));
+        bar.Children.Add(PickButton(Icons.Mouse, "Point at", PickTools.Hover));
+        bar.Children.Add(StepTool(Icons.Keyboard, "Press keys", "Press a key or a shortcut, such as Ctrl+S.", () => NewStep("key", "Press keys", Icons.Keyboard)));
+        bar.Children.Add(StepTool(Icons.Menu, "Pick from a menu", "Pick each item of a menu in turn, such as File then Export.", () => NewStep("menu", "Pick from a menu", Icons.Menu)));
+        bar.Children.Add(MenuTool(Icons.App, "In the app", "Set a control's value, open tree items, drag and drop, open a tab, use another window, or have the builder watch a control.", menu =>
+        {
+            menu.Items.Add(PickItem(Icons.Slider, PickTools.SetValue));
+            menu.Items.Add(new Separator());
+            ListSteps(menu, AppSteps, Icons.App);
+            menu.Items.Add(new Separator());
+            menu.Items.Add(PickItem(Icons.Look, PickTools.Watch));
+            menu.Items.Add(PickItem(Icons.Macro, PickTools.AfterClick));
+        }, PickTools.SetValue, PickTools.Watch, PickTools.AfterClick));
+        Gap();
+
+        // Waiting for the app, and what it shows.
+        PickTool[] waits = [PickTools.WaitFor, PickTools.WaitGone, PickTools.WaitText, PickTools.WaitEnabled];
+        bar.Children.Add(MenuTool(Icons.Wait, "Wait", "Wait for a control to show, to go, to say something or to be usable, or a number of seconds.", menu =>
+        {
+            foreach (var tool in waits)
+                menu.Items.Add(PickItem(Icons.Wait, tool));
+            menu.Items.Add(new Separator());
+            menu.Items.Add(Item(Icons.Clock, "Wait a number of seconds…", "Where the app shows something to wait for, waiting for that is more reliable.", WaitAWhile));
+        }, waits));
+        bar.Children.Add(PickButton(Icons.Copy, "Keep its text", PickTools.Keep));
+        bar.Children.Add(PickButton(Icons.CheckList, "Check it", [PickTools.CheckShows, PickTools.CheckText, null, .. PickTools.Checks]));
+        bar.Children.Add(PickButton(Icons.Name, "Name it", PickTools.Name));
+        Gap();
+
+        // The rest: the tester, scripts and macros, the computer, and the app's data.
+        bar.Children.Add(StepTool(Icons.Message, "Show a message", "A step that only shows the tester a message, such as what to notice.", SaySomething));
+        bar.Children.Add(MenuTool(Icons.Macro, "Use a macro", "Add a step that runs one of the suite's macros, with its parameters.", ListMacros));
+        bar.Children.Add(MenuTool(Icons.Console, "Script", "Run a PowerShell or C# script, or write a new one.", menu =>
         {
             menu.Items.Add(Item(Icons.Console, "Run a script…", "Choose a .ps1 or .cs file: it runs now, and is added as a step", PickScript));
             menu.Items.Add(Item(Icons.Document, "New PowerShell script…", "Create a .ps1 file in the tools folder and open it to write. Its step plays with Run to here.", () => NewScript(csharp: false)));
             menu.Items.Add(Item(Icons.Document, "New C# script…", "Create a .cs file in the tools folder and open it to write. It runs with dotnet run, which needs the .NET 10 SDK.", () => NewScript(csharp: true)));
         }));
-        steps.Children.Add(MenuTool(Icons.Macro, "Use a macro", "Add a step that runs one of the suite's macros, with its parameters.", ListMacros));
-        steps.Children.Add(MenuTool(Icons.App, "In the app", "Open tree items, drag and drop, open a tab, or use another window.", menu => ListSteps(menu, AppSteps, Icons.App)));
-        steps.Children.Add(MenuTool(Icons.Computer, "On this computer", "Copy, delete or write files, change settings, start and stop services, or run a program.",
+        bar.Children.Add(MenuTool(Icons.Computer, "On this computer", "Copy, delete or write files, change settings, start and stop services, or run a program.",
             menu => ListSteps(menu, ComputerSteps, Icons.Computer)));
-        steps.Children.Add(MenuTool(Icons.Database, "Databases and queues", "Query a database, or send, receive or empty a message queue, as named in suite.json.",
+        bar.Children.Add(MenuTool(Icons.Database, "Databases and queues", "Query a database, or send, receive or empty a message queue, as named in suite.json.",
             menu => ListSteps(menu, DataSteps, Icons.Database)));
 
-        var picks = new WrapPanel();
-        picks.Children.Add(PickButton(Icons.Pointer, "Click", PickTools.Click));
-        picks.Children.Add(PickButton(Icons.Mouse, "Point at", PickTools.Hover));
-        picks.Children.Add(PickButton(Icons.Wait, "Wait for it", PickTools.WaitFor, PickTools.WaitGone, PickTools.WaitText, PickTools.WaitEnabled));
-        picks.Children.Add(PickButton(Icons.Copy, "Keep its text", PickTools.Keep));
-        picks.Children.Add(PickButton(Icons.CheckList, "Check it", [PickTools.CheckShows, PickTools.CheckText, null, .. PickTools.Checks]));
-        picks.Children.Add(PickButton(Icons.Name, "Name it", PickTools.Name));
-        picks.Children.Add(PickButton(Icons.More, "More", PickTools.SetValue, PickTools.Watch, PickTools.AfterClick));
-        var heading = Ui.Heading("Pick a control to…");
-        heading.Foreground = Ui.AmberInk;
-        heading.Margin = new Thickness(4, 0, 0, 2);
-        var pickBar = new StackPanel();
-        pickBar.Children.Add(heading);
-        pickBar.Children.Add(picks);
-
-        var bars = new StackPanel { Margin = new Thickness(0, 10, 4, 8) };
-        bars.Children.Add(new Border { Background = Ui.Surface, CornerRadius = new CornerRadius(6), Padding = new Thickness(2), Child = steps });
-        bars.Children.Add(new Border
-        {
-            Background = Ui.AmberSoft, BorderBrush = Ui.Amber, BorderThickness = new Thickness(3, 0, 0, 0), CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(4, 5, 2, 2), Margin = new Thickness(0, 6, 0, 0), Child = pickBar,
-        });
-        return bars;
+        return new Border { Background = Ui.Surface, CornerRadius = new CornerRadius(6), Padding = new Thickness(2), Margin = new Thickness(0, 10, 4, 8), Child = bar };
     }
 
     // Record, with its key under it, as the run panel shows its keys.
@@ -150,13 +158,23 @@ internal sealed partial class BuilderPanel
         return button;
     }
 
-    // A tool that opens a menu under it, filled as it opens, as the suite's macros can change while building.
-    private Button MenuTool(string glyph, string title, string tip, Action<ContextMenu> fill)
+    // A tool that opens a menu under it, filled as it opens, as the suite's macros can change while building. One whose
+    // menu has pick tools among its steps keeps the toolbar's ink, and is on, in amber, while one of them waits.
+    private ButtonBase MenuTool(string glyph, string title, string tip, Action<ContextMenu> fill, params PickTool[] picks)
     {
-        var button = new Button { Content = WithChevron(glyph), ToolTip = Tip(title, tip), Style = (Style)Ui.Theme["IconButton"], Padding = new Thickness(9, 8, 7, 8), IsEnabled = false };
+        ButtonBase button = picks.Length == 0
+            ? new Button { Style = (Style)Ui.Theme["IconButton"] }
+            : new ToggleButton { Style = (Style)Ui.Theme["PickTool"], Foreground = Ui.Ink };
+        button.Content = WithChevron(glyph);
+        button.ToolTip = Tip(title, tip);
+        button.Padding = new Thickness(9, 8, 7, 8);
+        button.IsEnabled = false;
         AutomationProperties.SetName(button, title);
+        if (button is ToggleButton toggle)
+            _pickButtons.Add((toggle, picks));
         button.Click += (_, _) =>
         {
+            ShowArmed();
             var menu = new ContextMenu { PlacementTarget = button, Placement = PlacementMode.Bottom };
             fill(menu);
             menu.IsOpen = true;
@@ -173,7 +191,7 @@ internal sealed partial class BuilderPanel
         {
             Content = one is null ? WithChevron(glyph) : Ui.Glyph(glyph, 17), Style = (Style)Ui.Theme["PickTool"],
             Padding = new Thickness(9, 8, one is null ? 7 : 9, 8), IsEnabled = false,
-            ToolTip = one is not null ? Tip(one.Title, one.Tip + " Choose it, then click the control in the app.")
+            ToolTip = one is not null ? Tip(one.Title, one.Tip + PickHow)
                 : Tip(title, string.Join("\n", tools.OfType<PickTool>().Select(tool => tool.Title.TrimEnd('…')))),
         };
         AutomationProperties.SetName(button, one?.Title ?? title);
@@ -190,15 +208,20 @@ internal sealed partial class BuilderPanel
             ShowArmed();
             var menu = new ContextMenu { PlacementTarget = button, Placement = PlacementMode.Bottom };
             foreach (var tool in tools)
-            {
-                if (tool is null)
-                    menu.Items.Add(new Separator());
-                else
-                    menu.Items.Add(Item(glyph, tool.Title, tool.Tip, () => Arm(tool), Ui.AmberInk));
-            }
+                menu.Items.Add(tool is null ? new Separator() : PickItem(glyph, tool));
             menu.IsOpen = true;
         };
         return button;
+    }
+
+    private const string PickHow = " Choose it, then click the control in the app.";
+
+    // A pick tool in a menu, in amber: chosen, it waits for a control to be clicked.
+    private MenuItem PickItem(string glyph, PickTool tool)
+    {
+        var item = Item(glyph, tool.Title, tool.Tip + PickHow, () => Arm(tool), Ui.AmberInk);
+        item.Foreground = Ui.AmberInk;
+        return item;
     }
 
     // A glyph with a small chevron after it, for a button that opens a menu.

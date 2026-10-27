@@ -53,6 +53,8 @@ public sealed partial class FlaUiDriver
     {
         var last = int.MinValue;
         var still = 0;
+        var turns = 0;
+        bool? wasDown = null;
         for (var attempt = 0; attempt < 120; attempt++)
         {
             ScreenRect view, box;
@@ -80,8 +82,17 @@ public sealed partial class FlaUiDriver
                 Log("Couldn't scroll to a control, as scrolling didn't move it.");
                 return;
             }
-            last = box.Top;
-            ScrollStep(list, box.Bottom > view.Bottom, view, page: false);
+            // A control that is past one edge after a line down and the other after a line up never fits: scrolling
+            // back and forth only shakes the list.
+            var down = box.Bottom > view.Bottom;
+            turns += wasDown is { } before && before != down ? 1 : 0;
+            if (turns == 2)
+            {
+                Log("Couldn't scroll a control fully into view, as it is past one edge or the other at each step.");
+                return;
+            }
+            (last, wasDown) = (box.Top, down);
+            ScrollStep(list, down, view, page: false);
         }
     }
 
@@ -96,12 +107,13 @@ public sealed partial class FlaUiDriver
     }
 
     // The part of the screen the lists a control is in leave it, and the innermost of them, which is the one to
-    // scroll. Only containers that scroll up and down count.
+    // scroll. Only containers that scroll up and down count. A drop-down's options show in a popup over everything,
+    // so neither the drop-down's own box nor the lists around it hide them: its own ScrollIntoView brings one into view.
     private static ScreenRect ScrolledArea(AutomationElement element, out AutomationElement? list)
     {
         var area = new ScreenRect(-100_000, -100_000, 100_000, 100_000);
         list = null;
-        for (var parent = element.Parent; parent is not null && parent.Properties.ControlType.ValueOrDefault != ControlType.Window; parent = parent.Parent)
+        for (var parent = element.Parent; parent is not null && parent.Properties.ControlType.ValueOrDefault is not (ControlType.Window or ControlType.ComboBox); parent = parent.Parent)
         {
             var item = parent;
             if (!OrIfGone(() => item.Patterns.Scroll.IsSupported && item.Patterns.Scroll.Pattern.VerticallyScrollable.ValueOrDefault, false))

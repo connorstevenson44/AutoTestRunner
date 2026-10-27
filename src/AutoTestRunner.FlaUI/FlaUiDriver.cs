@@ -85,12 +85,16 @@ public sealed partial class FlaUiDriver : IDriver
     private static void StartProcess(string exe, string? arguments) =>
         Process.Start(new ProcessStartInfo(exe, arguments ?? "") { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(exe) })?.Dispose();
 
-    /// <summary>Drives an app that is open already, by its exe and its window's title; false when it isn't open.</summary>
-    public bool Attach(string exe, string window)
+    /// <summary>
+    /// Drives an app that is open already, by its exe: its main window, else its sign-in window, else any window it
+    /// shows, as it may be at a sign-in the suite doesn't name. False when it isn't open.
+    /// </summary>
+    public bool Attach(string exe, AppSettings app)
     {
         _processName = Path.GetFileNameWithoutExtension(exe);
-        _windowTitle = window;
-        _main = AppWindows().FirstOrDefault(hwnd => Native.Title(hwnd) == window);
+        var found = AppWindows().Where(Native.IsVisible).Select(hwnd => (Window: hwnd, Title: Native.Title(hwnd))).Where(window => window.Title.Length > 0)
+            .OrderBy(window => window.Title == app.Window ? 0 : window.Title == app.StartWindow ? 1 : 2).FirstOrDefault();
+        (_main, _windowTitle) = found.Window != 0 ? found : (0, app.Window);
         return _main != 0;
     }
 
