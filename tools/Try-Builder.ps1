@@ -451,7 +451,16 @@ if ($Parts -contains 'new-suite') {
         Invoke (Find $form $ui::NameProperty 'Point at it')
         Start-Sleep -Seconds 1
         Click (Find $app $ui::AutomationIdProperty 'StatusText')
-        Saying $form '*found by*' 'the status bar to be picked' 20
+        try { Saying $form '*found by*' 'the status bar to be picked' 20 }
+        catch {
+            # What the window says instead, such as why the pick didn't take, as the screenshot can't be read here.
+            $said = @($form.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+                (New-Object System.Windows.Automation.PropertyCondition($ui::ControlTypeProperty, [System.Windows.Automation.ControlType]::Text))) |
+                ForEach-Object { $_.Current.Name } | Where-Object { $_ })
+            $under = [System.Windows.Forms.Cursor]::Position
+            $bar = (Find $app $ui::AutomationIdProperty 'StatusText').Current.BoundingRectangle
+            throw "$_ The New suite window says: $($said -join ' | '). The status bar is at $bar, and the mouse at $under."
+        }
         Assert-Open $launcher 'after the status bar was pointed at'
         Save-Screen 'new-suite.png'
 
