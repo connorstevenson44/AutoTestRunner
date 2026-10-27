@@ -1,0 +1,20 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "OD-WH-03 A pick from the warehouse marks the order",
+  "needs": ["shipping-tells-the-warehouse"],
+  "covers": "An OrderPicked message on the picks queue marks the order Picked, on its row and in the database, and is taken off the queue",
+  "tags": ["integration", "warehouse"],
+  "steps": [
+    { "send": "picks", "file": "data/picked-1001.json", "say": "As the warehouse does once the order is picked" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "The warehouse picked order 1001" }, "as": "picked" },
+    { "checkpoint": "Order 1001 is picked",
+      "checks": [
+        { "equals": "${picked}", "to": "The warehouse picked order 1001.", "label": "Status" },
+        { "shows": { "element": "orderLabel", "with": { "number": "1001", "status": "picked" } }, "label": "Picked label on 1001" },
+        { "dbValue": "orders", "sql": "select Status from Orders where Number = 1001", "equals": "Picked" },
+        { "queue": "picks", "count": 0, "within": 5 },
+        { "logged": "${activityLog}", "text": "Picked order 1001" }
+      ],
+      "look": [ "Order 1001 has a blue Picked label." ] }
+  ]
+}

@@ -173,14 +173,15 @@ one changed, the checkpoint, and everything else in the file stay as they were w
 `autotest record <suite folder>` opens the builder straight away: `--name` names a new case, `--after <case>` starts it
 where that case leaves off, `--after-reset <case>` after that case's reset, and `--edit <case>` opens that case to
 change it. CI builds a case in Order Desk this way,
-with clicks and keys sent to the screen, then changes case 1 from a step, and runs them:
+with clicks and keys sent to the screen, then changes case 4 from a step, and runs them:
 [tools/Try-Builder.ps1](tools/Try-Builder.ps1).
 
 ## Writing a suite
 
 A suite is a folder, one per app. See [docs/format.md](docs/format.md) for every step and check, and
-[samples/demo](samples/demo) for a small one. [samples/README.md](samples/README.md) has demos to watch: a feature
-tour, tests that fail on purpose, and a suite full of mistakes, all against a small app made for them.
+[samples/demo](samples/demo) for a small one. [samples/README.md](samples/README.md) has demos to watch: an app's
+tests, with its database and message queue, tests that fail on purpose, and a suite full of mistakes, all against a
+small app made for them.
 
 ```
 suite.json        how to start and reset the app, its variables

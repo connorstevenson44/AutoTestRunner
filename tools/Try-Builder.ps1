@@ -1,15 +1,16 @@
 # Builds a case in Order Desk as a person would, with clicks and keys sent to the screen, pausing and starting with F9
 # and adding a wait with a pick tool, then checks that the case saved has the steps a person would write, file picker
-# and all, and that it passes when run. Then it opens case 1 to change it: runs it to a step, rolls back to an earlier
-# one, and edits from a later one, which takes out the step after it and marks case 2, which carries on from it; and
-# checks both still pass. CI runs it against the demo bundle, after the demos; it builds
+# and all, and that it passes when run. Each new case starts where the sign-in case's reset leaves Order Desk, signed
+# in, as the suite's cases do. Then it opens case 4, Take a standard order, to change it: runs it to a step, rolls back
+# to an earlier one, and edits from a later one, which takes out the step after it and marks case 5, which carries on
+# from it; and checks both still pass. CI runs it against the demo bundle, after the demos; it builds
 # in a copy of the Order Desk tests beside it, so the bundle is left as it was.
 #
 #   tools/Try-Builder.ps1 -Bundle <folder with autotestrunner\, OrderDesk\ and the suites> -Results <folder>
 #
 # Then it adds a C# script step from the Script menu, runs to it, and clicks its words and its details, as a person does
-# before changing it; and makes a new suite from the launcher, starting Order Desk to read its window's title and
-# pointing at its status bar. autotest must still be open after each.
+# before changing it; and makes a new suite from the launcher, starting Order Desk to read its first window's title,
+# signing in, and pointing at the main window's status bar. autotest must still be open after each.
 #
 #   tools/Try-Builder.ps1 ... -Parts script, new-suite    only some of them: record, edit, script and new-suite
 param(
@@ -138,13 +139,13 @@ function Assert-Open($process, [string] $while) {
 
 if ($Parts -contains 'record') {
     $name = 'Take an order for Grace'
-    $builder = Start-Process $autotest -ArgumentList @('record', "`"$suite`"", '--name', "`"$name`"") -PassThru `
+    $builder = Start-Process $autotest -ArgumentList @('record', "`"$suite`"", '--name', "`"$name`"", '--after-reset', 'sign-in') -PassThru `
         -RedirectStandardOutput (Join-Path $Results 'builder-output.txt') -RedirectStandardError (Join-Path $Results 'builder-errors.txt')
     $problem = $null
     try {
         $panel = Wait-For { Window "New case: $name" } 'the builder panel'
         Wait-For { $panel.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition) |
-            Where-Object { $_.Current.Name -like 'Recording. Use Order Desk*' } } 'the builder to start Order Desk and record' 90 | Out-Null
+            Where-Object { $_.Current.Name -like 'Recording. Use Order Desk*' } } 'the builder to start Order Desk, sign in and record' 120 | Out-Null
         $app = Wait-For { Window 'Order Desk' } 'Order Desk'
 
         Click (Find $app $ui::AutomationIdProperty 'CustomerBox')
@@ -232,58 +233,61 @@ if ($Parts -contains 'record') {
     if ($problem) { throw $problem }
 
     # The case reads as a person would write it, finding each control by its name in elements.json.
-    $case = Get-ChildItem (Join-Path $suite 'cases') -Filter '09-*.json' | Select-Object -First 1
-    if (-not $case) { throw 'The builder saved no case 9.' }
+    $case = Get-ChildItem (Join-Path $suite 'cases') -Filter '21-*.json' | Select-Object -First 1
+    if (-not $case) { throw 'The builder saved no case 21.' }
     Copy-Item $case.FullName (Join-Path $Results $case.Name)
     $text = Get-Content -Raw -LiteralPath $case.FullName
     $text
     $expected = @(
-        '"startApp": {}', '"type": "customer", "text": "Grace Hopper"', '"choose": "product", "option": "Coffee beans"',
+        '"afterReset": "sign-in"', '"type": "customer", "text": "Grace Hopper"', '"choose": "product", "option": "Coffee beans"',
         '"type": "quantity", "text": "3"', '"tick": "giftWrap"', '"click": "addOrder"',
         '"call": "waitForStatusBar", "with": { "startsWith": "Added order 1001 for Grace Hopper" }',
         '"click": "importOrders"', '"pickFile": "Import orders"', '"waitText": "statusText"'
     )
     $missing = @($expected | Where-Object { -not $text.Contains($_) })
     if ($missing) { throw "The case the builder saved doesn't have:`n$($missing -join "`n")" }
+    # Signed in already, so it doesn't start Order Desk itself.
+    if ($text.Contains('"startApp"')) { throw "The case the builder saved starts Order Desk, though it starts after the sign-in case's reset:`n$text" }
 
     # And it passes, run as any other case.
     & $autotest validate $suite
     if ($LASTEXITCODE -ne 0) { throw "validate found mistakes after the builder saved (exit code $LASTEXITCODE)." }
-    & $autotest run $suite --cases 9 --unattended --results (Join-Path $Results 'built-case')
+    & $autotest run $suite --cases 21 --unattended --results (Join-Path $Results 'built-case')
     if ($LASTEXITCODE -ne 0) { throw "The built case ended with exit code $LASTEXITCODE, not 0." }
-    'The builder recorded case 9, and it passes.'
+    'The builder recorded case 21, after the sign-in case''s reset, and it passes.'
 }
 
-# ===== Changing case 1 =====
+# ===== Changing case 4 =====
 if ($Parts -contains 'edit') {
-    $first = Get-ChildItem (Join-Path $suite 'cases') -Filter '01-*.json' | Select-Object -First 1
-    $second = Get-ChildItem (Join-Path $suite 'cases') -Filter '02-*.json' | Select-Object -First 1
+    $first = Get-ChildItem (Join-Path $suite 'cases') -Filter '04-*.json' | Select-Object -First 1
+    $second = Get-ChildItem (Join-Path $suite 'cases') -Filter '05-*.json' | Select-Object -First 1
     $before = Get-Content -Raw -LiteralPath $first.FullName
     $editor = Start-Process $autotest -ArgumentList @('record', "`"$suite`"", '--edit', 'take-an-order') -PassThru `
         -RedirectStandardOutput (Join-Path $Results 'edit-output.txt') -RedirectStandardError (Join-Path $Results 'edit-errors.txt')
     $problem = $null
     try {
-        $panel = Wait-For { Window 'Edit 1. Take an order' } 'the builder panel, on case 1'
-        Saying $panel 'Order Desk is at the start of the case*' 'the case opened at its start' 90
+        $panel = Wait-For { Window 'Edit 4. OD-ORD-01 Take a standard order' } 'the builder panel, on case 4'
+        # Order Desk is started and signed in first, as the case starts after the sign-in case's reset.
+        Saying $panel 'Order Desk is at the start of the case*' 'the case opened at its start' 120
 
         Step-Button $panel 'Pick Coffee beans from product' 'Run to here'
-        Saying $panel 'Order Desk is at step 5.*' 'case 1 played to step 5' 90
+        Saying $panel 'Order Desk is at step 5.*' 'case 4 played to step 5' 90
         Step-Button $panel 'Type Ada Lovelace in customer*' 'Roll back to here'
-        Saying $panel 'Order Desk is at step 3.*' 'Order Desk started again, and played to step 3' 120
+        Saying $panel 'Order Desk is at step 3.*' 'Order Desk started again, signed in, and played to step 3' 150
         Save-Screen 'edit-rolled-back.png'
 
         # Edit from the wait for the bar at the bottom: the step after it, pointing at the new order, goes.
         Step-Button $panel 'Wait for the bar at the bottom to say*' 'Edit from here'
         # A window the panel owns is under it, as UI Automation sees it.
         $confirm = Wait-For { $panel.FindFirst([System.Windows.Automation.TreeScope]::Children,
-            (New-Object System.Windows.Automation.PropertyCondition($ui::NameProperty, 'Edit from step 11'))) } 'the window that asks before steps are taken out' 20
-        if (-not (Named $confirm '2. Take orders for three customers')) { throw 'Case 2, which carries on from case 1, isn''t offered to mark.' }
+            (New-Object System.Windows.Automation.PropertyCondition($ui::NameProperty, 'Edit from step 13'))) } 'the window that asks before steps are taken out' 20
+        if (-not (Named $confirm '5. OD-ORD-03 Take the day''s orders from a sheet')) { throw 'Case 5, which carries on from case 4, isn''t offered to mark.' }
         Save-Screen 'edit-confirm.png'
         Invoke (Find $confirm $ui::NameProperty 'Confirm')
-        Saying $panel 'Recording. Use Order Desk*' 'case 1 played to step 11, and recording' 120
+        Saying $panel 'Recording. Use Order Desk*' 'case 4 played to step 13, and recording' 120
 
         Invoke (Find $panel $ui::NameProperty 'Save')
-        Saying $panel 'Saved in*' 'case 1 to be saved' 20
+        Saying $panel 'Saved in*' 'case 4 to be saved' 20
     }
     catch {
         $problem = "$_"
@@ -303,17 +307,17 @@ if ($Parts -contains 'edit') {
     $after
     # The steps up to the one edited from are as they were written, and the one after it has gone.
     $kept = $before.Substring(0, $before.IndexOf('{ "hover"'))
-    if (-not $after.StartsWith($kept.TrimEnd())) { throw 'Case 1''s steps before the edit aren''t as they were written.' }
-    if ($after.Contains('"hover"')) { throw 'The step after the one edited from is still in case 1.' }
-    if (-not $after.Contains('"checkpoint": "Order 1001 is added and saved"')) { throw 'Case 1 lost its checkpoint.' }
-    if (-not (Get-Content -Raw -LiteralPath $second.FullName).Contains('"review": "Case 1, Take an order, was changed from step 11')) {
-        throw 'Case 2 isn''t marked as needing a look.'
+    if (-not $after.StartsWith($kept.TrimEnd())) { throw 'Case 4''s steps before the edit aren''t as they were written.' }
+    if ($after.Contains('"hover"')) { throw 'The step after the one edited from is still in case 4.' }
+    if (-not $after.Contains('"checkpoint": "Order 1001 is added and saved"')) { throw 'Case 4 lost its checkpoint.' }
+    if (-not (Get-Content -Raw -LiteralPath $second.FullName).Contains('"review": "Case 4, OD-ORD-01 Take a standard order, was changed from step 13')) {
+        throw 'Case 5 isn''t marked as needing a look.'
     }
     & $autotest validate $suite
-    if ($LASTEXITCODE -ne 0) { throw "validate found mistakes after case 1 was changed (exit code $LASTEXITCODE)." }
-    & $autotest run $suite --cases 1-2 --unattended --results (Join-Path $Results 'edited-cases')
-    if ($LASTEXITCODE -ne 0) { throw "Cases 1 and 2 ended with exit code $LASTEXITCODE after case 1 was changed, not 0." }
-    'The builder changed case 1 from step 11, marked case 2, and both pass.'
+    if ($LASTEXITCODE -ne 0) { throw "validate found mistakes after case 4 was changed (exit code $LASTEXITCODE)." }
+    & $autotest run $suite --cases 4-5 --unattended --results (Join-Path $Results 'edited-cases')
+    if ($LASTEXITCODE -ne 0) { throw "Cases 4 and 5 ended with exit code $LASTEXITCODE after case 4 was changed, not 0." }
+    'The builder changed case 4 from step 13, marked case 5, and both pass.'
 }
 # The first window of autotest's, such as the launcher, titled for the suite it shows.
 function Window-Of($process, [string] $what) {
@@ -330,12 +334,12 @@ function Text-Of($box) { $box.GetCurrentPattern([System.Windows.Automation.Value
 # Made from the Script menu, as it comes, and played with Run to here; then its words are clicked to change them, and its
 # details folded out, as a person does next.
 if ($Parts -contains 'script') {
-    $scripter = Start-Process $autotest -ArgumentList @('record', "`"$suite`"", '--name', '"Check the orders file"') -PassThru `
+    $scripter = Start-Process $autotest -ArgumentList @('record', "`"$suite`"", '--name', '"Check the orders file"', '--after-reset', 'sign-in') -PassThru `
         -RedirectStandardOutput (Join-Path $Results 'script-output.txt') -RedirectStandardError (Join-Path $Results 'script-errors.txt')
     $problem = $null
     try {
         $panel = Wait-For { Window 'New case: Check the orders file' } 'the builder panel'
-        Saying $panel 'Recording. Use Order Desk*' 'the builder to start Order Desk and record' 90
+        Saying $panel 'Recording. Use Order Desk*' 'the builder to start Order Desk, sign in and record' 120
 
         Invoke (Find $panel $ui::NameProperty 'Script')
         # The Script menu is a window of its own, as a WPF menu is.
@@ -354,7 +358,7 @@ if ($Parts -contains 'script') {
 
         Step-Button $panel 'Read the orders' 'Run to here'
         # dotnet run builds it the first time, which takes a while.
-        Wait-For { (Named $panel 'Paused.*'), (Named $panel 'Step 2,*') | Where-Object { $_ } | Select-Object -First 1 } 'the script step to run' 240 | Out-Null
+        Wait-For { (Named $panel 'Paused.*'), (Named $panel 'Step 1,*') | Where-Object { $_ } | Select-Object -First 1 } 'the script step to run' 240 | Out-Null
         Save-Screen 'script-ran.png'
         Assert-Open $scripter 'after Run to here played the script step'
 
@@ -407,7 +411,7 @@ if ($Parts -contains 'script') {
 
 # ===== A new suite =====
 # From the launcher the demo bundle's first shortcut opens: the app's exe typed in, started to read its window's title,
-# and its status bar pointed at.
+# which is the sign-in window's; then signed in, as a person would, and the main window's status bar pointed at.
 if ($Parts -contains 'new-suite') {
     $made = Join-Path $Bundle 'order-desk-again'
     if (Test-Path -LiteralPath $made) { Remove-Item -LiteralPath $made -Recurse -Force }
@@ -436,11 +440,16 @@ if ($Parts -contains 'new-suite') {
         Invoke (Find $form $ui::NameProperty 'Start the app and read its window''s title')
         Saying $form 'Read from the window*' 'Order Desk to start and its title to be read' 60
         Assert-Open $launcher 'after Order Desk was started to read its title'
-        if ((Text-Of $boxes[2]) -ne 'Order Desk') { throw "The window's title was read as '$(Text-Of $boxes[2])', not 'Order Desk'." }
+        if ((Text-Of $boxes[2]) -ne 'Sign in to Order Desk') { throw "The window's title was read as '$(Text-Of $boxes[2])', not 'Sign in to Order Desk'." }
 
+        $signIn = Wait-For { Window 'Sign in to Order Desk' } 'the sign-in window' 20
+        Set-Text (Find $signIn $ui::AutomationIdProperty 'UserBox') 'clerk'
+        Click (Find $signIn $ui::AutomationIdProperty 'PasswordBox')
+        Keys 'clerk-demo'
+        Invoke (Wait-For { $button = Find $signIn $ui::AutomationIdProperty 'SignInButton'; if ($button.Current.IsEnabled) { $button } } 'Sign in to be enabled' 10)
+        $app = Wait-For { Window 'Order Desk' } 'the Order Desk window, signed in' 30
         Invoke (Find $form $ui::NameProperty 'Point at it')
         Start-Sleep -Seconds 1
-        $app = Wait-For { Window 'Order Desk' } 'Order Desk'
         Click (Find $app $ui::AutomationIdProperty 'StatusText')
         Saying $form '*found by*' 'the status bar to be picked' 20
         Assert-Open $launcher 'after the status bar was pointed at'
@@ -461,9 +470,9 @@ if ($Parts -contains 'new-suite') {
     if ($problem) { throw $problem }
     $text = Get-Content -Raw -LiteralPath (Join-Path $made 'suite.json')
     Copy-Item (Join-Path $made 'suite.json') (Join-Path $Results 'new-suite.json')
-    if (-not $text.Contains('"window": "Order Desk"')) { throw "The new suite's suite.json doesn't wait for the Order Desk window:`n$text" }
+    if (-not $text.Contains('"window": "Sign in to Order Desk"')) { throw "The new suite's suite.json doesn't wait for the sign-in window:`n$text" }
     & $autotest validate $made
     if ($LASTEXITCODE -ne 0) { throw "validate found mistakes in the new suite (exit code $LASTEXITCODE)." }
     Remove-Item -LiteralPath $made -Recurse -Force
-    'The launcher made a new suite for Order Desk, reading its title and status bar from the app.'
+    'The launcher made a new suite for Order Desk, reading its first window''s title and its status bar from the app.'
 }

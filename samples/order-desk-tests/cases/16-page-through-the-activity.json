@@ -1,0 +1,23 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "OD-ACT-01 Page back through the activity history",
+  "needs": ["import-orders"],
+  "covers": "The Activity tab shows activity.log newest first, ten lines a page; Older goes back to the first thing done, the failed sign-in, and is greyed out there",
+  "tags": ["activity"],
+  "steps": [
+    { "tab": "Activity" },
+    { "find": "activityPage", "as": "firstPage", "what": "page" },
+    { "click": "olderActivity", "whileEnabled": true, "say": "Older until it greys out, on the oldest page" },
+    { "find": "activityPage", "as": "lastPage", "what": "page" },
+    { "checkpoint": "The oldest page starts with the failed sign-in",
+      "checks": [
+        { "matches": "${firstPage}", "regex": "^Page 1 of \\d+$", "label": "First page" },
+        { "equals": "${pageCount(lastPage)}", "to": "${pageCount(firstPage)}", "label": "Pages, at the end" },
+        { "atLeast": "${pageCount(lastPage)}", "to": "2", "label": "Pages of activity" },
+        { "disabled": "olderActivity" },
+        { "enabled": "newerActivity" },
+        { "shows": { "listItem": "Sign-in failed for ${user}", "match": "contains", "within": "activityList" }, "label": "The failed sign-in, first of all" }
+      ],
+      "tools": [ { "openFile": "${activityLog}", "label": "Activity log" } ] }
+  ]
+}

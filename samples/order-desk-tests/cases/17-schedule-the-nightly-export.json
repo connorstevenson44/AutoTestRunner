@@ -1,0 +1,26 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "OD-SCH-01 Schedule the nightly export",
+  "afterReset": "sign-in",
+  "covers": "Tools > Schedule nightly export adds a task of the person's own, with no administrator, and Stop nightly export takes it away again",
+  "tags": ["settings"],
+  "steps": [
+    { "menu": ["Tools", "Schedule nightly export"] },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Scheduled the nightly export" }, "as": "scheduled" },
+    { "checkpoint": "The nightly export is scheduled",
+      "checks": [
+        { "equals": "${scheduled}", "to": "Scheduled the nightly export at 23:00.", "label": "Status" },
+        { "scheduledTask": "\\Order Desk nightly export" },
+        { "output": "schtasks.exe", "args": ["/Query", "/TN", "Order Desk nightly export", "/V", "/FO", "LIST"], "contains": "--export", "label": "What the task runs" }
+      ],
+      "look": [ "In Task Scheduler, Order Desk nightly export runs every day at 23:00." ],
+      "tools": [ { "app": "taskschd.msc", "label": "Task Scheduler" } ] },
+    { "menu": ["Tools", "Stop nightly export"] },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Stopped the nightly export" } },
+    { "checkpoint": "The nightly export is stopped",
+      "checks": [
+        { "scheduledTask": "\\Order Desk nightly export", "exists": false },
+        { "logged": "${activityLog}", "text": "Stopped the nightly export" }
+      ] }
+  ]
+}

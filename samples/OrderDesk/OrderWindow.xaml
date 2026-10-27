@@ -1,0 +1,24 @@
+<Window x:Class="OrderDesk.OrderWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="420" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" Background="White">
+    <StackPanel Margin="20">
+        <TextBlock x:Name="CustomerText" FontSize="16" FontWeight="SemiBold" />
+        <TextBlock x:Name="ProductText" Foreground="{StaticResource InkMuted}" Margin="0,4,0,0" />
+
+        <TextBlock Text="Quantity" Style="{StaticResource FieldLabel}" />
+        <TextBox x:Name="DetailQuantityBox" AutomationProperties.Name="Quantity" TextChanged="OnChanged" />
+
+        <TextBlock Text="Note" Style="{StaticResource FieldLabel}" />
+        <TextBox x:Name="DetailNotesBox" AutomationProperties.Name="Note" AcceptsReturn="True" TextWrapping="Wrap" Height="60" />
+
+        <TextBlock x:Name="DetailProblem" Foreground="{StaticResource Danger}" Margin="0,10,0,0" />
+        <TextBlock x:Name="DetailTotal" FontSize="16" FontWeight="SemiBold" Margin="0,6,0,0" />
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button x:Name="SaveButton" Content="Save" IsDefault="True" Click="OnSave" />
+            <Button x:Name="CancelButton" Content="Cancel" IsCancel="True" Margin="0" />
+        </StackPanel>
+    </StackPanel>
+</Window>

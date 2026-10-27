@@ -1,0 +1,15 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "Read what an order was charged",
+  "needsNote": "Nothing",
+  "covers": "Reading an order's price from the database. Fails: the query asks for a Price column, and the Orders table calls it Total.",
+  "tags": ["orders"],
+  "steps": [
+    { "call": "startWithNoOrders" },
+    { "call": "addOrder", "with": { "customer": "Grace Hopper", "product": "Green tea", "quantity": "2" } },
+    { "query": "orders", "sql": "select Price from Orders where Number = @number", "params": { "number": "1001" },
+      "say": "For the invoice check, which needs what the order was charged" },
+    { "checkpoint": "Order 1001 was charged £16.00",
+      "checks": [ { "dbValue": "orders", "sql": "select Total from Orders where Number = 1001", "equals": "16.00", "label": "Saved total" } ] }
+  ]
+}

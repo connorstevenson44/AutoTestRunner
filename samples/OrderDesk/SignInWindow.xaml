@@ -1,0 +1,23 @@
+<Window x:Class="OrderDesk.SignInWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Sign in to Order Desk" Width="380" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen" Background="White">
+    <StackPanel Margin="24">
+        <TextBlock Text="Order Desk" FontSize="20" FontWeight="SemiBold" Foreground="{StaticResource Brand}" />
+        <TextBlock x:Name="ShopText" Foreground="{StaticResource InkMuted}" Margin="0,2,0,8" />
+
+        <TextBlock Text="User name" Style="{StaticResource FieldLabel}" />
+        <TextBox x:Name="UserBox" AutomationProperties.Name="User name" TextChanged="OnChanged" />
+
+        <TextBlock Text="Password" Style="{StaticResource FieldLabel}" />
+        <PasswordBox x:Name="PasswordBox" AutomationProperties.Name="Password" Padding="6,4" PasswordChanged="OnChanged" />
+
+        <TextBlock x:Name="SignInProblem" Foreground="{StaticResource Danger}" Margin="0,10,0,0" TextWrapping="Wrap" />
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button x:Name="SignInButton" Content="Sign in" IsDefault="True" IsEnabled="False" Click="OnSignIn" />
+            <Button x:Name="QuitButton" Content="Quit" IsCancel="True" Margin="0" Click="OnQuit" />
+        </StackPanel>
+    </StackPanel>
+</Window>

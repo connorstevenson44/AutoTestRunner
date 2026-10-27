@@ -1,6 +1,6 @@
-# Runs the demo suites unattended and checks each one ends the way it should: the Order Desk tests pass, each failure
-# example fails or gets stuck with the message it is there to show, and validate finds the mistakes in the script
-# mistakes suite. CI runs it against the demo bundle; it runs the same from a folder laid out like the bundle.
+# Runs the demo suites unattended and checks each one ends the way it should: the Order Desk tests and the warehouse
+# tests pass, each failure example fails or gets stuck with the message it is there to show, and validate finds the
+# mistakes in the script mistakes suite. The warehouse tests need RabbitMQ running on this computer. CI runs it against the demo bundle; it runs the same from a folder laid out like the bundle.
 #
 #   tools/Run-Demos.ps1 -Bundle <folder with autotestrunner\, OrderDesk\ and the suites> -Results <folder>
 param(
@@ -11,6 +11,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $autotest = Join-Path $Bundle 'autotestrunner\autotest.exe'
 $tour = Join-Path $Bundle 'order-desk-tests'
+$warehouse = Join-Path $Bundle 'order-desk-warehouse-tests'
 $failures = Join-Path $Bundle 'order-desk-failure-examples'
 $mistakes = Join-Path $Bundle 'script-mistakes'
 New-Item -ItemType Directory -Force -Path $Results | Out-Null
@@ -22,8 +23,8 @@ function Summary($folder) {
     if ($file) { Get-Content -Raw -LiteralPath $file.FullName } else { '' }
 }
 
-# validate: the two Order Desk suites have no mistakes, and every mistake in the script mistakes suite is found.
-foreach ($suite in @($tour, $failures)) {
+# validate: the Order Desk suites have no mistakes, and every mistake in the script mistakes suite is found.
+foreach ($suite in @($tour, $warehouse, $failures)) {
     & $autotest validate $suite
     if ($LASTEXITCODE -ne 0) { $problems.Add("validate found mistakes in $suite (exit code $LASTEXITCODE).") }
 }
@@ -45,6 +46,12 @@ $code = $LASTEXITCODE
 if ($code -ne 0) { $problems.Add("The Order Desk tests ended with exit code $code, not 0:`n$(Summary (Join-Path $Results 'order-desk-tests'))") }
 else { $report.Add('Order Desk tests: every case passed') }
 
+# The warehouse tests pass, against the RabbitMQ on this computer.
+& $autotest run $warehouse --unattended --results (Join-Path $Results 'order-desk-warehouse-tests')
+$code = $LASTEXITCODE
+if ($code -ne 0) { $problems.Add("The warehouse tests ended with exit code $code, not 0:`n$(Summary (Join-Path $Results 'order-desk-warehouse-tests'))") }
+else { $report.Add('Warehouse tests: every case passed') }
+
 # Each failure example fails with the message it shows. They run one at a time, as an unattended run stops at the
 # first case that gets stuck.
 $expected = [ordered]@{
@@ -56,6 +63,8 @@ $expected = [ordered]@{
     6 = "I couldn't find the Submit order button."
     7 = 'It says: Connecting to the warehouse'
     8 = 'is showing another window instead: "Import order"'
+    9 = 'Delivery: found Next day'
+    10 = 'no such column: Price'
 }
 foreach ($entry in $expected.GetEnumerator()) {
     # Indexing an ordered dictionary with a number picks by position, so take each key and its text together.

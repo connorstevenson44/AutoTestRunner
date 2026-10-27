@@ -1,0 +1,17 @@
+{
+  "$schema": "../../schema/elements.schema.json",
+  "userName": { "id": "UserBox" },
+  "password": { "id": "PasswordBox" },
+  "signIn": { "id": "SignInButton" },
+
+  "statusText": { "id": "StatusText" },
+  "customer": [ { "id": "CustomerBox" }, { "type": "Edit", "name": "Customer" } ],
+  "product": { "id": "ProductBox" },
+  "quantity": { "id": "QuantityBox" },
+  "addOrder": { "button": "Add order" },
+  "connectToWarehouse": { "id": "ConnectButton" },
+
+  "orderRow": { "type": "Button", "helpText": "Order ${number}" },
+  "orderRowButton": { "type": "Button", "helpText": "${tip}", "within": { "element": "orderRow", "with": { "number": "${number}" } } },
+  "orderLabel": { "type": "Text", "helpText": "Order ${number} ${status}" }
+}

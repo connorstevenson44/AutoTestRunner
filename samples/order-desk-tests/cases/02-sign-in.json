@@ -1,0 +1,33 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "OD-SIGN-02 Sign in as a clerk",
+  "needsNote": "Order Desk closed",
+  "covers": "Signing in opens the main window with no orders, says who is signed in, and remembers them for next time. Its reset, an empty order form on the Orders tab, is where the cases that start after it begin.",
+  "tags": ["smoke", "sign-in"],
+  "steps": [
+    { "startApp": {} },
+    { "type": "userName", "text": "${user}" },
+    { "type": "password", "text": "${password}", "secret": true },
+    { "waitEnabled": "signIn" },
+    { "click": "signIn" },
+    { "useWindow": "Order Desk" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Ready. Signed in as" }, "as": "ready" },
+    { "find": "signedInAs", "as": "signedIn", "what": "who is signed in" },
+    { "checkpoint": "Jo Bloggs is signed in, with no orders yet",
+      "checks": [
+        { "equals": "${ready}", "to": "Ready. Signed in as Jo Bloggs. 0 orders in ${dataDir}.", "label": "Status after sign-in" },
+        { "equals": "${signedIn}", "to": "Contoso Coffee and Tea · Jo Bloggs", "label": "Top bar" },
+        { "selected": { "tabItem": "Orders" } },
+        { "registry": "HKCU\\Software\\OrderDesk", "value": "LastUser", "equals": "${user}", "label": "Last user remembered" },
+        { "dbValue": "orders", "sql": "select FullName from Staff where UserName = @user", "params": { "user": "${user}" }, "equals": "Jo Bloggs" },
+        { "dbValue": "orders", "sql": "select count(*) from Orders", "equals": "0", "label": "Orders in the database" },
+        { "lastLine": "${activityLog}", "contains": "Signed in: ${user} (Jo Bloggs)" }
+      ],
+      "tools": [ { "openFolder": "${dataDir}", "label": "Data folder" } ] }
+  ],
+  "reset": [
+    { "tab": "Orders" },
+    { "key": "Ctrl+N", "say": "Ctrl+N starts a new order, which empties the form" },
+    { "waitText": "formProblem", "equals": "Type the customer's name.", "within": 5, "what": "form" }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "OD-SET-01 Fees follow settings.json",
+  "needsNote": "Signed in once, so settings.json is there",
+  "covers": "Gift wrap and next-day fees come from settings.json when Order Desk starts, and the database and shop name from OrderDesk.dll.config",
+  "tags": ["regression", "settings"],
+  "steps": [
+    { "closeApp": {} },
+    { "setJsonValue": "${settingsFile}", "path": "giftWrapFee", "to": "2.50" },
+    { "setJsonValue": "${settingsFile}", "path": "nextDayFee", "to": "7.95" },
+    { "startApp": {} },
+    { "call": "signIn" },
+    { "type": "customer", "text": "Alan Turing" },
+    { "choose": "product", "option": "Mug" },
+    { "tick": "giftWrap" },
+    { "click": { "element": "delivery", "with": { "option": "Next day" } }, "what": "Next day" },
+    { "find": "formTotal", "as": "total" },
+    { "find": "signedInAs", "as": "topBar", "what": "top bar" },
+    { "checkpoint": "The total has the new fees",
+      "checks": [
+        { "equals": "${total}", "to": "Total: £16.45", "label": "£6.00 + £2.50 + £7.95" },
+        { "jsonValue": "${settingsFile}", "path": "currency", "equals": "£" },
+        { "connectionString": "${appConfig}", "name": "Orders" },
+        { "appSetting": "${appConfig}", "key": "ShopName", "equals": "Contoso Coffee and Tea" },
+        { "contains": "${topBar}", "text": "Contoso Coffee and Tea", "label": "Shop name in the top bar" }
+      ],
+      "tools": [
+        { "openFile": "${settingsFile}", "label": "settings.json" },
+        { "openFile": "${appConfig}", "label": "OrderDesk.dll.config" }
+      ] }
+  ]
+}

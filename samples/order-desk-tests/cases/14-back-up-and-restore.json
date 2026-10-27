@@ -1,0 +1,36 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "OD-EXP-03 Back up, lose the orders, and restore them",
+  "needs": ["export-to-a-folder"],
+  "covers": "File > Back up writes a .zip of the database, settings and activity log; Restore asks first, then puts every order back",
+  "tags": ["export", "backup"],
+  "steps": [
+    { "menu": ["File", "Back up"] },
+    { "pickFolder": "Back up to", "path": "${exportDir}" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Backed up 7 orders." }, "as": "backedUp" },
+    { "unzip": "${fileIn(backedUp)}", "to": "${exportDir}\\unpacked" },
+    { "checkpoint": "The backup has the database, settings and activity log",
+      "checks": [
+        { "fileCount": "${exportDir}\\unpacked", "pattern": "*", "equals": 3 },
+        { "fileExists": "${exportDir}\\unpacked\\orderdesk.db" },
+        { "fileContains": "${exportDir}\\unpacked\\activity.log", "text": "Added order 1007" }
+      ] },
+    { "query": "orders", "sql": "delete from Orders", "as": "lost", "say": "As if the database was lost" },
+    { "key": "F5" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Refreshed: 0 orders" } },
+    { "menu": ["File", "Restore"] },
+    { "pickFile": "Restore a backup", "path": "${fileIn(backedUp)}" },
+    { "answerDialog": "Restore a backup", "button": "Yes", "expect": "Replace the 0 orders here with the 7 orders in orderdesk-backup-" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Restored 7 orders" } },
+    { "checkpoint": "Every order is back",
+      "checks": [
+        { "equals": "${lost.rows}", "to": "7", "label": "Orders lost" },
+        { "dbValue": "orders", "sql": "select Number from Orders", "rows": 7, "label": "Orders after the restore" },
+        { "dbValue": "orders", "sql": "select Status from Orders where Number = 1003", "equals": "Shipped" },
+        { "shows": { "element": "orderRow", "with": { "number": "1007" } } },
+        { "fileCount": "${exportDir}", "pattern": "orderdesk-backup-*.zip", "equals": 1 },
+        { "logged": "${activityLog}", "text": "Restored from ${fileIn(backedUp)}" }
+      ],
+      "tools": [ { "openFolder": "${exportDir}", "label": "Backups" } ] }
+  ]
+}

@@ -1,8 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Order Desk: a small WPF app for the demo suites to drive. It has the things real apps have that tests must cope
-       with: a form, a drop-down, tick boxes, rows whose buttons only show on hover, Windows message boxes and file
-       pickers, a window per item, slow work with progress, and a long list that only builds the rows on screen. -->
+  <!-- Order Desk: a small WPF app for the demo suites to drive, made like a real order-taking app: staff sign in, the
+       orders and customers are in a SQLite database, settings are in a JSON file and connection strings in a .config,
+       and shipped orders go to the warehouse over RabbitMQ. It has the things real apps have that tests must cope with:
+       a form with a drop-down, tick boxes, radio buttons and a date, rows whose buttons only show on hover and that
+       have a menu of their own, a grid, a tree, Windows message boxes and file and folder pickers, a window per item,
+       slow work with progress, and a long list that only builds the rows on screen. -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
@@ -10,6 +13,20 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <AssemblyName>OrderDesk</AssemblyName>
     <RootNamespace>OrderDesk</RootNamespace>
+    <!-- Order Desk's own version, which the About box shows and the tests check the exe for. -->
+    <Version>2.4.1</Version>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="RabbitMQ.Client" />
+  </ItemGroup>
+
+  <!-- The connection strings, beside the exe as OrderDesk.dll.config, where whoever installs it changes them. It stays a
+       file of its own when published as a single file. -->
+  <ItemGroup>
+    <None Include="OrderDesk.config" Link="OrderDesk.dll.config" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest"
+          ExcludeFromSingleFile="true" />
+  </ItemGroup>
 
 </Project>

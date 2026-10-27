@@ -1,0 +1,22 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "OD-WH-04 Ignore messages that aren't a pick for an order here",
+  "needs": ["a-pick-marks-the-order"],
+  "covers": "A message in the old warehouse system's format, and a pick for an order Order Desk doesn't have, are each logged and taken off the queue, and change nothing",
+  "tags": ["negative", "integration", "warehouse"],
+  "steps": [
+    { "send": "picks", "message": "PICKED 1001", "say": "The old warehouse system's format" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Ignored a message from the warehouse" }, "as": "ignored" },
+    { "send": "picks", "message": "{\"type\":\"OrderPicked\",\"number\":9999,\"by\":\"Bay 2\"}" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "The warehouse picked order 9999" }, "as": "unknown" },
+    { "checkpoint": "Both are logged, and nothing else changes",
+      "checks": [
+        { "equals": "${ignored}", "to": "Ignored a message from the warehouse: it isn't a pick.", "label": "Status, old format" },
+        { "equals": "${unknown}", "to": "The warehouse picked order 9999, which isn't here.", "label": "Status, unknown order" },
+        { "logged": "${activityLog}", "text": "Ignored a message from the warehouse: PICKED 1001" },
+        { "queue": "picks", "count": 0, "within": 5 },
+        { "dbValue": "orders", "sql": "select Number from Orders", "rows": 1, "label": "Orders" },
+        { "dbValue": "orders", "sql": "select Status from Orders where Number = 1001", "equals": "Picked" }
+      ] }
+  ]
+}

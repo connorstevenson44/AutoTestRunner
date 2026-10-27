@@ -1,11 +1,15 @@
 {
   "$schema": "../../schema/elements.schema.json",
+  "userName": { "id": "UserBox" },
+  "password": { "id": "PasswordBox" },
+  "signIn": { "id": "SignInButton" },
+
   "statusText": { "id": "StatusText" },
   "customer": [ { "id": "CustomerBox" }, { "type": "Edit", "name": "Customer" } ],
   "product": { "id": "ProductBox" },
   "quantity": { "id": "QuantityBox" },
   "giftWrap": { "type": "CheckBox", "name": "Gift wrap" },
-  "express": { "type": "CheckBox", "name": "Express delivery" },
+  "delivery": { "radioButton": "${option}" },
   "notes": { "id": "NotesBox" },
   "formProblem": { "id": "ProblemText" },
   "formTotal": { "id": "TotalText" },
@@ -16,6 +20,5 @@
   "exportOrders": { "id": "ExportButton" },
   "importOrders": { "id": "ImportButton" },
   "connectToWarehouse": { "id": "ConnectButton" },
-  "importWindow": { "window": "Import order" },
-  "catalogueProduct": { "type": "Text", "name": "${name}", "scrollToFind": true }
+  "importWindow": { "window": "Import order" }
 }

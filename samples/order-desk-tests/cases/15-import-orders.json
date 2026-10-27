@@ -1,12 +1,14 @@
 {
   "$schema": "../../../schema/case.schema.json",
-  "name": "Import orders",
-  "needs": ["export-orders"],
+  "name": "OD-IMP-01 Import orders, skipping drafts",
+  "needs": ["back-up-and-restore"],
   "covers": "Import orders from a .csv: one window per order, Import or Skip, drafts skipped",
   "tags": ["import"],
   "steps": [
+    { "writeFile": "${exportDir}\\to-import.csv", "text": ["customer,product,quantity,note", "Mary Jackson,Green tea,2,", "Dorothy Vaughan,Mug,4,draft"] },
+    { "writeFile": "${exportDir}\\to-import.csv", "text": ["Margaret Hamilton,Coffee beans,1,"], "append": true, "say": "A late order, phoned in" },
     { "click": "importOrders" },
-    { "pickFile": "Import orders", "path": "${suiteDir}\\data\\orders-to-import.csv" },
+    { "pickFile": "Import orders", "path": "${exportDir}\\to-import.csv" },
     { "whileShows": "importWindow", "untilText": "statusText", "matches": "^Import finished", "new": true, "within": 60, "as": "finished",
       "what": "Import",
       "steps": [
@@ -21,12 +23,12 @@
     { "checkpoint": "2 orders imported, the draft skipped",
       "checks": [
         { "equals": "${finished}", "to": "Import finished: 2 imported, 1 skipped.", "label": "Status after import" },
-        { "jsonValue": "${ordersFile}", "path": "orders:1005:customer", "equals": "Mary Jackson" },
-        { "jsonValue": "${ordersFile}", "path": "orders:1006:customer", "equals": "Margaret Hamilton" },
-        { "jsonValue": "${ordersFile}", "path": "orders:1007", "equals": "<absent>", "label": "Draft not imported" },
+        { "dbValue": "orders", "sql": "select Customer from Orders where Number = 1009", "equals": "Mary Jackson", "label": "Order 1009, after the deleted 1008" },
+        { "dbValue": "orders", "sql": "select Customer from Orders where Number = 1010", "equals": "Margaret Hamilton" },
+        { "dbValue": "orders", "sql": "select Number from Orders where Customer = 'Dorothy Vaughan' and Product = 'Mug'", "rows": 0, "label": "Draft not imported" },
         { "logged": "${activityLog}", "text": "Imported 2, skipped 1" }
       ],
-      "look": [ "Orders 1005 Mary Jackson and 1006 Margaret Hamilton at the end of the list." ],
-      "tools": [ { "openFile": "${suiteDir}\\data\\orders-to-import.csv", "label": "Imported file" } ] }
+      "look": [ "Orders 1009 Mary Jackson and 1010 Margaret Hamilton at the end of the list." ],
+      "tools": [ { "openFile": "${exportDir}\\to-import.csv", "label": "Imported file" } ] }
   ]
 }

@@ -1,20 +1,29 @@
 {
   "$schema": "../../schema/suite.schema.json",
   "name": "Order Desk tests",
-  "app": { "exe": "${exe}", "window": "Order Desk", "status": "statusText" },
+  "app": { "exe": "${exe}", "window": "Order Desk", "startWindow": "Sign in to Order Desk", "status": "statusText" },
   "variables": {
     "exe": { "firstExisting": [
       "../OrderDesk/OrderDesk.exe",
       "../OrderDesk/bin/Release/net10.0-windows/OrderDesk.exe",
       "../OrderDesk/bin/Debug/net10.0-windows/OrderDesk.exe"
     ] },
+    "appConfig": "${folderOf(exe)}\\OrderDesk.dll.config",
     "dataDir": "${env:LOCALAPPDATA}\\OrderDesk",
-    "ordersFile": "${dataDir}\\orders.json",
-    "exportFile": "${dataDir}\\orders.csv",
-    "activityLog": "${dataDir}\\activity.log"
+    "database": "${dataDir}\\orderdesk.db",
+    "settingsFile": "${dataDir}\\settings.json",
+    "activityLog": "${dataDir}\\activity.log",
+    "exportDir": "${env:LOCALAPPDATA}\\OrderDesk exports",
+    "user": "clerk",
+    "password": "clerk-demo"
   },
   "helpers": {
-    "exportedFile": { "regex": "File: (.+)$" }
+    "folderOf": { "regex": "^(.*)\\\\[^\\\\]+$" },
+    "fileIn": { "regex": "File: (.+)$" },
+    "pageCount": { "regex": "of (\\d+)$" }
+  },
+  "databases": {
+    "orders": { "kind": "sqlite", "connection": "Data Source=${database};Mode=ReadWrite;Pooling=False" }
   },
   "requires": ["${exe}"],
   "reset": { "script": "tools/Reset-OrderDesk.ps1", "leftovers": "tools/Find-Leftovers.ps1" }

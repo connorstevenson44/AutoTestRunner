@@ -14,6 +14,7 @@ public class SampleSuiteTests
     [InlineData("demo")]
     [InlineData("order-desk-tests")]
     [InlineData("order-desk-failure-examples")]
+    [InlineData("order-desk-warehouse-tests")]
     public void A_sample_suite_has_no_mistakes(string name)
     {
         var suite = Suite.Load(Sample(name));
@@ -24,7 +25,7 @@ public class SampleSuiteTests
     public void The_failure_examples_fail_by_what_they_do_not_by_mistakes_in_their_scripts()
     {
         var suite = Suite.Load(Sample("order-desk-failure-examples"));
-        Assert.Equal(8, suite.Cases.Count);
+        Assert.Equal(10, suite.Cases.Count);
         Assert.All(suite.Cases, item => Assert.Equal("startWithNoOrders", item.Steps[0]!["call"]!.GetValue<string>()));
     }
 

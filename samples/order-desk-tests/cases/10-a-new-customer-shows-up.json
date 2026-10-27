@@ -1,0 +1,27 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "OD-CUS-01 A customer added in the database shows up",
+  "needs": ["ship-keep-and-delete"],
+  "covers": "The Customers tab lists every customer with their orders, and F5 shows a customer added straight into the database, as the CRM sync adds them",
+  "tags": ["customers"],
+  "steps": [
+    { "query": "orders", "sql": "insert into Customers (Account, Name, Email) values (@account, @name, @email)",
+      "params": { "account": "C-2001", "name": "Hedy Lamarr", "email": "hedy.lamarr@example.com" }, "as": "added",
+      "say": "As the overnight CRM sync would add her" },
+    { "tab": "Customers" },
+    { "key": "F5" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Refreshed:" }, "as": "refreshed" },
+    { "find": { "element": "customerCell", "with": { "account": "C-2001", "column": "Name" } }, "as": "newName", "what": "C-2001's name" },
+    { "checkpoint": "Hedy Lamarr is listed, with no orders yet",
+      "checks": [
+        { "equals": "${added.rows}", "to": "1", "label": "Rows inserted" },
+        { "equals": "${refreshed}", "to": "Refreshed: 7 orders, 8 customers.", "label": "Status after F5" },
+        { "rows": "customersGrid", "equals": 8 },
+        { "equals": "${newName}", "to": "Hedy Lamarr", "label": "C-2001's name" },
+        { "says": { "element": "customerCell", "with": { "account": "C-2001", "column": "Orders" } }, "equals": "0", "label": "C-2001's orders" },
+        { "says": { "element": "customerCell", "with": { "account": "C-1001", "column": "Orders" } }, "equals": "1", "label": "Ada Lovelace's orders" },
+        { "says": { "element": "customerCell", "with": { "account": "C-1004", "column": "Orders" } }, "equals": "1", "label": "Katherine Johnson's orders, the duplicate deleted" },
+        { "says": { "element": "customerCell", "with": { "account": "C-2001", "column": "Email" } }, "equals": "hedy.lamarr@example.com", "label": "C-2001's email" }
+      ] }
+  ]
+}

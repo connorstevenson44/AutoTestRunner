@@ -10,6 +10,6 @@
     { "pickFile": "Import orders", "path": "${suiteDir}\\data\\orders-to-import.csv" },
     { "call": "waitForStatusBar", "with": { "startsWith": "Import finished", "within": "60" } },
     { "checkpoint": "The orders are imported",
-      "checks": [ { "jsonValue": "${ordersFile}", "path": "orders:1003:customer", "equals": "Margaret Hamilton" } ] }
+      "checks": [ { "dbValue": "orders", "sql": "select Customer from Orders where Number = 1003", "equals": "Margaret Hamilton" } ] }
   ]
 }

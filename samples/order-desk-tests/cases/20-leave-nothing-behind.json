@@ -1,0 +1,22 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "OD-END-01 Leave nothing behind",
+  "needsNote": "Any time",
+  "covers": "Closing Order Desk and deleting what the tests made leaves nothing on the computer: no data, exports, remembered settings or scheduled task",
+  "tags": ["smoke"],
+  "steps": [
+    { "closeApp": {} },
+    { "delete": "${dataDir}" },
+    { "delete": "${exportDir}" },
+    { "powershell": "Remove-Item -LiteralPath 'HKCU:\\Software\\OrderDesk' -Recurse -ErrorAction SilentlyContinue" },
+    { "checkpoint": "Nothing is left behind",
+      "checks": [
+        { "fileMissing": "${dataDir}" },
+        { "fileMissing": "${exportDir}" },
+        { "registry": "HKCU\\Software\\OrderDesk", "value": "LastUser", "equals": "<absent>" },
+        { "scheduledTask": "\\Order Desk nightly export", "exists": false },
+        { "process": "OrderDesk", "running": false, "within": 10 },
+        { "nothingLeft": {} }
+      ] }
+  ]
+}

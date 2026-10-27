@@ -1,0 +1,16 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "Next-day delivery is saved with the order",
+  "needsNote": "Nothing",
+  "covers": "A next-day order's delivery in the database. Fails: the test expects the code NextDay, and Order Desk saves the words Next day.",
+  "tags": ["orders"],
+  "steps": [
+    { "call": "startWithNoOrders" },
+    { "call": "addOrder", "with": { "customer": "Margaret Hamilton", "product": "Teapot", "delivery": "Next day" } },
+    { "checkpoint": "Order 1001 goes next day",
+      "checks": [
+        { "dbValue": "orders", "sql": "select Delivery from Orders where Number = 1001", "equals": "NextDay", "label": "Delivery" },
+        { "dbValue": "orders", "sql": "select Total from Orders where Number = 1001", "equals": "33.00", "label": "Saved total" }
+      ] }
+  ]
+}

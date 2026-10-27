@@ -3,9 +3,11 @@
   "description": "Fills in the order form and clicks Add order, then waits for the bar at the bottom to say it was added. Hands back what the bar says, such as Added order 1002 for Grace Hopper: £24.00.",
   "params": {
     "customer": { "description": "The customer's name." },
-    "product": { "description": "Coffee beans, Green tea, Mug or Teapot." },
+    "product": { "description": "A product on the form's drop-down, such as Coffee beans or Teapot." },
     "quantity": { "description": "How many.", "default": "1" },
-    "giftWrap": { "description": "yes to tick Gift wrap.", "default": "no" }
+    "giftWrap": { "description": "yes to tick Gift wrap.", "default": "no" },
+    "delivery": { "description": "Standard, Express or Next day.", "default": "Standard" },
+    "notes": { "description": "The delivery note, if any.", "default": "" }
   },
   "steps": [
     { "type": "customer", "text": "${customer}" },
@@ -13,6 +15,9 @@
     { "type": "quantity", "text": "${quantity}" },
     { "if": { "equals": "${giftWrap}", "to": "yes" },
       "steps": [ { "tick": "giftWrap" } ] },
+    { "click": { "element": "delivery", "with": { "option": "${delivery}" } }, "what": "${delivery}" },
+    { "if": { "matches": "${notes}", "regex": "." },
+      "steps": [ { "type": "notes", "text": "${notes}" } ] },
     { "click": "addOrder" },
     { "call": "waitForStatusBar", "with": { "startsWith": "Added order" }, "as": "status" }
   ],

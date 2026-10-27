@@ -1,6 +1,7 @@
 # The demos: Order Desk, a small WPF app, and the suites that drive it. Demos-ReadyToRun has everything to watch them
-# on any Windows computer, without .NET installed. Then the Order Desk tests must pass, each failure example must fail with
-# the message it is there to show, and validate must find every mistake in script-mistakes.
+# on any Windows computer, without .NET installed. Then the Order Desk tests and the warehouse tests must pass, each
+# failure example must fail with the message it is there to show, and validate must find every mistake in
+# script-mistakes.
 #
 # To rebuild the bundle by hand: Actions > Demos > Run workflow, pick the branch, and untick the check to only build it.
 name: Demos
@@ -35,7 +36,7 @@ jobs:
           dotnet publish samples/OrderDesk -c Release -r win-x64 --self-contained -p:PublishSingleFile=true `
             -p:IncludeNativeLibrariesForSelfExtract=true -o "$bundle\OrderDesk"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          foreach ($suite in 'order-desk-tests', 'order-desk-failure-examples', 'script-mistakes') {
+          foreach ($suite in 'order-desk-tests', 'order-desk-warehouse-tests', 'order-desk-failure-examples', 'script-mistakes') {
             Copy-Item "samples\$suite" "$bundle\$suite" -Recurse
           }
           Copy-Item samples\README.md "$bundle\README.md"
@@ -44,6 +45,8 @@ jobs:
           Set-Content "$bundle\2 Step through the Order Desk tests.cmd" '@"%~dp0autotestrunner\autotest.exe" launch "%~dp0order-desk-tests" --mode step-by-step %*'
           Set-Content "$bundle\3 Watch tests fail.cmd" '@"%~dp0autotestrunner\autotest.exe" launch "%~dp0order-desk-failure-examples" --mode pause-at-checkpoints %*'
           Set-Content "$bundle\4 Find the mistakes in a suite.cmd" "@`"%~dp0autotestrunner\autotest.exe`" validate `"%~dp0script-mistakes`"`r`n@pause"
+          Set-Content "$bundle\5 Do the Order Desk tests yourself.cmd" '@"%~dp0autotestrunner\autotest.exe" launch "%~dp0order-desk-tests" --speed Manual %*'
+          Set-Content "$bundle\6 Run the warehouse tests.cmd" '@"%~dp0autotestrunner\autotest.exe" launch "%~dp0order-desk-warehouse-tests" %*'
 
       - uses: actions/upload-artifact@v4
         with:
@@ -58,6 +61,19 @@ jobs:
           Set-DisplayResolution -Width 1600 -Height 900 -Force
           Add-Type -AssemblyName System.Windows.Forms
           "The screen is now $([Windows.Forms.Screen]::PrimaryScreen.Bounds.Size)"
+
+      # The warehouse tests need a RabbitMQ on the computer, with its guest user, as a tester's computer would have.
+      - name: Install RabbitMQ
+        if: github.event_name != 'workflow_dispatch' || inputs.check
+        timeout-minutes: 10
+        run: |
+          choco install rabbitmq -y --no-progress
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($try in 1..30) {
+            if ((Test-NetConnection localhost -Port 5672 -WarningAction SilentlyContinue).TcpTestSucceeded) { "RabbitMQ is answering"; exit 0 }
+            Start-Sleep -Seconds 5
+          }
+          throw "RabbitMQ didn't start answering on port 5672."
 
       - name: Run the demos and check how each ends
         if: github.event_name != 'workflow_dispatch' || inputs.check

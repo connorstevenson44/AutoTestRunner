@@ -1,0 +1,13 @@
+{
+  "$schema": "../../../schema/macro.schema.json",
+  "description": "Signs in as the suite's user, in the sign-in window that opens when Order Desk starts, then drives the main window and waits for it to say it is ready. Hands back what the bar at the bottom says.",
+  "steps": [
+    { "type": "userName", "text": "${user}" },
+    { "type": "password", "text": "${password}", "secret": true },
+    { "waitEnabled": "signIn" },
+    { "click": "signIn" },
+    { "useWindow": "Order Desk" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Ready. Signed in as" }, "as": "status" }
+  ],
+  "returns": "status"
+}

@@ -1,0 +1,49 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "OD-ORD-01 Take a standard order",
+  "afterReset": "sign-in",
+  "covers": "Order form: what it asks for, the product's code and price, the total with gift wrap, a deliver-by date, Add order, the saved row and the activity log",
+  "tags": ["smoke", "orders"],
+  "steps": [
+    { "powershell": "(Get-Date).AddDays(7).ToString('dd/MM/yyyy')", "as": "nextWeek", "say": "A week from today, as the date box shows dates" },
+    { "powershell": "(Get-Date).AddDays(7).ToString('yyyy-MM-dd')", "as": "nextWeekSaved", "say": "The same day, as the database keeps it" },
+    { "type": "customer", "text": "Ada Lovelace" },
+    { "find": "formProblem", "as": "problem" },
+    { "choose": "product", "option": "Coffee beans" },
+    { "find": "price", "as": "price" },
+    { "type": "quantity", "text": "2" },
+    { "tick": "giftWrap" },
+    { "setValue": "deliverBy", "to": "${nextWeek.first}" },
+    { "type": "notes", "text": "Leave it at the back door" },
+    { "find": "formTotal", "as": "total" },
+    { "click": "addOrder" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Added order 1001" }, "as": "status" },
+    { "hover": { "element": "orderRow", "with": { "number": "1001" } } },
+    { "checkpoint": "Order 1001 is added and saved",
+      "checks": [
+        { "equals": "${problem}", "to": "Pick a product.", "label": "Form, no product" },
+        { "equals": "${price}", "to": "CB-001 · £12.00 each", "label": "Price under the product" },
+        { "equals": "${total}", "to": "Total: £26.00", "label": "Form total" },
+        { "equals": "${status}", "to": "Added order 1001 for Ada Lovelace: £26.00.", "label": "Status after Add" },
+        { "dbValue": "orders", "sql": "select Customer from Orders where Number = 1001", "equals": "Ada Lovelace" },
+        { "dbValue": "orders", "sql": "select Sku from Orders where Number = 1001", "equals": "CB-001" },
+        { "dbValue": "orders", "sql": "select Quantity from Orders where Number = 1001", "equals": "2" },
+        { "dbValue": "orders", "sql": "select GiftWrap from Orders where Number = 1001", "equals": "1", "label": "Gift wrap saved" },
+        { "dbValue": "orders", "sql": "select Delivery from Orders where Number = 1001", "equals": "Standard" },
+        { "dbValue": "orders", "sql": "select DeliverBy from Orders where Number = 1001", "equals": "${nextWeekSaved.first}" },
+        { "dbValue": "orders", "sql": "select Total from Orders where Number = 1001", "equals": "26.00" },
+        { "dbValue": "orders", "sql": "select Notes from Orders where Number = 1001", "equals": "Leave it at the back door" },
+        { "lastLine": "${activityLog}", "contains": "Added order 1001: Ada Lovelace, 2 x Coffee beans, 26.00" },
+        { "shows": { "element": "orderRow", "with": { "number": "1001" } } },
+        { "says": "quantity", "equals": "1", "label": "Quantity after Add" },
+        { "notTicked": "giftWrap" },
+        { "selected": { "element": "delivery", "with": { "option": "Standard" } }, "label": "Delivery after Add" },
+        { "disabled": "addOrder" }
+      ],
+      "look": [ "Order 1001 in the list: Ada Lovelace, 2 × Coffee beans, gift wrapped, by next week's date, £26.00." ],
+      "tools": [
+        { "openFile": "${activityLog}", "label": "Activity log" },
+        { "openFolder": "${dataDir}", "label": "Data folder" }
+      ] }
+  ]
+}

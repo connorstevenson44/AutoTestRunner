@@ -1,9 +1,10 @@
 {
   "$schema": "../../../schema/macro.schema.json",
-  "description": "Closes Order Desk, deletes its orders and starts it again, so a case doesn't depend on the ones before it.",
+  "description": "Closes Order Desk, deletes its data and starts it again, signed in, so a case doesn't depend on the ones before it.",
   "steps": [
     { "closeApp": {} },
     { "delete": "${dataDir}" },
-    { "startApp": {} }
+    { "startApp": {} },
+    { "call": "signIn" }
   ]
 }
