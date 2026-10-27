@@ -67,11 +67,12 @@ on Start means the suite needs administrator, which autotest asks for when it st
 
 A case that runs after others shows their numbers in a small pill with an arrow, such as ← 1, 2: amber when one of
 them isn't ticked. Click the pill to tick the case with every case it needs. A case with reset steps has ↻ after its
-name, and a case that starts after its reset has ↻ and its number in the pill: the run plays that case first when it
-isn't ticked. **Clean up** runs the suite's reset
+name, and a case that starts after its reset has ↻ and its number in the pill, amber too when that case isn't ticked,
+though the run plays it first. **Clean up** runs the suite's reset
 script and shows its log, which folds away, or hides with ✕.
 
-A chip for each tag picks the cases tagged with it. The **⋯** on a case copies, renames, moves or deletes it: moving
+**Any tag** drops down the suite's tags, with a box to type part of one: ticking tags ticks the cases with any of them,
+and Enter ticks the first one shown. The **⋯** on a case copies, renames, moves or deletes it: moving
 keeps every case after the cases it carries on from, and deleting one that others carry on from has them carry on
 from what it did, marked as needing a look. The icons beside the suite's name open:
 
@@ -119,22 +120,23 @@ buttons still pause, step and stop. Changing the speed from Manual while a step 
   time. Message boxes and file pickers become `answerDialog`, `pickFile` and `pickFolder`. A right-click and the menu
   items picked after it become a `menu` step, and a double-click a click with `how: double`. F9 was chosen as Windows
   and WPF's own controls give it no meaning; while the builder is open it is kept from the app.
-- The amber **pick tools** under the toolbar do something with a control: choose the tool, then click the control in
-  the app, and the click doesn't reach the app. As the mouse goes, each control is outlined with how a step would find
-  it, or in grey with why the tool can't be used on it, such as a wait for the text of a control that shows none.
-  **Click**, **Point at**, **Wait for it** › (to show, to go, its text, until it can be used), **Keep its text**,
-  **Check it** › (it shows, its text, can be used, greyed out, ticked, selected, has the keyboard, says, rows),
-  **Name it**, and **More** › (**Set its value…**, **Watch it**, **After clicking it…**). Esc puts a tool down. Once one
-  has been used, Ctrl+click while recording uses it again.
+- The toolbar groups its tools by what they do: using the app, then waiting and checking, then the rest. The amber
+  ones, on a button or as an item in a menu, are **pick tools**, which do something with a control: choose the tool,
+  then click the control in the app, and the click doesn't reach the app. As the mouse goes, each control is outlined
+  with how a step would find it, or in grey with why the tool can't be used on it, such as a wait for the text of a
+  control that shows none. **Click**, **Point at**, **Wait** › (for it to show, to go, its text, until it can be
+  used), **Keep its text**, **Check it** › (it shows, its text, can be used, greyed out, ticked, selected, has the
+  keyboard, says, rows), **Name it**, and in **In the app** › **Set its value…**, **Watch it** and **After clicking
+  it…**. Esc puts a tool down. Once one has been used, Ctrl+click while recording uses it again.
 - Each step shows how it finds its control, with a dot: green for a name in `elements.json` or an AutomationId, amber
   for what it says, red when more than one control matches. **Name it** adds a red or amber one to `elements.json`
   and has the steps use the name. Over a step, ▶ tries it in the app, the arrows move it, and the bin takes it out;
   click its words to change what the panel says.
-- The toolbar adds steps that aren't about one control: **Press keys**, **Pick from a menu**, **Wait** a number of
-  seconds and **Show a message**, each a button; **Script** › **Run a script…** picks a `.ps1` or `.cs` in the suite
-  and runs it, and **New PowerShell script…** or **New C# script…** writes one in `tools/` from a short template and
-  opens it, in Notepad++ when it is installed, else Notepad, and its step plays once you've written it. The page icon on
-  a script step opens its file. **Use a macro** › asks for a macro's parameters. **In the app** › and **On this
+- The other tools add steps that aren't about one control: **Press keys**, **Pick from a menu** and **Show a message**,
+  each a button; **Wait** › **Wait a number of seconds…**; **Script** › **Run a script…** picks a `.ps1` or `.cs` in
+  the suite and runs it, and **New PowerShell script…** or **New C# script…** writes one in `tools/` from a short
+  template and opens it, in Notepad++ when it is installed, else Notepad, and its step plays once you've written it.
+  The page icon on a script step opens its file. **Use a macro** › asks for a macro's parameters. **In the app** › and **On this
   computer** › offer every other step, such as opening tree items, a drag, copying a file or setting a JSON value, each
   with a form: browse for a file, pick a control. **Databases and queues** › queries a database, or sends, receives
   or empties a queue, picked from those in suite.json.
@@ -145,8 +147,8 @@ buttons still pause, step and stop. Changing the speed from Manual while a step 
   the values you tick, such as what is typed, as its parameters, and puts a call to it in their place. **Repeat** runs
   them for each of a list of values or the rows of a data file; **Only if…** runs them when a check passes. The
   arrow on a repeat or an if takes its steps out again.
-- **More** › **Watch it** has the builder wait for a control's new words whenever a step changes them, as it does for
-  the status text; **After clicking it…** adds a macro after each click on it, after a delay if need be. Both go in
+- **In the app** › **Watch it** has the builder wait for a control's new words whenever a step changes them, as it does
+  for the status text; **After clicking it…** adds a macro after each click on it, after a delay if need be. Both go in
   `suite.json`'s `builder` section, for every case built after: see [docs/format.md](docs/format.md).
 - **Save** writes `cases/NN-name.json`, as a person would write it, then checks the suite. The checkpoint's title,
   checks and the manual checks for the tester are at the bottom of the panel.

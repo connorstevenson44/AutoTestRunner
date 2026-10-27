@@ -105,7 +105,7 @@ internal static class Ui
         return toggle;
     }
 
-    /// <summary>A small icon and word that stays on or off, such as a tag to pick cases by.</summary>
+    /// <summary>A small icon and word that stays on or off, such as a filter on a list.</summary>
     public static ToggleButton Chip(string glyph, string text, string tip)
     {
         var chip = new ToggleButton { Content = IconText(glyph, text, Muted, 11.5, FontWeights.Normal), ToolTip = tip, Style = (Style)Theme["ToggleIcon"] };
