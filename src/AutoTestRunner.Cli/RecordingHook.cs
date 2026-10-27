@@ -32,6 +32,9 @@ internal sealed class RecordingHook : IDisposable
     /// <summary>Whether Ctrl is held down now.</summary>
     public static bool ControlHeld => Held(Control);
 
+    /// <summary>Whether Shift is held down now: a control picked is the one under the mouse, even one no step can find.</summary>
+    public static bool ShiftHeld => Held(Shift);
+
     /// <summary>Whether the left mouse button is held down now.</summary>
     public static bool ButtonHeld => Held(LeftButton);
 

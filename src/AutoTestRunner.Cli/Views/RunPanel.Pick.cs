@@ -21,15 +21,16 @@ internal sealed partial class RunPanel
         while (true)
         {
             var app = inspector.Processes();
-            var clicked = new TaskCompletionSource<(int X, int Y)?>(TaskCreationOptions.RunContinuationsAsynchronously);
-            var back = OnUi(() => Ask(Ui.Accent, Icons.Pick, "Pick the control", $"Click the control in {_suite.App.Window} that the step should use. The click doesn't reach the app. Esc goes back.",
+            var clicked = new TaskCompletionSource<(int X, int Y, bool Exact)?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var back = OnUi(() => Ask(Ui.Accent, Icons.Pick, "Pick the control",
+                $"Click the control in {_suite.App.Window} that the step should use. The click doesn't reach the app. Hold Shift to pick exactly what is under the mouse. Esc goes back.",
                 [(Icons.Back, "Back")]));
             var hook = OnUi(() => new RecordingHook(
                 (x, y, _) =>
                 {
                     if (!app.Contains(Native.ProcessOf(Native.WindowAt(x, y))))
                         return false;
-                    clicked.TrySetResult((x, y));
+                    clicked.TrySetResult((x, y, RecordingHook.ShiftHeld));
                     return true;
                 },
                 keys =>
@@ -47,8 +48,7 @@ internal sealed partial class RunPanel
 
             if (inspector.At(at.X, at.Y) is not { } hit)
                 continue;
-            var facts = hit.Facts.Meant();
-            var choice = inspector.Suggest(facts, _suite.Elements, runner.Globals);
+            var (facts, choice) = inspector.Pick(hit.Facts, _suite.Elements, runner.Globals, at.Exact);
             var answer = OnUi(() => Ask(Ui.Accent, Icons.Pick, "Use this control?",
                 $"{facts.Type} \"{facts.Label}\", found by {choice.Shown}. {choice.Why}\n\nIt is saved in {fix.Shown}, and the step is tried again.",
                 [(Icons.Save, "Save and try again"), (Icons.Pick, "Pick again"), (Icons.Back, "Back")])).Result;

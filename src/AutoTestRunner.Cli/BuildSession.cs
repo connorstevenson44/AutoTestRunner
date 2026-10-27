@@ -48,6 +48,8 @@ internal sealed class BuildSession
         _panel.EditFrom += (step, rewind) => Post(new BuildInput(BuildInputKind.EditFrom, Step: step, Rewind: rewind));
         _panel.Try += (check, answer) => Post(new BuildInput(BuildInputKind.Try, Check: check, Answer: answer));
         _panel.MadeMacro += macro => Post(new BuildInput(BuildInputKind.Use, Macro: macro));
+        // Straight away, not through the builder's thread, which is busy playing the steps it stops.
+        _panel.Stop += _control.StopPlaying;
         _panel.Loaded += (_, _) =>
         {
             _hook = new RecordingHook(OnDown, OnKeys, () => _playing, OnRight);
@@ -150,7 +152,7 @@ internal sealed class BuildSession
                 return false;
             passOn = true;
         }
-        _inputs.Add(new BuildInput(pick ? BuildInputKind.Pick : BuildInputKind.Click, x, y, PassOn: passOn));
+        _inputs.Add(new BuildInput(pick ? BuildInputKind.Pick : BuildInputKind.Click, x, y, PassOn: passOn, Exact: pick && RecordingHook.ShiftHeld));
         return pick || passOn;
     }
 

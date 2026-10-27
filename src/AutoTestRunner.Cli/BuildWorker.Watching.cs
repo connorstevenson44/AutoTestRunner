@@ -108,7 +108,8 @@ internal sealed partial class BuildWorker
 
     // Reads the control under the mouse once it stops on one, so a click is of what was there before it; while it is
     // moving, nothing is read, as a click there reads what it is on. While picking or while Ctrl is held, the control
-    // is read as the mouse goes, and outlined with how a step would find it.
+    // is read as the mouse goes, and outlined with how a step would find it: the control around it, such as a text
+    // box, when no way finds it by itself, or with Shift held exactly the control under the mouse.
     private void FollowPointer(BuildMode mode)
     {
         var at = Native.Cursor();
@@ -118,23 +119,38 @@ internal sealed partial class BuildWorker
         var outlining = mode == BuildMode.Picking || RecordingHook.ControlHeld;
         if (!_read && (!moved || outlining))
         {
-            _under = _session.IsApp(Native.WindowAt(at.X, at.Y)) ? _inspector.At(at.X, at.Y) : null;
+            var window = Native.WindowAt(at.X, at.Y);
+            var isApp = _session.IsApp(window);
+            if (isApp)
+                FollowWindow(window);
+            _under = isApp ? _inspector.At(at.X, at.Y) : null;
             _read = true;
         }
         if (outlining && _under is { } under)
         {
-            if (!moved && _outlined)
+            var exact = RecordingHook.ShiftHeld;
+            // Still on the control outlined, it is named again only when Shift went down or up.
+            if (!moved && _outlined && (_named is not { } held || held.Exact == exact))
                 return;
-            var meant = under.Facts.Meant();
-            if (_outlined && _named is { } named && Same(named.Facts, meant))
+            if (_outlined && _named is { } named && named.Exact == exact && Same(named.Pointed, under.Facts))
                 return;
-            var choice = Name(meant);
-            _named = (meant, choice);
-            _panel.ShowHover(meant, choice);
+            var (picked, choice) = Pick(under.Facts, exact);
+            _named = (under.Facts, exact, picked, choice);
+            _panel.ShowHover(picked, choice);
             _outlined = true;
         }
         else
             EndHover();
+    }
+
+    // The window driven may have closed, as a sign-in window does once it is used: the app's window the mouse is on is
+    // driven from then on, and the case does the same, so its steps find their controls there when it runs.
+    private void FollowWindow(nint window)
+    {
+        if (Native.IsDialog(window) || Native.Title(window).Length == 0 || !_driver.Follow(window))
+            return;
+        LeaveBox();
+        _panel.Add(_recorder.Add(StepMaker.UseWindow(Native.Title(window)), changesStatus: false));
     }
 
     // Whether two reads are of the same control, as far as how a step finds it goes.

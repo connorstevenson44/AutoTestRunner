@@ -61,6 +61,9 @@ public sealed class RunControl
 
     public bool StopRequested { get; private set; }
 
+    /// <summary>Whether the builder's Stop was pressed: the steps playing end, and the builder carries on.</summary>
+    public bool PlayStopped { get; private set; }
+
     /// <summary>Raised whenever Waiting, StepByStep or StopRequested change, on whichever thread changed them.</summary>
     public event Action? Changed;
 
@@ -77,11 +80,13 @@ public sealed class RunControl
     {
         lock (_lock)
         {
-            while (Waiting != HoldReason.None && !StopRequested)
+            while (Waiting != HoldReason.None && !StopRequested && !PlayStopped)
                 Monitor.Wait(_lock);
         }
         if (StopRequested)
             throw new StopRunException("You stopped the test.");
+        if (PlayStopped)
+            throw new StopRunException("You stopped it.");
     }
 
     /// <summary>Sleeps, a little at a time, so a pause or stop takes effect during long waits.</summary>
@@ -128,6 +133,15 @@ public sealed class RunControl
     public void CarryOn() => Update(() => Waiting = HoldReason.None);
 
     public void RequestStop() => Update(() => StopRequested = true);
+
+    /// <summary>
+    /// The builder's Stop: ends the steps playing now at their next wait, such as a step waiting for a control that
+    /// isn't there, without ending the builder as RequestStop would.
+    /// </summary>
+    public void StopPlaying() => Update(() => PlayStopped = true);
+
+    /// <summary>Lets steps play again after StopPlaying, as the builder does before it plays more.</summary>
+    public void PlayAgain() => Update(() => PlayStopped = false);
 
     private void Update(Action change)
     {
