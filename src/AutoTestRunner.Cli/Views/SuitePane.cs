@@ -98,6 +98,8 @@ internal sealed class SuitePane : Grid
             () => ControlsWindow.Open(Window.GetWindow(this), _suite, _options, _reload, ids: true));
         if (newSuite is not null)
             Tool(Icons.NewFolder, "New suite: pick an app, read its window and point at its status bar", newSuite);
+        foreach (var button in FileTools(suite.Folder))
+            tools.Children.Add(button);
         DockPanel.SetDock(tools, Dock.Right);
         titleRow.Children.Add(tools);
         titleRow.Children.Add(title);
@@ -147,6 +149,34 @@ internal sealed class SuitePane : Grid
     }
 
     public Suite Suite => _suite;
+
+    /// <summary>Whether it is cleaning up, when loading the suite again would lose what that shows.</summary>
+    public bool Busy => _busy;
+
+    /// <summary>
+    /// Icons that open the suite's own files to change by hand: suite.json in Notepad++, or Notepad when there is none,
+    /// and the suite's folder in Explorer. The launcher loads the suite again once they are changed.
+    /// </summary>
+    public static IEnumerable<Button> FileTools(string folder)
+    {
+        var config = Path.Combine(folder, "suite.json");
+        var editor = ScriptEditor.NotepadPlusPlus() is null ? "Notepad" : "Notepad++";
+        yield return FileTool(Icons.Setting, $"Edit suite.json in {editor}\n{config}", () =>
+        {
+            if (!ScriptEditor.Open(config))
+                MessageBox.Show($"Couldn't start Notepad++ or Notepad to open {config}.", "AutoTestRunner", MessageBoxButton.OK, MessageBoxImage.Warning);
+        });
+        yield return FileTool(Icons.Folder, $"Open the suite's folder\n{folder}", () => ScriptEditor.ShowFolder(folder));
+    }
+
+    private static Button FileTool(string glyph, string tip, Action click)
+    {
+        var button = Ui.IconButton(glyph, tip, click, 15);
+        button.Padding = new Thickness(7, 4, 7, 4);
+        // The tip's second line is a path, which a screen reader or a test needn't hear.
+        System.Windows.Automation.AutomationProperties.SetName(button, tip.Split('\n')[0]);
+        return button;
+    }
 
     /// <summary>The cases ticked, in order.</summary>
     public IReadOnlyList<Case> Ticked => [.. _rows.Where(row => row.Box.IsChecked == true).Select(row => row.Case)];

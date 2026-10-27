@@ -32,9 +32,9 @@ public sealed class ConnectionTests : IDisposable
         return suite;
     }
 
-    private (FakeRunView View, Results Results) Run(string steps, FakeConnections connections)
+    private (FakeRunView View, Results Results) Run(string steps, FakeConnections connections, string settings = Settings)
     {
-        var loaded = Scripting.Suite.Load(Suite(steps));
+        var loaded = Scripting.Suite.Load(Suite(steps, settings));
         var view = new FakeRunView();
         var results = new Results(Path.Combine(_folder, "results"), console: null);
         new Runner(loaded, new FakeDriver(), new FakeMachine(), view, new Driving.RunControl(unattended: true) { TimeoutScale = 0.01 }, results) { Connections = connections }
@@ -66,6 +66,38 @@ public sealed class ConnectionTests : IDisposable
         Assert.Contains("start shop (PostgreSQL)", view.Commands);
         Assert.Contains("out status\ttotal", view.Commands);
         Assert.DoesNotContain(view.Commands, line => line.Contains("s3cret", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_database_can_be_read_from_the_apps_own_config_file()
+    {
+        Directory.CreateDirectory(_folder);
+        File.WriteAllText(Path.Combine(_folder, "Orders.exe.config"), """
+            <configuration><database><type>SQLite</type><connectionString>Data Source=orders.db</connectionString></database></configuration>
+            """);
+        var connections = new FakeConnections();
+        connections.Answers["select 1"] = new QueryResult(["one"], [["1"]], 1);
+        var (_, results) = Run("""{ "query": "orders", "sql": "select 1" }""", connections, """
+            "variables": { "appConfig": "../Orders.exe.config" },
+            "helpers": { "databaseType": { "xPath": "//database/type/text()" }, "databaseConnection": { "xPath": "//database/connectionString/text()" } },
+            "databases": { "orders": { "kind": "${databaseType(readFile(appConfig))}", "connection": "${databaseConnection(readFile(appConfig))}" } }
+            """);
+
+        Assert.Equal(CaseStatus.Passed, results.Cases.Single().Status);
+        var (database, _, _) = connections.Queries.Single();
+        Assert.Equal(("sqlite", "Data Source=orders.db"), (database.Kind, database.Connection));
+    }
+
+    [Fact]
+    public void A_database_kind_that_comes_to_no_kind_fails_the_step_saying_what_it_came_to()
+    {
+        var (_, results) = Run("""{ "query": "orders", "sql": "select 1" }""", new FakeConnections(), """
+            "variables": { "kind": "access" },
+            "databases": { "orders": { "kind": "${kind}", "connection": "Data Source=orders.db" } }
+            """);
+
+        Assert.Equal(CaseStatus.Failed, results.Cases.Single().Status);
+        Assert.Contains(results.Cases.Single().Failures, failure => failure.Contains("comes to \"access\", which isn't one of: sqlServer", StringComparison.Ordinal));
     }
 
     [Fact]

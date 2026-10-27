@@ -9,6 +9,9 @@ public enum FieldType
     /// <summary>Text that can run to more than one line, such as a file's contents.</summary>
     LongText,
 
+    /// <summary>Keys to press, such as Ctrl+S, which can be recorded by pressing them.</summary>
+    Keys,
+
     /// <summary>A number, or a ${variable} that holds one.</summary>
     Number,
 

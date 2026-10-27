@@ -97,7 +97,19 @@ public sealed partial class Runner
                 scope.Set(name, candidates.FirstOrDefault(path => File.Exists(path) || Directory.Exists(path)) ?? candidates.LastOrDefault() ?? "");
             }
             else
-                scope.Set(name, scope.Expand(node?.ToString() ?? ""));
+            {
+                var text = node?.ToString() ?? "";
+                try
+                {
+                    scope.Set(name, scope.Expand(text));
+                }
+                catch (ScriptException)
+                {
+                    // Such as a setting read from the app's .config file before the app is built: the suite still
+                    // opens, and a step that uses it says why it can't be read.
+                    scope.SetLater(name, () => Value.Of(scope.Expand(text)));
+                }
+            }
         }
         foreach (var (name, value) in overrides)
             if (!scope.TryGet(name, out _))

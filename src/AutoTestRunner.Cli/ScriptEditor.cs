@@ -9,7 +9,7 @@ namespace AutoTestRunner.Cli;
 
 /// <summary>
 /// The .ps1 and .cs files that script steps run: a new one written from a short template in the suite's tools folder, and
-/// any of them opened to change, in Notepad++ when it is installed, else in Notepad.
+/// any of them, or suite.json, opened to change, in Notepad++ when it is installed, else in Notepad.
 /// </summary>
 internal static partial class ScriptEditor
 {
@@ -33,6 +33,19 @@ internal static partial class ScriptEditor
             }
         }
         return false;
+    }
+
+    /// <summary>Opens a folder in Explorer, saying so when it can't.</summary>
+    public static void ShowFolder(string folder)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe") { ArgumentList = { folder } })?.Dispose();
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            System.Windows.MessageBox.Show($"Couldn't open {folder}: {ex.Message}", "AutoTestRunner", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+        }
     }
 
     /// <summary>Where Notepad++ is installed, from its App Paths entry or Program Files; null when it isn't.</summary>

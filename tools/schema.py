@@ -165,11 +165,16 @@ suite = {"$schema":S,"$id":"suite.schema.json","title":"AutoTestRunner suite","d
    "window":text("Its main window's title."),"startWindow":text("The title of the window it opens first, when that isn't its main window, such as a sign-in window. A useWindow step moves on to the main window."),"runAsAdmin":{"type":"boolean","description":"Restarts autotest as administrator, as the app needs it."},
    "status":text("An element whose text says what the app is doing, such as a status bar. Its text before each click is kept for waitText's new.")},"additionalProperties":False},
  "variables":{"type":"object","additionalProperties":{"anyOf":[{"type":["string","number","boolean"]},{"type":"object","required":["firstExisting"],"properties":{"firstExisting":{"type":"array","items":{"type":"string"},"description":"The first path that exists, relative to the suite folder; the last when none does."}},"additionalProperties":False}]}},
- "helpers":{"type":"object","additionalProperties":{"type":"object","required":["regex"],"properties":{"regex":text("${name(value)} gives the regex's first group in value.")},"additionalProperties":False}},
+ "helpers":{"type":"object","description":"${name(value)} picks something out of value. readFile is built in: ${name(readFile(path))} reads it out of a file, relative to the suite folder.",
+   "propertyNames":{"not":{"pattern":"^[Rr][Ee][Aa][Dd][Ff][Ii][Ll][Ee]$"}},
+   "additionalProperties":{"type":"object","oneOf":[{"required":[way]} for way in ["regex","xPath","jsonPath"]],"properties":{
+     "regex":text("${name(value)} gives the regex's first group in value, or the whole match when it has no group."),
+     "xPath":text("${name(value)} gives what the XPath finds first in value, which is XML, such as //database/connectionString/text(). Namespaces are left out."),
+     "jsonPath":text("${name(value)} gives what the JSONPath finds first in value, which is JSON, such as $.ConnectionStrings.Orders.")},"additionalProperties":False}},
  "requires":{"type":"array","items":{"type":"string"},"description":"Paths that must exist before a run starts. If one doesn't, autotest exits with code 2."},
  "reset":{"type":"object","properties":{"script":text("A .ps1 or .cs file that removes what the suite leaves on the machine. A .cs runs with dotnet run, which needs the .NET 10 SDK."),"powershell":text("The older name for script."),"leftovers":text("A .ps1 or .cs file that prints one line for each thing an earlier run left; nothing on a clean machine.")},"additionalProperties":False},
  "databases":{"type":"object","description":"Databases that query steps and dbValue checks use, by a name of your own.","additionalProperties":{"type":"object","required":["kind","connection"],"properties":{
-   "kind":{"enum":["sqlServer","postgres","oracle","mySql","sqlite"],"description":"sqlServer for SQL Server, Express and LocalDB; mySql for MySQL and MariaDB."},
+   "kind":{"anyOf":[{"enum":["sqlServer","postgres","oracle","mySql","sqlite"]},{"type":"string","pattern":"\\$\\{"}],"description":"sqlServer for SQL Server, Express and LocalDB; mySql for MySQL and MariaDB. It can be a ${...}, such as one read from the app's .config file, which comes to one of them when it is used."},
    "connection":text("Its connection string, as its .NET driver takes it; ${variables} allowed, so a password can come from --var.")},"additionalProperties":False}},
  "queues":{"type":"object","description":"Message queues that send, receive and purge steps and queue checks use, by a name of your own.","additionalProperties":{"type":"object","required":["kind","queue"],"properties":{
    "kind":{"enum":["rabbitMq","ibmMq","msmq"]},

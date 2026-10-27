@@ -242,4 +242,24 @@ public sealed class ManualRunTests : IDisposable
         Assert.True(KeyNames.Same("Enter", KeyNames.Of(0x0D, ctrl: false, alt: false, shift: false, win: false)!));
         Assert.False(KeyNames.Same("Ctrl+S", KeyNames.Of('S', ctrl: false, alt: false, shift: false, win: false)!));
     }
+
+    [Theory]
+    [InlineData('S', true, false, false, "Ctrl+S")]
+    [InlineData(0x22, false, false, true, "Shift+PageDown")]
+    [InlineData(0x74, true, true, false, "Ctrl+Alt+F5")]
+    [InlineData(0x1B, false, false, false, "Esc")]
+    [InlineData(0x08, false, false, false, "Backspace")]
+    [InlineData(0x61, false, false, false, "Numpad1")]
+    public void Keys_recorded_in_a_form_are_written_as_a_person_writes_them(int key, bool ctrl, bool alt, bool shift, string written)
+    {
+        Assert.Equal(written, KeyNames.Written(key, ctrl, alt, shift, win: false));
+        Assert.True(KeyNames.Same(written, KeyNames.Of(key, ctrl, alt, shift, win: false)!));
+    }
+
+    [Fact]
+    public void Ctrl_or_shift_on_its_own_isnt_recorded_until_a_key_is_pressed_with_it()
+    {
+        Assert.Null(KeyNames.Written(0x11, ctrl: true, alt: false, shift: false, win: false));
+        Assert.Null(KeyNames.Written(0xA0, ctrl: false, alt: false, shift: true, win: false));
+    }
 }

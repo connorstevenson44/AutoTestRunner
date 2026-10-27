@@ -30,13 +30,18 @@ public sealed partial class Suite
         var helpers = new Dictionary<string, Helper>();
         foreach (var (name, helper) in root["helpers"] as JsonObject ?? [])
         {
+            if (string.Equals(name, VariableScope.ReadFile, StringComparison.OrdinalIgnoreCase))
+            {
+                problems.Add($"suite.json: there can't be a helper called {name}: {VariableScope.ReadFile} is built in, and gives a file's text.");
+                continue;
+            }
             try
             {
-                helpers[name] = new Helper(name, new Regex(helper!["regex"]!.GetValue<string>(), RegexOptions.Multiline));
+                helpers[name] = Helper.From(name, helper);
             }
-            catch (Exception ex) when (ex is ArgumentException or NullReferenceException or InvalidOperationException)
+            catch (ArgumentException ex)
             {
-                problems.Add($"suite.json: helper {name} needs a regex: {ex.Message}");
+                problems.Add($"suite.json: helper {name}: {ex.Message}");
             }
         }
 
@@ -146,7 +151,8 @@ public sealed partial class Suite
         foreach (var (name, node) in root["databases"] as JsonObject ?? [])
         {
             var (kind, connection) = (Words(node?["kind"]), Words(node?["connection"]));
-            if (kind is null || !DatabaseSettings.Kinds.ContainsKey(kind))
+            // A kind with ${...} in it, such as one read from the app's .config file, is checked when it is used.
+            if (kind is null || !DatabaseSettings.Kinds.ContainsKey(kind) && !kind.Contains("${", StringComparison.Ordinal))
                 problems.Add($"suite.json: database {name} needs kind, one of: {string.Join(", ", DatabaseSettings.Kinds.Keys)}.");
             else if (connection is null)
                 problems.Add($"suite.json: database {name} needs connection, its connection string.");

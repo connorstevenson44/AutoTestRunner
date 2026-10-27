@@ -2,14 +2,16 @@ using System.IO;
 using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using AutoTestRunner.Building;
+using AutoTestRunner.Driving;
 
 namespace AutoTestRunner.Cli.Views;
 
 /// <summary>
 /// A step's or check's fields, one under another, each with its name over it: a box for words, with a button that
-/// puts in a kept value; a box for a control, with Pick; a box for a path, with Browse; a tick for yes or no; and a
-/// drop-down for one of a few words. What is typed is written back as the JSON the scripts take.
+/// puts in a kept value; a box for a control, with Pick; a box for a path, with Browse; a box for keys, with Record; a
+/// tick for yes or no; and a drop-down for one of a few words. What is typed is written back as the JSON the scripts take.
 /// </summary>
 internal sealed class FormView : StackPanel
 {
@@ -111,6 +113,13 @@ internal sealed class FormView : StackPanel
             Button(Icons.Folder, "Browse for a folder", () => Browse(box, folder: true));
         if (field.Type is not (FieldType.Target or FieldType.Json or FieldType.Number))
             Button(Icons.Values, "Put in a kept value or a suite variable", () => Values(box));
+        // Last, so it sits right beside the box.
+        if (field.Type == FieldType.Keys)
+        {
+            var record = RecordKeys(box);
+            DockPanel.SetDock(record, Dock.Right);
+            row.Children.Add(record);
+        }
         row.Children.Add(box);
         Children.Add(row);
         _fields.Add((field, () => box.Text, was));
@@ -142,6 +151,63 @@ internal sealed class FormView : StackPanel
         if (values.Count == 0)
             menu.Items.Add(new MenuItem { Header = "Nothing kept yet", IsEnabled = false });
         menu.IsOpen = true;
+    }
+
+    // A button that puts the next keys pressed in the box, such as Ctrl+S, then stops. The keys are kept from the
+    // window, so Esc or Enter is recorded rather than closing it; Ctrl or Shift on its own waits for the key it is held with.
+    private static Button RecordKeys(TextBox box)
+    {
+        const string Tip = "Record keys: click, then press them, such as Ctrl+S";
+        var recording = false;
+        Button? button = null;
+        void Stop()
+        {
+            recording = false;
+            ((TextBlock)button!.Content).ClearValue(TextBlock.ForegroundProperty);
+            button.ToolTip = Tip;
+        }
+        button = Ui.IconButton(Icons.Record, Tip, () =>
+        {
+            if (recording)
+            {
+                Stop();
+                return;
+            }
+            recording = true;
+            ((TextBlock)button!.Content).Foreground = Ui.Fail;
+            button.ToolTip = "Recording: press the keys, or click to stop";
+            box.Focus();
+            box.SelectAll();
+        }, 13);
+        button.Padding = new Thickness(6, 3, 6, 3);
+        button.VerticalAlignment = VerticalAlignment.Top;
+        box.PreviewKeyDown += (_, e) =>
+        {
+            if (!recording)
+                return;
+            e.Handled = true;
+            var key = e.Key switch
+            {
+                Key.System => e.SystemKey,
+                Key.ImeProcessed => e.ImeProcessedKey,
+                Key.DeadCharProcessed => e.DeadCharProcessedKey,
+                var other => other,
+            };
+            var held = Keyboard.Modifiers;
+            if (KeyNames.Written(KeyInterop.VirtualKeyFromKey(key), held.HasFlag(ModifierKeys.Control), held.HasFlag(ModifierKeys.Alt),
+                    held.HasFlag(ModifierKeys.Shift), held.HasFlag(ModifierKeys.Windows)) is not { } keys)
+                return;
+            box.Text = keys;
+            box.CaretIndex = keys.Length;
+            Stop();
+        };
+        // Clicking anywhere else stops it; clicking the button again stops it through the button.
+        box.LostKeyboardFocus += (_, e) =>
+        {
+            if (recording && !ReferenceEquals(e.NewFocus, button))
+                Stop();
+        };
+        return button;
     }
 
     // A path browsed to, written from ${suiteDir} when it is in the suite's folder, so the suite can move.

@@ -34,6 +34,9 @@ internal sealed class LauncherWindow : Window
     private readonly ToggleButton[] _modes, _speeds;
     private readonly Button _start;
     private SuitePane? _suite;
+    // When the open suite's files were last written as it was loaded, so that coming back from changing them by hand,
+    // such as suite.json in Notepad++, loads it again.
+    private DateTime _written;
 
     public LauncherWindow(IReadOnlyList<FoundSuite> suites, FoundSuite chosen, Options options)
     {
@@ -126,6 +129,11 @@ internal sealed class LauncherWindow : Window
         main.Children.Add(go);
         Content = root;
 
+        Activated += (_, _) =>
+        {
+            if (_pane.Tag is FoundSuite open && _suite?.Busy != true && Written(open.Folder) != _written)
+                Reload();
+        };
         Choose(chosen);
     }
 
@@ -241,6 +249,7 @@ internal sealed class LauncherWindow : Window
     private void Choose(FoundSuite found, IReadOnlySet<string>? ticked = null)
     {
         _pane.Tag = found;
+        _written = Written(found.Folder);
         foreach (var (each, row) in _railRows)
             row.Background = Same(each, found) ? Ui.AccentSoft : Brushes.Transparent;
         if (found.Suite is { } suite)
@@ -262,11 +271,36 @@ internal sealed class LauncherWindow : Window
         Changed();
     }
 
+    // When a suite's scripts were last written: suite.json, elements.json, and its cases and macros.
+    private static DateTime Written(string folder)
+    {
+        try
+        {
+            return new[] { folder, System.IO.Path.Combine(folder, "cases"), System.IO.Path.Combine(folder, "macros") }
+                .Where(System.IO.Directory.Exists)
+                .SelectMany(each => System.IO.Directory.EnumerateFiles(each, "*.json"))
+                .Select(System.IO.File.GetLastWriteTimeUtc)
+                .DefaultIfEmpty()
+                .Max();
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+        {
+            return default;
+        }
+    }
+
     // A suite that can't load: what is wrong with its scripts, as validate says it.
     private static StackPanel Problems(FoundSuite found)
     {
         var panel = new StackPanel();
-        panel.Children.Add(Ui.Words(found.Name, 20, Ui.Ink, FontWeights.Bold));
+        var titleRow = new DockPanel();
+        var tools = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        foreach (var button in SuitePane.FileTools(found.Folder))
+            tools.Children.Add(button);
+        DockPanel.SetDock(tools, Dock.Right);
+        titleRow.Children.Add(tools);
+        titleRow.Children.Add(Ui.Words(found.Name, 20, Ui.Ink, FontWeights.Bold));
+        panel.Children.Add(titleRow);
         var pill = Ui.Pill(Ui.IconText(Icons.Failed, $"Can't run: {found.Problems.Count} {(found.Problems.Count == 1 ? "mistake" : "mistakes")} in its scripts", Ui.Fail),
             Ui.FailSoft, 12, new Thickness(10, 4, 12, 4));
         pill.HorizontalAlignment = HorizontalAlignment.Left;
@@ -288,7 +322,7 @@ internal sealed class LauncherWindow : Window
             BorderBrush = Ui.Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), MaxHeight = 420,
             Child = new ScrollViewer { Content = list, VerticalScrollBarVisibility = ScrollBarVisibility.Auto },
         });
-        panel.Children.Add(Ui.Words($"Fix them in {found.Folder}, then reopen the launcher. autotest validate also lists them.", 12, Ui.Muted));
+        panel.Children.Add(Ui.Words($"Fix them in {found.Folder}, and the launcher loads the suite again when you come back to it. autotest validate also lists them.", 12, Ui.Muted));
         ((FrameworkElement)panel.Children[^1]).Margin = new Thickness(0, 10, 0, 0);
         return panel;
     }

@@ -31,7 +31,7 @@ the scripts never turn into a programming language that a person can't read as a
 | `app.runAsAdmin` | autotest restarts itself as administrator; unattended, it exits with 4 instead |
 | `app.status` | An element whose text says what the app is doing. Its text before every click is kept, so `waitText` with `new` doesn't take the old text. |
 | `variables` | Text, or `{ "firstExisting": [paths] }`: the first that exists, else the last. `autotest run --var name=value` overrides one. Built in: `suiteDir`, `resultsDir`, `temp`. |
-| `helpers` | `${name(value)}` gives the regex's first group in value, or the whole match when it has no group |
+| `helpers` | `${name(value)}` picks something out of value: `{ "regex": … }` gives the regex's first group, or the whole match when it has no group; `{ "xPath": … }` and `{ "jsonPath": … }` give what the path finds first in XML or JSON. `${name(readFile(path))}` reads it out of a file: see [Settings from the app's own files](#settings-from-the-apps-own-files) |
 | `requires` | Paths that must exist; if one doesn't, autotest exits with 2 |
 | `reset.leftovers` | A script that prints one line for each thing an earlier run left. Unattended, or when a watched run starts from the first case, anything it prints is cleaned up first. |
 | `reset.powershell` | The script that cleans up |
@@ -196,11 +196,39 @@ the text that said it was done.
   "steps": [ { "call": "answerRemovalStep", "with": { "choice": "run" } } ] }
 ```
 
+## Settings from the app's own files
+
+A suite can read a setting out of the app's own files, such as its connection string from its .config file, so the
+tests never get out of step with the app. `${readFile(path)}` gives a file's text, relative to the suite folder, and a
+helper picks the setting out of it:
+
+```json
+"variables": { "appConfig": "../app/Orders.exe.config" },
+"helpers": {
+  "databaseConnection": { "xPath": "//database/connectionString/text()" },
+  "databaseType": { "xPath": "//database/type/text()" },
+  "ordersApi": { "jsonPath": "$.Services.Orders.Url" }
+},
+"databases": {
+  "orders": { "kind": "${databaseType(readFile(appConfig))}", "connection": "${databaseConnection(readFile(appConfig))}" }
+}
+```
+
+| Helper | What it gives |
+| --- | --- |
+| `regex` | The regex's first group, or the whole match when it has no group |
+| `xPath` | What the XPath finds first: an element's text, an attribute's value, or a count. Namespaces are left out, so `//connectionString` finds it whatever namespace the file puts it in. |
+| `jsonPath` | What the JSONPath finds first: a text as it is, anything else as JSON. `$.a.b`, `$['a b']`, `$.list[0]`, `$.list[-1]` for the last, `*` for every property or item, and `$..name` at any depth. A name is matched ignoring case when it isn't there exactly, as .NET reads appsettings.json; comments are fine. |
+
+Each finds nothing as an empty text. A call can take a variable, `'text in quotes'`, or another call, and works
+wherever `${variables}` do. `readFile` is built in, so no helper can have its name; `ReadFile` works too.
+
 ## Databases and queues
 
 Each database and queue has a name in suite.json, so the cases never repeat a connection string. `${variables}` work in
 every part, so a password can come from `autotest run --var dbPassword=…`; wherever a connection shows, its password
-shows as dots.
+shows as dots. A database's `kind` can be read too, as above: it is checked when a step uses it, ignoring case, so
+`SqlServer` in the app's file is `sqlServer`.
 
 ```json
 "databases": {

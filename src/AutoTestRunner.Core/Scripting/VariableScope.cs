@@ -6,27 +6,47 @@ namespace AutoTestRunner.Scripting;
 /// <summary>
 /// The variables a step can use. A macro call gets a scope of its own over the case's, so its parameters don't leak,
 /// while what the case kept stays readable. Expressions are deliberately tiny: <c>${name}</c>, <c>${name.part}</c>,
-/// <c>${env:NAME}</c> and <c>${helper(name)}</c>. Anything more is a C# step, not a script.
+/// <c>${env:NAME}</c>, <c>${helper(name)}</c> and <c>${readFile(path)}</c>, which calls can wrap, as in
+/// <c>${connection(readFile(appConfig))}</c>. Anything more is a C# step, not a script.
 /// </summary>
 public sealed partial class VariableScope(VariableScope? parent = null, IReadOnlyDictionary<string, Helper>? helpers = null)
 {
+    /// <summary>The call that gives a file's text, built in rather than one of the suite's helpers.</summary>
+    public const string ReadFile = "readFile";
+
     private readonly VariableScope? _parent = parent;
     private readonly Dictionary<string, Value> _values = new(StringComparer.Ordinal);
+    // Variables worked out when they are first used, by SetLater.
+    private readonly Dictionary<string, Func<Value>> _later = new(StringComparer.Ordinal);
     private readonly IReadOnlyDictionary<string, Helper> _helpers = helpers ?? parent?._helpers ?? new Dictionary<string, Helper>();
 
     public VariableScope Child() => new(this, _helpers);
 
-    public void Set(string name, Value value) => _values[name] = value;
+    public void Set(string name, Value value)
+    {
+        _later.Remove(name);
+        _values[name] = value;
+    }
 
-    public void Set(string name, string text) => _values[name] = Value.Of(text);
+    public void Set(string name, string text) => Set(name, Value.Of(text));
+
+    /// <summary>
+    /// Sets a variable that is worked out when it is first used, such as one read from a file the app writes once it
+    /// is built, so a suite still opens before it can be. Until it can be, using it says why it can't.
+    /// </summary>
+    public void SetLater(string name, Func<Value> make)
+    {
+        _values.Remove(name);
+        _later[name] = make;
+    }
 
     /// <summary>Sets a variable in the scope that already has it, so a macro can update what the case kept.</summary>
     public void SetOuter(string name, Value value)
     {
         for (var scope = this; scope is not null; scope = scope._parent)
-            if (scope._values.ContainsKey(name))
+            if (scope._values.ContainsKey(name) || scope._later.ContainsKey(name))
             {
-                scope._values[name] = value;
+                scope.Set(name, value);
                 return;
             }
         _values[name] = value;
@@ -35,19 +55,52 @@ public sealed partial class VariableScope(VariableScope? parent = null, IReadOnl
     public bool TryGet(string name, out Value value)
     {
         for (var scope = this; scope is not null; scope = scope._parent)
+        {
             if (scope._values.TryGetValue(name, out value!))
                 return true;
+            if (scope._later.TryGetValue(name, out var make))
+            {
+                try
+                {
+                    value = make();
+                }
+                catch (ScriptException ex)
+                {
+                    throw new ScriptException($"{name}: {ex.Message}");
+                }
+                scope.Set(name, value);
+                return true;
+            }
+        }
         value = null!;
         return false;
     }
 
-    /// <summary>Every variable it can see, each with its text, the nearest scope's where two have the same name.</summary>
+    /// <summary>
+    /// Every variable it can see, each with its text, the nearest scope's where two have the same name. One that can't
+    /// be worked out yet has why as its text.
+    /// </summary>
     public IReadOnlyList<(string Name, string Text)> All()
     {
         var seen = new Dictionary<string, string>(StringComparer.Ordinal);
         for (var scope = this; scope is not null; scope = scope._parent)
+        {
+            foreach (var name in scope._later.Keys.ToList())
+            {
+                if (seen.ContainsKey(name))
+                    continue;
+                try
+                {
+                    seen[name] = scope.Get(name).Text;
+                }
+                catch (ScriptException ex)
+                {
+                    seen[name] = ex.Message;
+                }
+            }
             foreach (var (name, value) in scope._values)
                 seen.TryAdd(name, value.Text);
+        }
         return [.. seen.OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase).Select(pair => (pair.Key, pair.Value))];
     }
 
@@ -105,12 +158,13 @@ public sealed partial class VariableScope(VariableScope? parent = null, IReadOnl
         if (call.Success)
         {
             var name = call.Groups["name"].Value;
-            if (!_helpers.TryGetValue(name, out var helper))
+            var reads = string.Equals(name, ReadFile, StringComparison.OrdinalIgnoreCase);
+            Helper? helper = null;
+            if (!reads && !_helpers.TryGetValue(name, out helper))
                 throw new ScriptException($"There is no helper called {name}. The suite's helpers are: {(_helpers.Count == 0 ? "none" : string.Join(", ", _helpers.Keys))}.");
             var argument = call.Groups["arg"].Value.Trim();
             var input = argument.StartsWith('\'') && argument.EndsWith('\'') && argument.Length >= 2 ? argument[1..^1] : Evaluate(argument);
-            var match = helper.Pattern.Match(input);
-            return match.Success ? (match.Groups.Count > 1 ? match.Groups[1].Value : match.Value) : "";
+            return helper is null ? Read(input) : helper.Apply(input);
         }
 
         var dot = expression.IndexOf('.');
@@ -127,6 +181,21 @@ public sealed partial class VariableScope(VariableScope? parent = null, IReadOnl
         }
     }
 
-    [GeneratedRegex(@"^(?<name>[A-Za-z_][A-Za-z0-9_]*)\((?<arg>[^()]*)\)$")]
+    // A file's text, relative to the suite folder, for a helper to read a setting out of, such as an app's .config file.
+    private string Read(string path)
+    {
+        var full = Path.IsPathRooted(path) || !TryGet("suiteDir", out var suite) ? Path.GetFullPath(path) : Path.GetFullPath(Path.Combine(suite.Text, path));
+        try
+        {
+            return File.ReadAllText(full);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            throw new ScriptException($"{ReadFile} couldn't read {full}: {ex.Message}");
+        }
+    }
+
+    // The argument can be another call, as in configValue(readFile(appConfig)).
+    [GeneratedRegex(@"^(?<name>[A-Za-z_][A-Za-z0-9_]*)\((?<arg>.*)\)$", RegexOptions.Singleline)]
     private static partial Regex HelperCall();
 }
