@@ -26,6 +26,8 @@ using System.Runtime.InteropServices;
 public static class Pointer
 {
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr hwnd);
+    [DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, System.IntPtr extra);
     [DllImport("user32.dll")] public static extern void mouse_event(uint flags, int x, int y, uint data, System.IntPtr extra);
 }
 '@
@@ -448,9 +450,12 @@ if ($Parts -contains 'new-suite') {
         Keys 'clerk-demo'
         Invoke (Wait-For { $button = Find $signIn $ui::AutomationIdProperty 'SignInButton'; if ($button.Current.IsEnabled) { $button } } 'Sign in to be enabled' 10)
         $app = Wait-For { Window 'Order Desk' } 'the Order Desk window, signed in' 30
-        # The main window opens where Windows puts it, not beside the launcher as the window started was: brought to
-        # the front, as a person would before pointing at it.
-        $app.SetFocus()
+        # The main window opens where Windows puts it, and here behind the launcher, as signing in wasn't a click:
+        # brought to the front, as a person would before pointing at it. Windows lets a script do that just after a
+        # key press, so Alt is pressed and let go first.
+        [Pointer]::keybd_event(0x12, 0, 0, [System.IntPtr]::Zero)
+        [Pointer]::keybd_event(0x12, 0, 2, [System.IntPtr]::Zero)
+        [Pointer]::SetForegroundWindow([System.IntPtr]$app.Current.NativeWindowHandle) | Out-Null
         Start-Sleep -Milliseconds 500
         Invoke (Find $form $ui::NameProperty 'Point at it')
         Start-Sleep -Seconds 1
