@@ -35,6 +35,8 @@ the scripts never turn into a programming language that a person can't read as a
 | `requires` | Paths that must exist; if one doesn't, autotest exits with 2 |
 | `reset.leftovers` | A script that prints one line for each thing an earlier run left. Unattended, or when a watched run starts from the first case, anything it prints is cleaned up first. |
 | `reset.powershell` | The script that cleans up |
+| `databases` | The databases `query` steps and `dbValue` checks use, by a name of your own: see [Databases and queues](#databases-and-queues) |
+| `queues` | The message queues `send`, `receive` and `purge` steps and `queue` checks use, by a name of your own |
 | `builder.watch` | Controls whose text the builder watches while recording: `{ "element": "savedText", "call": "waitForSaved", "check": true }`. When it changes after a step, the builder adds a wait for its new words, through `call` (given `startsWith` when the macro takes it) or a `waitText`; with `check`, it keeps the words and checks them at the checkpoint. The app's `status`, and any element with a macro named `waitFor` and its name, such as `waitForSavedText`, are watched anyway. |
 | `builder.afterClick` | Steps the builder adds after a control is clicked, instead of a wait for the status text: `{ "element": "deploy", "call": "waitForDeploy", "with": { "within": "300" }, "delay": 0.5 }` adds a `wait` of `delay` seconds, then the call. |
 
@@ -104,6 +106,10 @@ Each step does one thing, named by its key. Any step can also have:
 | `startService`, `stopService` | a service's name | Starts or stops a Windows service, and waits until it has |
 | `setJsonValue` | a JSON file, `path`, `to` | Sets a setting such as `Orders:Region`, making the objects on the way. A number or true and false stays one. Comments in the file are dropped. |
 | `setAppSetting` | a .config file, `key`, `to` | Sets an appSettings value, adding it when it isn't there |
+| `query` | a database, `sql`, `params` | Runs SQL on a database in suite.json. With `as`, keeps the first value it reads; `${name.rows}` is how many rows it read or changed, and `${name.output}` all it read, a line to a row. |
+| `send` | a queue, `message` or `file` | Puts a message on a queue in suite.json |
+| `receive` | a queue, `equals`, `contains`, `matches` | Takes the next message off the queue, waiting `within` seconds (10 when left out); nothing coming is stuck. A message that isn't the one expected fails the step. With `as`, keeps its text. |
+| `purge` | a queue | Takes every message off the queue |
 | `checkpoint` | a title, `checks`, `look`, `tools` | Ends a case: see below |
 
 ## Targets
@@ -168,6 +174,48 @@ the text that said it was done.
   "steps": [ { "call": "answerRemovalStep", "with": { "choice": "run" } } ] }
 ```
 
+## Databases and queues
+
+Each database and queue has a name in suite.json, so the cases never repeat a connection string. `${variables}` work in
+every part, so a password can come from `autotest run --var dbPassword=…`; wherever a connection shows, its password
+shows as dots.
+
+```json
+"databases": {
+  "orders": { "kind": "sqlServer", "connection": "Server=.\\SQLEXPRESS;Database=Orders;Integrated Security=true;TrustServerCertificate=true" },
+  "stock": { "kind": "postgres", "connection": "Host=localhost;Database=stock;Username=qa;Password=${dbPassword}" }
+},
+"queues": {
+  "newOrders": { "kind": "rabbitMq", "connection": "amqp://guest:guest@localhost:5672/", "queue": "orders.new" },
+  "invoices": { "kind": "ibmMq", "connection": "localhost(1414)", "channel": "DEV.APP.SVRCONN", "queueManager": "QM1", "queue": "DEV.QUEUE.1",
+                "user": "app", "password": "${mqPassword}" },
+  "legacy": { "kind": "msmq", "queue": ".\\private$\\orders" }
+}
+```
+
+| Kind | What it is | Driver |
+| --- | --- | --- |
+| `sqlServer` | SQL Server, Express and LocalDB | Microsoft.Data.SqlClient |
+| `postgres` | PostgreSQL | Npgsql |
+| `oracle` | Oracle Database | Oracle.ManagedDataAccess.Core |
+| `mySql` | MySQL and MariaDB | MySqlConnector |
+| `sqlite` | SQLite, a file | Microsoft.Data.Sqlite |
+| `rabbitMq` | RabbitMQ: `connection` is its amqp:// address | RabbitMQ.Client |
+| `ibmMq` | IBM MQ: `connection` is host(port), with `channel`, `queueManager`, and `user` and `password` when the channel asks | IBMMQDotnetClient |
+| `msmq` | MSMQ: `queue` is its path. `format` is `xml`, as .NET's XmlMessageFormatter writes text (the default), or `text`. Either is read. | Windows PowerShell's System.Messaging |
+
+SQL is written in the database's own dialect, and values go in `params`, never pasted into the SQL: `@id` names one,
+or `:id` on Oracle. Values are read as text: numbers and dates the same on every machine, a database null as `<null>`.
+
+```json
+{ "query": "orders", "sql": "delete from Orders where Customer = @customer", "params": { "customer": "Ada" } },
+{ "send": "newOrders", "file": "data/order-1001.json" },
+{ "receive": "invoices", "contains": "INV-1001", "within": 30, "as": "invoice" },
+{ "checkpoint": "Order 1001 is billed",
+  "checks": [ { "dbValue": "orders", "sql": "select Status from Orders where Id = @id", "params": { "id": "1001" }, "equals": "Billed" },
+              { "queue": "invoices", "count": 0 } ] }
+```
+
 ## Macros
 
 `macros/waitForStatusBar.json`:
@@ -224,6 +272,8 @@ Each check says what should be true and, when it isn't, what was found instead. 
 | `web` | an address, `status` (200 when left out), `contains` |
 | `clipboard` | text the clipboard should have |
 | `atMost`, `atLeast` | a number, usually `${kept}` such as `${deploy.seconds}`, and `to` |
+| `dbValue` | a database, `sql`, `params`, and `equals`, `contains`, `matches` or `rows`: the first value it reads, or how many rows. With none of them, that it reads a row. |
+| `queue` | a queue, `count` or `has`: how many messages are waiting, or that one has the text. It looks without taking them. |
 
 | Tool | Opens |
 | --- | --- |

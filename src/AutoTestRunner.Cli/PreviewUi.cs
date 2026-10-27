@@ -144,6 +144,33 @@ internal static class PreviewUi
         view.CaseFinished(Ended(cases[1], CaseStatus.Failed, 41.7));
 
         view.CaseStarted(3, cases.Count, cases[2]);
+        // What the app wrote to its database and sent on its queues: a query's rows, a message sent and one received.
+        var orders = new Part(PartKind.Database, "orders", "SQL Server\nServer=.\\SQLEXPRESS;Database=Orders;User Id=qa;Password=•••");
+        var invoices = new Part(PartKind.Queue, "invoices", "RabbitMQ\namqp://qa:•••@localhost:5672/\ninvoices.out");
+        const string Sql = "select Status, Total from Orders where Id = @id";
+        view.ShowStep(Activity.Of(ActivityKind.Database, Part.Verb("Query"), orders, Part.Value(Sql)) with { Command = Sql });
+        view.CommandStarted("orders (SQL Server)", Sql + "\n-- @id = 1001");
+        view.CommandOutput("Status\tTotal", false);
+        view.CommandOutput("Shipped\t26.00", false);
+        view.CommandFinished(0, TimeSpan.FromSeconds(0.2));
+        view.ShowStep(Activity.Of(ActivityKind.Queue, Part.Verb("Send"), Part.Value("{\"order\":1001,\"action\":\"invoice\"}"), Part.Word("to"),
+            new Part(PartKind.Queue, "billing", "RabbitMQ\namqp://qa:•••@localhost:5672/\nbilling.in")));
+        view.ShowStep(Activity.Of(ActivityKind.Queue, Part.Verb("Receive"), Part.Word("from"), invoices) with { Command = "invoices (RabbitMQ invoices.out)" });
+        view.CommandStarted("invoices (RabbitMQ invoices.out)", null);
+        view.CommandOutput("{\"invoice\":\"INV-1001\",\"order\":1001,\"total\":26.00}", false);
+        view.CommandFinished(0, TimeSpan.FromSeconds(1.3));
+        view.ShowStep(Activity.Of(ActivityKind.Check, Part.Verb("Check"), Part.Word("Order 1001 is billed")));
+        view.ShowCheckpoint("Order 1001 is billed",
+        [
+            Checked(SubjectKind.Database, "orders", "select Status from Orders where Id = 1001", "=", "Billed", "Billed", true),
+            Checked(SubjectKind.Database, "orders", "rows", "=", "1", "1", true),
+            Checked(SubjectKind.Queue, "invoices", "messages", "=", "0", "0", true),
+            Checked(SubjectKind.Queue, "billing", "a message", "contains", "1001", "2 messages, none with it", false),
+        ],
+        [], []);
+        control.Hold(HoldReason.Checkpoint);
+        Shot("13-databases-and-queues");
+        control.CarryOn();
         view.ShowStep(Activity.Of(ActivityKind.Point, Part.Verb("Point at"), Badge("main", "Button \"main\"\nelements.json  installRow main\nFound by  Button tooltip \"C:\\Apps\\Contoso.Orders\\main\"")));
         view.ShowStep(Activity.Of(ActivityKind.Click, Part.Verb("Click"), Badge("Remove", "Button \"Remove\"\nFound by  Button \"Remove\" beside Button \"main\"")));
         view.ShowStep(Activity.Of(ActivityKind.Dialog, Part.Verb("Answer"), Part.Window("Remove main?"), Part.Word("with"), Part.Key("Yes")) with { Detail = "Remove main? Its service, scheduled task and folder are removed." });

@@ -134,7 +134,8 @@ buttons still pause, step and stop. Changing the speed from Manual while a step 
   opens it, in Notepad++ when it is installed, else Notepad, and its step plays once you've written it. The page icon on
   a script step opens its file. **Use a macro** › asks for a macro's parameters. **In the app** › and **On this
   computer** › offer every other step, such as opening tree items, a drag, copying a file or setting a JSON value, each
-  with a form: browse for a file, pick a control.
+  with a form: browse for a file, pick a control. **Databases and queues** › queries a database, or sends, receives
+  or empties a queue, picked from those in suite.json.
 - The chevron on a step folds out its details, as a form; the circle switches it off, so the case skips it and keeps
   it. **+** by the checkpoint adds any check, from a form whose **Try now** runs it against the app as it is. The `{x}`
   by a box, and over the steps, lists the kept values and suite variables with what each holds now, to put one in.
@@ -200,6 +201,11 @@ A case reads like the manual test it automates:
 }
 ```
 
+A case can read and change the app's database, and send and take messages from its queues: SQL Server, PostgreSQL,
+Oracle, MySQL and SQLite, and RabbitMQ, IBM MQ and MSMQ, each named once in suite.json with its connection. A
+`query` step keeps a value, `send`, `receive` and `purge` work a queue, and the `dbValue` and `queue` checks say what
+is in them at a checkpoint: see [Databases and queues](docs/format.md#databases-and-queues).
+
 Setup that is easier written as code can be a C# file instead of PowerShell: `{ "script": "tools/SeedOrders.cs",
 "args": ["${dataDir}"] }` runs it with `dotnet run`, which builds it the first time and after it changes. It gets the
 step's args as `args`, a line such as `#:package Microsoft.Data.SqlClient@7.1.1` at the top brings in a NuGet package,
@@ -216,6 +222,7 @@ keep working when the wording changes.
 | Project | What it is |
 | --- | --- |
 | `AutoTestRunner.Core` | The script format, its loader and checks, the runner (pace, pausing, checkpoints, stuck, results) and the builder's engine (naming controls, turning what a person does into steps, writing the case). Plain .NET, tested on any OS against a fake app. |
+| `AutoTestRunner.Data` | The databases and queues: each kind through its vendor's own .NET driver, and MSMQ through Windows PowerShell. Its tests run against real servers in containers in CI. |
 | `AutoTestRunner.FlaUI` | The driver: finding controls, scrolling virtualised lists, buttons that only show on hover, Win32 message boxes and file pickers, screenshots and tree dumps; and the inspector, which reads the control under the mouse for the builder. |
 | `AutoTestRunner.Cli` | `autotest`: the command line, the launcher, the panel and keys of a watched run, and the builder. |
 | `schema/` | JSON schemas for suite.json, elements.json, macros and cases, written by `python3 tools/schema.py`. A test keeps them in step with the runner. |
