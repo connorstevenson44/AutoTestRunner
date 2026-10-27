@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Drawing;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using AutoTestRunner.Driving;
@@ -293,7 +294,7 @@ public sealed class FlaUiDriver : IDriver
         {
             throw;
         }
-        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or TimeoutException)
+        catch (Exception ex) when (Gone(ex))
         {
             return default;
         }
@@ -368,40 +369,25 @@ public sealed class FlaUiDriver : IDriver
         };
     }
 
-    private static string Name(AutomationElement element)
-    {
-        try
-        {
-            return element.Properties.Name.ValueOrDefault ?? "";
-        }
-        catch (System.Runtime.InteropServices.COMException)
-        {
-            return "";
-        }
-    }
+    private static string Name(AutomationElement element) => OrIfGone(() => element.Properties.Name.ValueOrDefault ?? "", "");
 
-    private static string HelpText(AutomationElement element)
-    {
-        try
-        {
-            return element.Properties.HelpText.ValueOrDefault ?? "";
-        }
-        catch (System.Runtime.InteropServices.COMException)
-        {
-            return "";
-        }
-    }
+    private static string HelpText(AutomationElement element) => OrIfGone(() => element.Properties.HelpText.ValueOrDefault ?? "", "");
 
-    private static bool IsShown(AutomationElement element)
+    private static bool IsShown(AutomationElement element) => OrIfGone(() => element.BoundingRectangle is { Width: > 0, Height: > 0 }, false);
+
+    /// <summary>Whether an error means a control or window went away while it was read, as they do while the app changes.</summary>
+    internal static bool Gone(Exception ex) => ex is COMException or InvalidOperationException or TimeoutException;
+
+    // What a control says about itself, or otherwise when it went away while it was being read.
+    private static T OrIfGone<T>(Func<T> read, T otherwise)
     {
         try
         {
-            var box = element.BoundingRectangle;
-            return box.Width > 0 && box.Height > 0;
+            return read();
         }
-        catch (System.Runtime.InteropServices.COMException)
+        catch (COMException)
         {
-            return false;
+            return otherwise;
         }
     }
 
@@ -411,15 +397,7 @@ public sealed class FlaUiDriver : IDriver
     {
         foreach (var list in MainWindow().FindAllDescendants(Conditions.ByControlType(ControlType.List)))
         {
-            Rectangle box;
-            try
-            {
-                box = list.BoundingRectangle;
-            }
-            catch (System.Runtime.InteropServices.COMException)
-            {
-                continue;
-            }
+            var box = OrIfGone(() => list.BoundingRectangle, Rectangle.Empty);
             if (box.Height < 120)
                 continue;
             var scroller = list.Patterns.Scroll.IsSupported && list.Patterns.Scroll.Pattern.VerticallyScrollable.ValueOrDefault ? list : null;
@@ -451,7 +429,7 @@ public sealed class FlaUiDriver : IDriver
             if (element.Patterns.ScrollItem.IsSupported)
                 element.Patterns.ScrollItem.Pattern.ScrollIntoView();
         }
-        catch (System.Runtime.InteropServices.COMException)
+        catch (COMException)
         {
             // Not every row can scroll itself into view; BringIntoView does the rest.
         }
@@ -470,7 +448,7 @@ public sealed class FlaUiDriver : IDriver
         {
             element.DrawHighlight(false, Color.DarkOrange, TimeSpan.FromMilliseconds(_control.Pace + 500));
         }
-        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException)
+        catch (Exception ex) when (ex is COMException or InvalidOperationException)
         {
             // The outline is a courtesy; the step goes on without it.
         }
@@ -492,7 +470,7 @@ public sealed class FlaUiDriver : IDriver
                 view = ScrolledArea(element, out list);
                 box = Rect(element.BoundingRectangle);
             }
-            catch (System.Runtime.InteropServices.COMException ex)
+            catch (COMException ex)
             {
                 Log($"Couldn't scroll to a control, as it couldn't be told where it is: {ex.Message}");
                 return;
@@ -533,16 +511,8 @@ public sealed class FlaUiDriver : IDriver
         list = null;
         for (var parent = element.Parent; parent is not null && parent.Properties.ControlType.ValueOrDefault != ControlType.Window; parent = parent.Parent)
         {
-            bool scrolls;
-            try
-            {
-                scrolls = parent.Patterns.Scroll.IsSupported && parent.Patterns.Scroll.Pattern.VerticallyScrollable.ValueOrDefault;
-            }
-            catch (System.Runtime.InteropServices.COMException)
-            {
-                scrolls = false;
-            }
-            if (!scrolls)
+            var item = parent;
+            if (!OrIfGone(() => item.Patterns.Scroll.IsSupported && item.Patterns.Scroll.Pattern.VerticallyScrollable.ValueOrDefault, false))
                 continue;
             var box = Rect(parent.BoundingRectangle);
             area = new ScreenRect(Math.Max(area.Left, box.Left), Math.Max(area.Top, box.Top), Math.Min(area.Right, box.Right), Math.Min(area.Bottom, box.Bottom));
@@ -570,7 +540,7 @@ public sealed class FlaUiDriver : IDriver
                 Thread.Sleep(120);
                 return;
             }
-            catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or NotSupportedException)
+            catch (Exception ex) when (ex is COMException or InvalidOperationException or NotSupportedException)
             {
                 if (!_wheelNoted)
                 {
@@ -690,7 +660,7 @@ public sealed class FlaUiDriver : IDriver
                 .SelectMany(top => top.FindAllDescendants(condition))
                 .Where(IsShown)];
         }
-        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or TimeoutException)
+        catch (Exception ex) when (Gone(ex))
         {
             return [];
         }
@@ -751,7 +721,7 @@ public sealed class FlaUiDriver : IDriver
         {
             element.Focus();
         }
-        catch (System.Runtime.InteropServices.COMException)
+        catch (COMException)
         {
             Mouse.LeftClick(Middle(Rect(element.BoundingRectangle)));
         }
@@ -794,7 +764,7 @@ public sealed class FlaUiDriver : IDriver
         {
             element.Patterns.ExpandCollapse.Pattern.Collapse();
         }
-        catch (System.Runtime.InteropServices.COMException)
+        catch (COMException)
         {
             // Picking an item closes most drop-downs by itself.
         }
@@ -828,21 +798,16 @@ public sealed class FlaUiDriver : IDriver
             Keyboard.TypeSimultaneously(parts);
     }
 
-    private static VirtualKeyShort KeyCode(string key) => key.ToUpperInvariant() switch
+    // A key by its name, as KeyNames spells it; any other is a VirtualKeyShort name, such as F5 or SHIFT.
+    private static VirtualKeyShort KeyCode(string key) => KeyNames.Canonical(key) switch
     {
-        "CTRL" or "CONTROL" => VirtualKeyShort.CONTROL,
-        "ALT" => VirtualKeyShort.ALT,
-        "SHIFT" => VirtualKeyShort.SHIFT,
-        "ENTER" or "RETURN" => VirtualKeyShort.RETURN,
-        "ESC" or "ESCAPE" => VirtualKeyShort.ESCAPE,
-        "TAB" => VirtualKeyShort.TAB,
-        "DEL" or "DELETE" => VirtualKeyShort.DELETE,
-        "SPACE" => VirtualKeyShort.SPACE,
+        "CTRL" => VirtualKeyShort.CONTROL,
+        "ENTER" => VirtualKeyShort.RETURN,
+        "ESC" => VirtualKeyShort.ESCAPE,
         "BACKSPACE" => VirtualKeyShort.BACK,
-        "INS" => VirtualKeyShort.INSERT,
-        "PAGEUP" or "PGUP" => VirtualKeyShort.PRIOR,
-        "PAGEDOWN" or "PGDN" => VirtualKeyShort.NEXT,
-        "WIN" or "WINDOWS" => VirtualKeyShort.LWIN,
+        "PAGEUP" => VirtualKeyShort.PRIOR,
+        "PAGEDOWN" => VirtualKeyShort.NEXT,
+        "WIN" => VirtualKeyShort.LWIN,
         { Length: 1 } letter when char.IsLetterOrDigit(letter[0]) => Enum.Parse<VirtualKeyShort>("KEY_" + letter),
         var other => Enum.TryParse<VirtualKeyShort>(other, out var code) ? code : throw new ScriptException($"There is no key called {key}."),
     };
@@ -886,7 +851,6 @@ public sealed class FlaUiDriver : IDriver
         var hwnd = FindWindow(title, dialog: true);
         if (hwnd == 0)
             throw new StuckException($"see the \"{title}\" message");
-        var dialog = _automation.FromHandle(hwnd);
         // Message box buttons have their command ids as automation ids, whatever the language.
         var found = Find(new Target([new Selector(Id: ((int)button).ToString(CultureInfo.InvariantCulture), Type: "Button", Within: new Target([new Selector(Type: "Window", Name: title)], title))],
             $"the {button} button"), _control.Scale(TimeSpan.FromSeconds(5)));
@@ -895,7 +859,6 @@ public sealed class FlaUiDriver : IDriver
         var end = Environment.TickCount64 + 10_000;
         while (Native.IsVisible(hwnd) && Environment.TickCount64 < end)
             Thread.Sleep(100);
-        GC.KeepAlive(dialog);
     }
 
     // The name box is control 1148 in a file picker, 1152 in a folder picker, and Open or Select Folder is control 1.
@@ -936,7 +899,7 @@ public sealed class FlaUiDriver : IDriver
         {
             text = MessageText(hwnd);
         }
-        catch (System.Runtime.InteropServices.COMException)
+        catch (COMException)
         {
             // Described by its title alone.
         }
@@ -970,7 +933,7 @@ public sealed class FlaUiDriver : IDriver
                         + (properties.ClassName.ValueOrDefault is { Length: > 0 } className ? $" class={className}" : "")
                         + $" ({box.Left},{box.Top},{box.Right},{box.Bottom})";
                 }
-                catch (System.Runtime.InteropServices.COMException ex)
+                catch (COMException ex)
                 {
                     line = $"(couldn't be read: {ex.Message})";
                 }
@@ -982,7 +945,7 @@ public sealed class FlaUiDriver : IDriver
             {
                 Walk(_automation.FromHandle(hwnd), 0);
             }
-            catch (System.Runtime.InteropServices.COMException ex)
+            catch (COMException ex)
             {
                 text.Append(CultureInfo.InvariantCulture, $"(the window couldn't be read: {ex.Message})\r\n");
             }
@@ -1000,7 +963,7 @@ public sealed class FlaUiDriver : IDriver
             return (type == ControlType.Edit || type == ControlType.Document)
                 && !(focused!.Patterns.Value.IsSupported && focused.Patterns.Value.Pattern.IsReadOnly.ValueOrDefault);
         }
-        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException)
+        catch (Exception ex) when (ex is COMException or InvalidOperationException)
         {
             return false;
         }

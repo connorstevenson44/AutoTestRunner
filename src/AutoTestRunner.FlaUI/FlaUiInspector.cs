@@ -55,7 +55,7 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
             var element = driver.Automation.FromPoint(new Point(x, y));
             return element is null || !IsApp(element) ? null : Inspect(element);
         }
-        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or TimeoutException)
+        catch (Exception ex) when (FlaUiDriver.Gone(ex))
         {
             return null;
         }
@@ -70,7 +70,7 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
             var element = driver.Automation.FocusedElement();
             return element is null || !IsApp(element) ? null : Inspect(element);
         }
-        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or TimeoutException)
+        catch (Exception ex) when (FlaUiDriver.Gone(ex))
         {
             return null;
         }
@@ -92,7 +92,7 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
                 return null;
             return current is not null && current.Element.Equals(element) ? current : Inspect(element);
         }
-        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or TimeoutException)
+        catch (Exception ex) when (FlaUiDriver.Gone(ex))
         {
             return null;
         }
@@ -106,7 +106,7 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
             using var cached = _facts.Activate();
             return Inspect(control.Element, again: true);
         }
-        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or TimeoutException)
+        catch (Exception ex) when (FlaUiDriver.Gone(ex))
         {
             return control;
         }
@@ -119,7 +119,7 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
         {
             return control.Element.Patterns.Value.IsSupported ? control.Element.Patterns.Value.Pattern.Value.ValueOrDefault ?? "" : null;
         }
-        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or TimeoutException)
+        catch (Exception ex) when (FlaUiDriver.Gone(ex))
         {
             return null;
         }
@@ -132,7 +132,7 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
         {
             return driver.TryFind(target) is FlaUiControl found && Rect(found.Element.BoundingRectangle) is { IsEmpty: false } box ? box : null;
         }
-        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or TimeoutException or StuckException or ScriptException)
+        catch (Exception ex) when (FlaUiDriver.Gone(ex) || ex is StuckException or ScriptException)
         {
             return null;
         }
@@ -163,7 +163,7 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
                 var window = new ControlFacts("Window", Native.Title(hwnd));
                 found.AddRange(driver.Automation.FromHandle(hwnd).FindAllDescendants().Select(element => Own(element) with { Ancestors = [window] }));
             }
-            catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or TimeoutException)
+            catch (Exception ex) when (FlaUiDriver.Gone(ex))
             {
                 // The window closed while it was read.
             }
