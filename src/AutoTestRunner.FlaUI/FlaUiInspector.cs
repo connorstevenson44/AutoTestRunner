@@ -15,10 +15,8 @@ namespace AutoTestRunner.FlaUI;
 /// itself and the controls around it, what a box holds and whether a tick box is ticked. Only the app's own controls
 /// count, not the builder's or another program's.
 /// <para>
-/// Each question UI Automation answers is a call into the app, answered on the app's UI thread, so asking many makes
-/// the app stutter while the mouse is over it. A control and the controls around it are read with a cache request, as
-/// Microsoft advises: each comes with everything the builder wants of it in one call, rather than one call for each
-/// thing. https://learn.microsoft.com/windows/win32/winauto/uiauto-cachingforclients
+/// Each UI Automation call is answered on the app's UI thread, so many of them make it stutter: a control and those
+/// around it are read in one cache request. https://learn.microsoft.com/windows/win32/winauto/uiauto-cachingforclients
 /// </para>
 /// </summary>
 public sealed class FlaUiInspector(FlaUiDriver driver)

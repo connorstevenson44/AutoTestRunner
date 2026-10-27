@@ -9,16 +9,6 @@ namespace AutoTestRunner.Cli;
 /// <summary>
 /// autotest: runs a suite while you watch, or unattended for CI, and builds cases by using the app. The commands and
 /// their options are in <see cref="CommandLine"/>; autotest --help lists them.
-///
-///   autotest                          the launcher, on the suites found near the runner
-///   autotest launch [&lt;folder&gt;]        the launcher, on a suite or the suites found in a folder
-///   autotest run &lt;suite folder&gt; [--cases 1-5,8] [--unattended] [--speed Slow|Modest|Fast]
-///            [--mode auto|pause-at-checkpoints|step-by-step] [--results &lt;folder&gt;] [--var name=value]...
-///   autotest record &lt;suite folder&gt; [--name &lt;name&gt;] [--after &lt;case&gt;] [--edit &lt;case&gt;]   builds or changes a case
-///   autotest setup &lt;suite folder&gt; [--install a,b|missing|all] [--yes]   finds the software it needs, and installs it
-///   autotest validate &lt;suite folder&gt;   reads every script and reports what is wrong with them
-///   autotest list &lt;suite folder&gt;    lists the cases
-///   autotest preview-ui [--shots &lt;folder&gt;]   plays a made-up run in the panel, and saves pictures of it
 /// </summary>
 public static class Program
 {

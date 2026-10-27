@@ -17,11 +17,8 @@ using AutoTestRunner.Scripting;
 namespace AutoTestRunner.Cli.Views;
 
 /// <summary>
-/// The builder's panel beside the app. From the top: the case's name and Save; a toolbar of steps, with Record first,
-/// and under it the amber pick tools, each used on the control clicked next in the app; what the builder is doing or
-/// what to do next; the steps so far, each with how sturdily it finds its control and whether the app has been taken
-/// through it; and the checkpoint the case ends at. A case opened to change it lists its own steps, to play up to any
-/// of them, go back to one, or record again from one.
+/// The builder's panel beside the app: the case's name and Save, the toolbars (BuilderPanel.Toolbar.cs), what the
+/// builder is doing, the steps so far (BuilderPanel.Steps.cs), and the checkpoint the case ends at.
 /// </summary>
 [SuppressMessage("Design", "CA1001", Justification = "The outline and the timer go when the window closes.")]
 internal sealed partial class BuilderPanel : Window
