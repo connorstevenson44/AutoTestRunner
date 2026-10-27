@@ -56,4 +56,20 @@ public static class JsonLine
     }
 
     public static string Quote(string text) => JsonSerializer.Serialize(text, Text);
+
+    /// <summary>The spaces before the first character of the line a place in the text is on.</summary>
+    public static string IndentAt(byte[] bytes, int at)
+    {
+        var start = at;
+        while (start > 0 && bytes[start - 1] != (byte)'\n')
+            start--;
+        var end = start;
+        while (end < bytes.Length && bytes[end] is (byte)' ' or (byte)'\t')
+            end++;
+        return Encoding.UTF8.GetString(bytes[start..end]);
+    }
+
+    /// <summary>The text with the bytes from start to end written over.</summary>
+    public static string Splice(byte[] bytes, int start, int end, string text) =>
+        Encoding.UTF8.GetString([.. bytes[..start], .. Encoding.UTF8.GetBytes(text), .. bytes[end..]]);
 }

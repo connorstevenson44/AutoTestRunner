@@ -1,5 +1,4 @@
 using System.Text;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace AutoTestRunner.Scripting;
@@ -20,7 +19,7 @@ public static class DataRows
 
     private static List<Value> Json(string file)
     {
-        var rows = JsonNode.Parse(File.ReadAllText(file), documentOptions: new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true }) as JsonArray
+        var rows = ScriptJson.ReadFile(file) as JsonArray
             ?? throw new ScriptException($"{Path.GetFileName(file)} must be a list of objects.");
         return [.. rows.Select(row => row as JsonObject ?? throw new ScriptException($"{Path.GetFileName(file)} must be a list of objects."))
             .Select(row => Row([.. row.Select(pair => (pair.Key, pair.Value is JsonValue value && value.TryGetValue(out string? text) ? text : pair.Value?.ToJsonString() ?? ""))]))];

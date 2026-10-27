@@ -11,7 +11,6 @@ namespace AutoTestRunner.Scripting;
 /// </summary>
 public sealed class Suite
 {
-    private static readonly JsonDocumentOptions ReadOptions = new() { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
 
     public required string Folder { get; init; }
     public required string Name { get; init; }
@@ -365,7 +364,7 @@ public sealed class Suite
     {
         try
         {
-            return JsonNode.Parse(File.ReadAllText(path), documentOptions: ReadOptions) as JsonObject
+            return ScriptJson.ReadFile(path) as JsonObject
                 ?? throw new JsonException("It must be a JSON object.");
         }
         catch (JsonException ex)

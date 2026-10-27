@@ -1166,7 +1166,7 @@ public sealed partial class Runner
     /// </summary>
     public static void SetJsonValue(string file, string path, string value)
     {
-        var root = JsonNode.Parse(File.ReadAllText(file), documentOptions: new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true }) as JsonObject
+        var root = ScriptJson.ReadFile(file) as JsonObject
             ?? throw new JsonException($"{Path.GetFileName(file)} isn't a JSON object.");
         var keys = path.Split(':');
         var node = root;

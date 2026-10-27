@@ -12,8 +12,6 @@ namespace AutoTestRunner.Building;
 /// </summary>
 public static class ElementUses
 {
-    private static readonly JsonDocumentOptions Lenient = new() { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
-    private static readonly JsonReaderOptions ReadOptions = new() { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
 
     // The properties of a step, besides its own key, that are targets.
     private static readonly Dictionary<string, string[]> TargetKeys = new(StringComparer.Ordinal)
@@ -77,7 +75,7 @@ public static class ElementUses
     private static List<(string Path, string Name)> References(Suite suite, string file)
     {
         var found = new List<(string Path, string Name)>();
-        if (JsonNode.Parse(File.ReadAllText(file), documentOptions: Lenient) is not JsonObject root)
+        if (ScriptJson.ReadFile(file) is not JsonObject root)
             return found;
         switch (Path.GetFileName(file).ToLowerInvariant())
         {
@@ -174,7 +172,7 @@ public static class ElementUses
     private static string Edit(string text, HashSet<string> at, string from, string to, bool renameKey)
     {
         var bytes = Encoding.UTF8.GetBytes(text);
-        var reader = new Utf8JsonReader(bytes, ReadOptions);
+        var reader = new Utf8JsonReader(bytes, ScriptJson.Reader);
         var edits = new List<(int Start, int End)>();
         // Each open object or array: the property being read in it, or the index of the item being read.
         var frames = new List<(bool IsArray, int Index, string? Property)>();

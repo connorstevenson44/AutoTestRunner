@@ -14,7 +14,6 @@ namespace AutoTestRunner.Building;
 public static partial class CaseWriter
 {
     private const string SchemaFolder = "https://raw.githubusercontent.com/connorstevenson44/AutoTestRunner/main/schema/";
-    private static readonly JsonReaderOptions ReadOptions = new() { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
 
     /// <summary>
     /// Saves the draft, and returns the case file it went in; with the controls it named, the hooks and macros it
@@ -88,13 +87,13 @@ public static partial class CaseWriter
     {
         var bytes = Encoding.UTF8.GetBytes(text);
         var layout = Read(bytes);
-        var newline = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        var newline = ScriptJson.NewLineOf(text);
         var edits = new List<(int At, int Length, string Text)>();
         var checkpoint = layout.Steps.Count > 0 && layout.Steps[^1].IsCheckpoint ? layout.Steps[^1] : null;
         var written = checkpoint is null ? layout.Steps : layout.Steps[..^1];
         string? Written(DraftStep step) =>
             step.Source is { } source && source < written.Count && Encoding.UTF8.GetString(bytes[written[source].Start..written[source].End]) is var original
-            && JsonNode.DeepEquals(JsonNode.Parse(original, documentOptions: new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true }), step.Json)
+            && JsonNode.DeepEquals(ScriptJson.Parse(original), step.Json)
                 ? original
                 : null;
 
@@ -103,7 +102,7 @@ public static partial class CaseWriter
         var kept = 0;
         while (kept < steps.Count && kept < written.Count && steps[kept].Source == kept && Written(steps[kept]) is not null)
             kept++;
-        var indent = layout.Steps.Count > 0 ? IndentAt(bytes, layout.Steps[0].Start) : "    ";
+        var indent = layout.Steps.Count > 0 ? JsonLine.IndentAt(bytes, layout.Steps[0].Start) : "    ";
         var lines = steps.Skip(kept).Select(step => Written(step) ?? JsonLine.Step(step.Json, indent, newline)).ToList();
         if (checkpoint is null && draft.Checkpoint() is { } made)
             lines.Add(JsonLine.Step(made, indent, newline));
@@ -125,14 +124,14 @@ public static partial class CaseWriter
         }
         if (checkpoint is not null)
         {
-            var itemIndent = IndentAt(bytes, checkpoint.Start) + "    ";
+            var itemIndent = JsonLine.IndentAt(bytes, checkpoint.Start) + "    ";
             AddItems(edits, bytes, checkpoint, "checks", draft.Checks.Select(check => (JsonNode)check), itemIndent, newline);
             AddItems(edits, bytes, checkpoint, "look", draft.Look.Select(line => (JsonNode)JsonValue.Create(line)), itemIndent, newline);
         }
 
         // The reset steps stay as written while they are the same; else they are written afresh, or taken out.
         var wasReset = layout.Reset is { } array
-            ? JsonNode.Parse(bytes.AsSpan(array.Start, array.End - array.Start), documentOptions: new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true }) as JsonArray ?? []
+            ? ScriptJson.Parse(bytes.AsSpan(array.Start, array.End - array.Start)) as JsonArray ?? []
             : [];
         if (!JsonNode.DeepEquals(wasReset, new JsonArray([.. reset.Select(step => step.Json.DeepClone())])))
         {
@@ -157,7 +156,7 @@ public static partial class CaseWriter
         var name = NameLine().Match(text);
         if (!name.Success)
             return text;
-        var newline = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        var newline = ScriptJson.NewLineOf(text);
         var line = $"\"review\": {JsonLine.Quote(why)}";
         var after = name.Index + name.Length;
         return name.Value.EndsWith(',')
@@ -188,14 +187,14 @@ public static partial class CaseWriter
             return;
         var path = Path.Combine(suite.Folder, "suite.json");
         var text = File.ReadAllText(path);
-        var newline = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        var newline = ScriptJson.NewLineOf(text);
         var items = new Dictionary<string, List<string>>
         {
             ["watch"] = [.. watch.Select(hook => JsonLine.Write(Hook(hook)))],
             ["afterClick"] = [.. afterClick.Select(hook => JsonLine.Write(Hook(hook)))],
         };
         var bytes = Encoding.UTF8.GetBytes(text);
-        var reader = new Utf8JsonReader(bytes, ReadOptions);
+        var reader = new Utf8JsonReader(bytes, ScriptJson.Reader);
         string? property = null;
         int? builderStart = null, rootEnd = null, lastRootValueEnd = null;
         var arrays = new Dictionary<string, (int Start, int? LastItemEnd)>();
@@ -329,7 +328,7 @@ public static partial class CaseWriter
     // Where a case file's steps are, from its text: each step's start and end, and a checkpoint's arrays.
     private static CaseLayout Read(byte[] bytes)
     {
-        var reader = new Utf8JsonReader(bytes, ReadOptions);
+        var reader = new Utf8JsonReader(bytes, ScriptJson.Reader);
         var layout = new CaseLayout();
         string? property = null;
         StepLayout? step = null;
@@ -384,24 +383,12 @@ public static partial class CaseWriter
         return layout;
     }
 
-    // The spaces before the line's first character, at a place in the text.
-    private static string IndentAt(byte[] bytes, int at)
-    {
-        var start = at;
-        while (start > 0 && bytes[start - 1] != (byte)'\n')
-            start--;
-        var end = start;
-        while (end < bytes.Length && bytes[end] is (byte)' ' or (byte)'\t')
-            end++;
-        return Encoding.UTF8.GetString(bytes[start..end]);
-    }
-
     // The $schema a new file points at: as the suite's other files do, or the one on GitHub.
     internal static string Schema(Suite suite, string kind)
     {
         foreach (var item in suite.Cases)
         {
-            if (JsonNode.Parse(File.ReadAllText(item.File), documentOptions: new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true })?["$schema"]?.GetValue<string>() is not { } schema)
+            if (ScriptJson.ReadFile(item.File)?["$schema"]?.GetValue<string>() is not { } schema)
                 continue;
             schema = schema.Replace("case.schema.json", $"{kind}.schema.json", StringComparison.Ordinal);
             // The suite's files are a folder above its cases and macros, so a relative path goes up one fewer.
@@ -411,8 +398,7 @@ public static partial class CaseWriter
     }
 
     internal static string NewLine(Suite suite) =>
-        suite.Cases is [var item, ..] && File.ReadAllText(item.File).Contains("\r\n", StringComparison.Ordinal) ? "\r\n"
-        : suite.Cases.Count > 0 ? "\n" : Environment.NewLine;
+        suite.Cases is [var item, ..] ? ScriptJson.NewLineOf(File.ReadAllText(item.File)) : Environment.NewLine;
 
     // A case's name line, with its indent: the review line goes after it.
     [GeneratedRegex(@"(?m)^([ \t]*)""name""[ \t]*:[ \t]*""(?:[^""\\\r\n]|\\.)*""[ \t]*,?")]
