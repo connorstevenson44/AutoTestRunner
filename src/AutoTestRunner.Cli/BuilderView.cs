@@ -38,6 +38,8 @@ internal sealed class BuilderView(BuilderPanel panel) : IRunView
 
     public void YourTurn(Activity? what) { }
 
+    public void Outline(ScreenRect? box) { }
+
     public void Waited(Activity what, TimeSpan took) { }
 
     public void CommandStarted(string line, string? script) { }

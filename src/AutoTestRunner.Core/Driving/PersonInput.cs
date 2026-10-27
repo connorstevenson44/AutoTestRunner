@@ -12,24 +12,27 @@ public sealed class PersonInput(Func<bool> noting)
 
     private readonly object _lock = new();
     private readonly List<PersonEvent> _events = [];
-    private (int X, int Y) _mouse;
+
+    // Both halves of where the mouse is in one long, so a move is noted without a lock: moves come by the hundred.
+    private long _mouse;
+
+    /// <summary>Whether a manual run is noting what the person does; the hook can skip working out what it was otherwise.</summary>
+    public bool Noting => noting();
 
     /// <summary>Where the mouse is on the screen, as the person last moved it.</summary>
     public (int X, int Y) Mouse
     {
         get
         {
-            lock (_lock)
-                return _mouse;
+            var mouse = Interlocked.Read(ref _mouse);
+            return ((int)(mouse >> 32), (int)mouse);
         }
     }
 
     public void Moved(int x, int y)
     {
-        if (!noting())
-            return;
-        lock (_lock)
-            _mouse = (x, y);
+        if (noting())
+            Interlocked.Exchange(ref _mouse, ((long)x << 32) | (uint)y);
     }
 
     public void Note(PersonEvent happened)

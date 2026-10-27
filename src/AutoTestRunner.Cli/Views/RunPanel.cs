@@ -45,6 +45,8 @@ internal sealed partial class RunPanel : Window, IRunView
     private readonly ContentControl _question;
     private readonly ActivityFeed _feed;
     private readonly DispatcherTimer _waitTimer;
+    // What a manual run outlines for the person: one window that moves, which the mouse goes through.
+    private readonly OutlineWindow _outline = new();
 
     private GlobalKeyHook? _hooks;
     private readonly Suite _suite;
@@ -243,6 +245,7 @@ internal sealed partial class RunPanel : Window, IRunView
         };
         Closed += (_, _) =>
         {
+            _outline.Close();
             _hooks?.Dispose();
             _typingPoll?.Dispose();
             _answer?.TrySetResult(_closeAnswer);
@@ -258,8 +261,8 @@ internal sealed partial class RunPanel : Window, IRunView
     {
         (_runner, _driver) = (runner, driver);
         // Whether the person is typing in a text box, looked at a few times a second rather than from the key hook,
-        // which Windows drops if it takes too long.
-        _typingPoll = new Timer(_ => _typing = _youClicked && _driver.IsTyping(), null, 0, 300);
+        // which Windows drops if it takes too long. A manual run's keys are the app's anyway, so it doesn't ask the app.
+        _typingPoll = new Timer(_ => _typing = !_control.Manual && _youClicked && _driver.IsTyping(), null, 0, 300);
     }
 
     /// <summary>The run has ended, so closing the panel no longer asks to stop it.</summary>
@@ -316,6 +319,14 @@ internal sealed partial class RunPanel : Window, IRunView
     });
 
     public void ShowWait(Activity what) => OnUi(() => StartWait(what));
+
+    public void Outline(ScreenRect? box) => OnUi(() =>
+    {
+        if (box is { } place)
+            _outline.Show(place, null);
+        else
+            _outline.Hide();
+    });
 
     // The step's line, with a secret's real words, as the person has to type them; how to do it waits under it.
     public void YourTurn(Activity? what) => OnUi(() =>

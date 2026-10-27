@@ -28,12 +28,9 @@ public interface IDriver : IDisposable
 
     /// <summary>
     /// Scrolls a control into view, moves the mouse to it and outlines it, labelled with what. In a manual run the mouse
-    /// is the person's, so it only scrolls and outlines.
+    /// is the person's, so it only scrolls: the run's view keeps the outline, for as long as the person needs it.
     /// </summary>
     void Point(IControl control, string what);
-
-    /// <summary>Outlines a control for a second or so, without scrolling or moving the mouse, as a manual run does while it waits.</summary>
-    void Outline(IControl control, string what);
 
     /// <summary>Invokes, toggles or selects a control, or clicks it with the mouse: once, with the right button or twice.</summary>
     void Click(IControl control, ClickHow how);
