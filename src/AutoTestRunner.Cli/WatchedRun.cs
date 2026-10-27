@@ -130,8 +130,17 @@ internal static class WatchedRun
                 using var driver = Runs.Driver(control, results, () => panel.Bounds, panel.KeepClear);
                 var runner = Runs.Runner(suite, driver, panel, control, results, options);
                 panel.Attach(runner, driver);
-                ended(Runs.Play(suite, runner, cases, results, panel.Tell));
-                panel.RunEnded();
+                var code = ExitCode.ScriptError;
+                try
+                {
+                    code = Runs.Play(suite, runner, cases, results, panel.Tell);
+                }
+                finally
+                {
+                    // The panel is never left waiting on a run that has gone.
+                    ended(code);
+                    panel.RunEnded();
+                }
             });
             worker.SetApartmentState(ApartmentState.MTA);
             worker.IsBackground = true;

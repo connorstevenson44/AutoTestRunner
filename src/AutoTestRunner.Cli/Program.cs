@@ -220,8 +220,6 @@ public static class Program
         return done ? (int)ExitCode.Passed : (int)ExitCode.Missing;
     }
 
-    // A suite that installs services needs administrator, and so does driving an app that runs as administrator.
-
     private static int Elevate(string[] args)
     {
         if (Elevation.Restart(args))

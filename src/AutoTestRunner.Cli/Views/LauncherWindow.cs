@@ -353,7 +353,6 @@ internal sealed class LauncherWindow : Window
         _start.IsEnabled = count > 0 && _suite?.Ready == true;
     }
 
-
     private Options HowItRuns(IReadOnlyList<Case> cases) => _options with
     {
         Mode = Modes[Array.FindIndex(_modes, toggle => toggle.IsChecked == true) is var index and >= 0 ? index : 0].Mode,

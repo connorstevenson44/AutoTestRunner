@@ -188,8 +188,6 @@ internal sealed class SuitePane : Grid
     /// <summary>The ticks changed, or whether it can start.</summary>
     public event Action? Changed;
 
-    /// <summary>Where a suite's results go, as autotest run puts them.</summary>
-
     /// <summary>How each case went in the newest results folder, from its junit.xml.</summary>
     public static Dictionary<int, CaseStatus> LastResults(string parent)
     {
