@@ -55,7 +55,7 @@ public partial class MainWindow : Window
     {
         if (e.Key == Key.N && Keyboard.Modifiers == ModifierKeys.Control)
         {
-            ClearForm();
+            ClearForm(newOrder: true);
             Status("New order.");
             e.Handled = true;
         }

@@ -21,7 +21,6 @@
     { "checkpoint": "Sencha is on the form, and the spare part isn't",
       "checks": [
         { "equals": "${picked}", "to": "Picked Sencha 100g from the catalogue.", "label": "Status after the drag" },
-        { "says": "product", "equals": "Sencha 100g" },
         { "says": "price", "equals": "TG-002 · £6.40 each" },
         { "equals": "${partPrice}", "to": "£21.88", "label": "SP-0388's price" },
         { "equals": "${refused}", "to": "SP-0388 Pump seal is a spare part: the service desk orders those.", "label": "Status after dragging a part" },

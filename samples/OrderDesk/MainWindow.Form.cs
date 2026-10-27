@@ -56,9 +56,11 @@ public partial class MainWindow
         Status("Cleared the form.");
     }
 
-    // Leaves the product picked, as the next order is often for the same.
-    private void ClearForm()
+    // Leaves the product picked, as the next order is often for the same, unless it is a new order.
+    private void ClearForm(bool newOrder = false)
     {
+        if (newOrder)
+            ProductBox.SelectedIndex = -1;
         CustomerBox.Text = "";
         QuantityBox.Text = "1";
         GiftWrapBox.IsChecked = false;

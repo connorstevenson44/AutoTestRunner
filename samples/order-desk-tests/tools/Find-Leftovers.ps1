@@ -8,8 +8,7 @@ foreach ($folder in (Join-Path $env:LOCALAPPDATA 'OrderDesk'), (Join-Path $env:L
 if (Test-Path -LiteralPath 'HKCU:\Software\OrderDesk') {
     'What Order Desk remembers, in HKCU\Software\OrderDesk'
 }
-schtasks.exe /Query /TN 'Order Desk nightly export' 2>$null | Out-Null
-if ($LASTEXITCODE -eq 0) {
+if (Get-ScheduledTask -TaskName 'Order Desk nightly export' -ErrorAction SilentlyContinue) {
     'The scheduled task Order Desk nightly export'
 }
 exit 0

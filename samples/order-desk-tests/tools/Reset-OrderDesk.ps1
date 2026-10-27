@@ -12,9 +12,8 @@ if (Test-Path -LiteralPath 'HKCU:\Software\OrderDesk') {
     Remove-Item -LiteralPath 'HKCU:\Software\OrderDesk' -Recurse -Force
     'Deleted HKCU\Software\OrderDesk'
 }
-schtasks.exe /Query /TN 'Order Desk nightly export' 2>$null | Out-Null
-if ($LASTEXITCODE -eq 0) {
-    schtasks.exe /Delete /F /TN 'Order Desk nightly export' | Out-Null
+if (Get-ScheduledTask -TaskName 'Order Desk nightly export' -ErrorAction SilentlyContinue) {
+    Unregister-ScheduledTask -TaskName 'Order Desk nightly export' -Confirm:$false
     'Deleted the scheduled task Order Desk nightly export'
 }
 exit 0
