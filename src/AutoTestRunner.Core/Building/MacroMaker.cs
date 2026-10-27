@@ -80,7 +80,7 @@ public static partial class MacroMaker
     /// <summary>Writes a new macro to macros/name.json, as the suite's other files are written, and returns the file.</summary>
     public static string Save(Suite suite, string name, JsonObject macro)
     {
-        if (!Identifier().IsMatch(name))
+        if (!ScriptVocabulary.IsName(name))
             throw new ArgumentException("A macro's name is letters and digits, such as addOrder.", nameof(name));
         if (suite.Macros.ContainsKey(name))
             throw new ArgumentException($"The suite already has a macro called {name}.", nameof(name));
@@ -92,11 +92,6 @@ public static partial class MacroMaker
         File.WriteAllText(path, Text(macro, CaseWriter.Schema(suite, "macro"), CaseWriter.NewLine(suite)));
         return path;
     }
-
-    /// <summary>The macro as the runner takes it, for a macro made while building.</summary>
-    public static Macro Read(string name, string file, JsonObject macro) =>
-        new(name, file, (macro["params"] as JsonObject ?? []).ToDictionary(pair => pair.Key, pair => pair.Value?["default"]?.ToString()),
-            macro["steps"] as JsonArray ?? [], macro["returns"]?.GetValue<string>());
 
     // A macro's text: its schema, then a property to a line and a step to a line.
     private static string Text(JsonObject macro, string schema, string newline)
@@ -151,8 +146,6 @@ public static partial class MacroMaker
         return unique;
     }
 
-    [GeneratedRegex(@"^[A-Za-z_]\w*$")]
-    private static partial Regex Identifier();
 
     [GeneratedRegex("[A-Za-z0-9]+")]
     private static partial Regex Word();

@@ -15,6 +15,11 @@ internal sealed class HookThread : IDisposable
     private const int KeyboardHook = 13, MouseHook = 14;
     private const uint Quit = 0x0012, NoRemove = 0;
 
+    // The messages the callbacks get, and the virtual keys of the buttons and keys held with others.
+    public const int KeyDown = 0x0100, KeyUp = 0x0101, SystemKeyDown = 0x0104;
+    public const int MouseMove = 0x0200, LeftButtonDown = 0x0201, LeftButtonUp = 0x0202, RightButtonDown = 0x0204;
+    public const int LeftButton = 0x01, Control = 0x11, Shift = 0x10, Menu = 0x12, LeftWindows = 0x5B, RightWindows = 0x5C;
+
     private readonly HookProc _keyboard, _mouse;
     private readonly Thread _thread;
     private uint _threadId;
@@ -49,6 +54,9 @@ internal sealed class HookThread : IDisposable
 
     /// <summary>Whether Dispose was called, after which the callbacks should let everything through.</summary>
     public bool Closed => _closed;
+
+    /// <summary>Whether a key or mouse button is held down now, by its virtual key.</summary>
+    public static bool Held(int key) => (GetAsyncKeyState(key) & 0x8000) != 0;
 
     /// <summary>Passes input on to the next hook and the app, as a callback does with what it doesn't keep.</summary>
     public static nint Next(int code, nint message, nint data) => CallNextHookEx(0, code, message, data);
@@ -95,6 +103,9 @@ internal sealed class HookThread : IDisposable
 
     [DllImport("user32.dll")]
     private static extern bool PostThreadMessage(uint threadId, uint message, nint wParam, nint lParam);
+
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int key);
 
     [DllImport("kernel32.dll")]
     private static extern uint GetCurrentThreadId();

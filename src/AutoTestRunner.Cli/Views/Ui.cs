@@ -144,16 +144,27 @@ internal static class Ui
         return row;
     }
 
+    /// <summary>
+    /// A dialog as tall as what it holds, in the panels' look: centred on its owner, or on the screen when it has none or
+    /// onScreen says so, as for a dialog over the side panel.
+    /// </summary>
+    public static Window Dialog(string title, Window? owner, double width, bool topmost = false, bool onScreen = false)
+    {
+        var window = new Window
+        {
+            Title = title, Owner = owner, Topmost = topmost, SizeToContent = SizeToContent.Height, Width = width, ResizeMode = ResizeMode.NoResize,
+            WindowStartupLocation = owner is null || onScreen ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
+            Background = Brushes.White, FontFamily = Text, Foreground = Ink,
+        };
+        window.Resources.MergedDictionaries.Add(Theme);
+        return window;
+    }
+
     /// <summary>Asks for a few words in a small window of its own, and returns them, or null when it was closed.</summary>
     public static string? Prompt(Window owner, string title, string message, string initial = "", string button = "Save", string glyph = Icons.Note, bool tall = true)
     {
         string? text = null;
-        var window = new Window
-        {
-            Title = title, Owner = owner, Topmost = true, SizeToContent = SizeToContent.Height, Width = 480, ResizeMode = ResizeMode.NoResize,
-            WindowStartupLocation = WindowStartupLocation.CenterScreen, Background = Brushes.White, FontFamily = Text,
-        };
-        window.Resources.MergedDictionaries.Add(Theme);
+        var window = Dialog(title, owner, 480, topmost: true, onScreen: true);
         var stack = new StackPanel { Margin = new Thickness(20, 16, 20, 16) };
         var box = new TextBox { Margin = new Thickness(0, 10, 0, 0), Height = tall ? 60 : double.NaN, TextWrapping = TextWrapping.Wrap, AcceptsReturn = false, Padding = new Thickness(4), Text = initial };
         var save = LabelledButton(glyph, button, () =>

@@ -62,7 +62,6 @@ internal sealed class FakeRunView(StuckAnswer answer = StuckAnswer.Stop) : IRunV
     public void CommandFinished(int exitCode, TimeSpan took) => Commands.Add($"exit {exitCode}");
     public void StepFailed(StepFailure failure) => StepFailures.Add(failure.Message);
     public void ShowCheckpoint(string title, IReadOnlyList<CheckResult> checks, IReadOnlyList<string> look, IReadOnlyList<ToolButton> tools) => Checks.AddRange(checks);
-    public void ShowCarryingOn(TimeSpan after) { }
 
     /// <summary>Called as the run asks what to do when it is stuck.</summary>
     public Action? OnStuck { get; init; }
@@ -73,8 +72,4 @@ internal sealed class FakeRunView(StuckAnswer answer = StuckAnswer.Stop) : IRunV
         OnStuck?.Invoke();
         return answer;
     }
-
-    public bool AskScriptError(string message) => false;
-    public void KeepClear(ScreenRect rect) { }
-    public void Finished(string summary, string resultsFolder, bool allPassed) { }
 }

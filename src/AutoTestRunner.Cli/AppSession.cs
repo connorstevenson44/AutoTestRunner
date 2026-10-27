@@ -89,23 +89,13 @@ internal sealed class AppSession : IDisposable
                     if (inspector.At(point.X, point.Y) is not { } hit)
                         return ((ControlFacts?)null, (TargetChoice?)null);
                     var facts = hit.Facts.Meant();
-                    return (facts, TargetSuggester.Suggest(facts, elements, globals, node =>
-                    {
-                        try
-                        {
-                            return driver.Count(Targets.Resolve(node, globals, elements));
-                        }
-                        catch (Exception ex) when (ex is ScriptException or COMException or InvalidOperationException)
-                        {
-                            return 0;
-                        }
-                    }));
+                    return (facts, inspector.Suggest(facts, elements, globals));
                 }, found => then(found.Item1, found.Item2), failed);
             }
             hook = new RecordingHook(
                 (x, y, _) =>
                 {
-                    if (!app.Contains(Desktop.ProcessOf(Desktop.WindowAt(x, y))))
+                    if (!app.Contains(Native.ProcessOf(Native.WindowAt(x, y))))
                         return false;
                     _ui.BeginInvoke(() => Done((x, y)));
                     return true;

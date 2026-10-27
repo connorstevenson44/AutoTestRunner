@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using AutoTestRunner.Scripting;
 
 namespace AutoTestRunner.Building;
 
@@ -11,7 +12,6 @@ namespace AutoTestRunner.Building;
 /// </summary>
 public static class Forms
 {
-    private static readonly JsonDocumentOptions Lenient = new() { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
 
     /// <summary>The checks the builder offers, in the order its menu lists them, under their groups.</summary>
     public static readonly IReadOnlyList<CheckKind> CheckKinds =
@@ -221,7 +221,7 @@ public static class Forms
     {
         try
         {
-            return JsonNode.Parse(text, documentOptions: Lenient);
+            return ScriptJson.Parse(text);
         }
         catch (JsonException ex)
         {

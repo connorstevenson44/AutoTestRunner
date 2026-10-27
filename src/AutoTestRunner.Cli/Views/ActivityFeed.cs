@@ -9,12 +9,8 @@ using AutoTestRunner.Running;
 namespace AutoTestRunner.Cli.Views;
 
 /// <summary>
-/// Everything the run has done, newest at the bottom: each case with its steps, each a verb and the controls and values
-/// it acts on; the waits, with what they saw and how long they took; the commands it ran with what they printed as they
-/// printed it; and its checkpoints, as a table of what each check expected and found. A step that failed is red, with
-/// what it wanted beside what it found. A case that
-/// passed folds away when it ends; a click on a case or command opens and closes it. It keeps the newest in view unless
-/// you scroll up, and a button brings you back.
+/// Everything the run has done, newest at the bottom: each case with its steps, waits, commands and checkpoints. A case
+/// that passed folds away when it ends. It keeps the newest in view unless you scroll up.
 /// </summary>
 internal sealed class ActivityFeed : Grid
 {

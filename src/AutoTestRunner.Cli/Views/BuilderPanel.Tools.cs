@@ -298,7 +298,7 @@ internal sealed partial class BuilderPanel
             return;
         var (macro, call) = MacroMaker.Make(made.Name, made.Description, json, made.Parameters);
         _draft.NewMacros[made.Name] = macro;
-        MadeMacro?.Invoke(MacroMaker.Read(made.Name, $"macros/{made.Name}.json", macro));
+        MadeMacro?.Invoke(Macro.From(made.Name, $"macros/{made.Name}.json", macro));
         Replace(steps, call);
         Note($"Made {made.Name}. It is saved in macros/ with the case, and can be used in other cases from the macro tool.");
     }

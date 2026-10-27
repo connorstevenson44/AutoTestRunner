@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Globalization;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
@@ -195,7 +194,7 @@ public static class Checks
     /// <summary>A JSON setting by its path, such as Orders:Region; an array as its items with spaces between.</summary>
     public static string JsonValue(string file, string path)
     {
-        JsonNode? node = JsonNode.Parse(System.IO.File.ReadAllText(file), documentOptions: new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+        JsonNode? node = ScriptJson.ReadFile(file);
         foreach (var key in path.Split(':'))
         {
             if (node is not JsonObject item)

@@ -36,8 +36,9 @@ public interface IMachine
     /// <param name="environment">Environment variables to set for it, on top of this process's own.</param>
     /// <param name="timeout">How long it may run before it is stopped; null for no limit.</param>
     /// <param name="output">Called with each line the program prints as it prints it, and whether it is an error.</param>
+    /// <param name="folder">The folder it runs in; null for this process's own.</param>
     ProcessOutput Run(string program, IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string>? environment = null, TimeSpan? timeout = null,
-        Action<string, bool>? output = null);
+        Action<string, bool>? output = null, string? folder = null);
 
     /// <summary>Runs a PowerShell script, passing arguments as $args, with errors stopping it.</summary>
     ProcessOutput PowerShell(string script, IReadOnlyList<string> arguments, TimeSpan? timeout = null, Action<string, bool>? output = null);

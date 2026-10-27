@@ -31,13 +31,7 @@ internal static class SoftwareWindow
     {
         var ran = false;
         installed = () => ran;
-        var window = new Window
-        {
-            Title = $"Software for {suite.Name}", Owner = owner, SizeToContent = SizeToContent.Height, Width = 600, ResizeMode = ResizeMode.NoResize,
-            WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
-            Background = Brushes.White, FontFamily = Ui.Text, Foreground = Ui.Ink,
-        };
-        window.Resources.MergedDictionaries.Add(Ui.Theme);
+        var window = Ui.Dialog($"Software for {suite.Name}", owner, 600);
         var stack = new StackPanel { Margin = new Thickness(22, 18, 22, 18) };
         var missing = states.Count(state => state.Wanted);
         stack.Children.Add(Ui.IconText(Icons.Package, missing == 0 ? "Everything is installed" : $"{suite.Name} needs {(missing == 1 ? "1 more" : $"{missing} more")}", missing == 0 ? Ui.Pass : Ui.AmberInk, 15, FontWeights.SemiBold));

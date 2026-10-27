@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
-using System.Windows.Media;
 using AutoTestRunner.Building;
 using AutoTestRunner.Scripting;
 
@@ -17,12 +16,7 @@ internal static class EditFromWindow
     public static IReadOnlyList<Case>? Ask(Window owner, int number, IReadOnlyList<DraftStep> later, IReadOnlyList<Case> carryingOn)
     {
         IReadOnlyList<Case>? ticked = null;
-        var window = new Window
-        {
-            Title = $"Edit from step {number}", Owner = owner, Topmost = true, SizeToContent = SizeToContent.Height, Width = 500, ResizeMode = ResizeMode.NoResize,
-            WindowStartupLocation = WindowStartupLocation.CenterScreen, Background = Brushes.White, FontFamily = Ui.Text, Foreground = Ui.Ink,
-        };
-        window.Resources.MergedDictionaries.Add(Ui.Theme);
+        var window = Ui.Dialog($"Edit from step {number}", owner, 500, topmost: true, onScreen: true);
         var stack = new StackPanel { Margin = new Thickness(22, 18, 22, 18) };
         var removed = later.Count == 1 ? $"Step {number + 1} will be removed" : $"Steps {number + 1} to {number + later.Count} will be removed";
         stack.Children.Add(Ui.IconText(Icons.Delete, removed, Ui.Hold, 14));
