@@ -8,8 +8,6 @@ namespace AutoTestRunner.Building;
 /// </summary>
 public static class SuiteMaker
 {
-    private const string Schema = "https://raw.githubusercontent.com/connorstevenson44/AutoTestRunner/main/schema/";
-
     /// <summary>
     /// Writes the suite's files in a folder that has no suite.json yet, and returns the folder. status is how to find
     /// the status bar, or null when the app has none.
@@ -25,19 +23,19 @@ public static class SuiteMaker
             app["status"] = "statusText";
         File.WriteAllText(Path.Combine(folder, "suite.json"), string.Join(newline,
             "{",
-            $"  \"$schema\": {JsonLine.Quote(Schema + "suite.schema.json")},",
+            $"  \"$schema\": {JsonLine.Quote(CaseWriter.SchemaFolder + "suite.schema.json")},",
             $"  \"name\": {JsonLine.Quote(name)},",
             $"  \"app\": {JsonLine.Write(app)}",
             "}", ""));
         File.WriteAllText(Path.Combine(folder, "elements.json"), string.Join(newline,
-            ["{", $"  \"$schema\": {JsonLine.Quote(Schema + "elements.schema.json")}" + (status is null ? "" : ","),
+            ["{", $"  \"$schema\": {JsonLine.Quote(CaseWriter.SchemaFolder + "elements.schema.json")}" + (status is null ? "" : ","),
                 .. status is null ? Array.Empty<string>() : [$"  \"statusText\": {JsonLine.Write(status)}"], "}", ""]));
         if (status is not null)
         {
             Directory.CreateDirectory(Path.Combine(folder, "macros"));
             File.WriteAllText(Path.Combine(folder, "macros", "waitForStatusBar.json"), string.Join(newline,
                 "{",
-                $"  \"$schema\": {JsonLine.Quote(Schema + "macro.schema.json")},",
+                $"  \"$schema\": {JsonLine.Quote(CaseWriter.SchemaFolder + "macro.schema.json")},",
                 "  \"description\": \"Waits for the status bar to say something new that starts with startsWith.\",",
                 "  \"params\": {",
                 "    \"startsWith\": { \"description\": \"What it should start with.\" },",

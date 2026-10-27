@@ -84,9 +84,7 @@ public sealed class Suite
             if (Read(file, problems) is not { } macro)
                 continue;
             var name = macro["name"]?.GetValue<string>() ?? Path.GetFileNameWithoutExtension(file);
-            var parameters = (macro["params"] as JsonObject ?? []).ToDictionary(
-                pair => pair.Key, pair => pair.Value?["default"]?.ToString());
-            macros[name] = new Macro(name, file, parameters, macro["steps"] as JsonArray ?? [], macro["returns"]?.GetValue<string>());
+            macros[name] = Macro.From(name, file, macro);
         }
 
         var cases = new List<Case>();
@@ -456,7 +454,7 @@ public sealed class Suite
 
             if (definition.Takes == Takes.Target)
                 CheckTarget(step[kind], at, problems);
-            if (TargetKeys.GetValueOrDefault(kind) is { } other && step[other] is { } control)
+            if (ScriptVocabulary.SecondTargets.GetValueOrDefault(kind) is { } other && step[other] is { } control)
                 CheckTarget(control, at, problems);
             switch (kind)
             {
@@ -489,9 +487,7 @@ public sealed class Suite
                         problems.Add($"{at}: there is no script {script} in the suite's folder.");
                     break;
                 case "whileShows":
-                    if (step["untilText"] is { } until)
-                        CheckTarget(until, at, problems);
-                    else
+                    if (step["untilText"] is null)
                         problems.Add($"{at}: whileShows needs untilText, the control that says when it is done.");
                     CheckSteps(step["steps"] as JsonArray ?? [], at, problems);
                     break;
@@ -586,9 +582,6 @@ public sealed class Suite
                 break;
         }
     }
-
-    // The properties of steps, besides their own key, that are controls: drag's to, menu's on and expand's in.
-    private static readonly Dictionary<string, string> TargetKeys = new() { ["drag"] = "to", ["menu"] = "on", ["expand"] = "in" };
 
     // A property's text as written, when it has no ${...} to fill in first.
     private static string? Written(JsonNode? node) =>

@@ -13,15 +13,6 @@ namespace AutoTestRunner.Building;
 public static class ElementUses
 {
 
-    // The properties of a step, besides its own key, that are targets.
-    private static readonly Dictionary<string, string[]> TargetKeys = new(StringComparer.Ordinal)
-    {
-        ["drag"] = ["to"],
-        ["menu"] = ["on"],
-        ["expand"] = ["in"],
-        ["whileShows"] = ["untilText"],
-    };
-
     /// <summary>Each element's uses, as the file each is in relative to the suite folder, once for each use.</summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<string>> Find(Suite suite)
     {
@@ -111,7 +102,7 @@ public static class ElementUses
             var kind = ScriptVocabulary.KindOf(step);
             if (ScriptVocabulary.Steps.TryGetValue(kind, out var known) && known.Takes == Takes.Target)
                 Target(step[kind], $"{at}/{Escape(kind)}", found);
-            foreach (var key in TargetKeys.GetValueOrDefault(kind) ?? [])
+            if (ScriptVocabulary.SecondTargets.GetValueOrDefault(kind) is { } key)
                 Target(step[key], $"{at}/{key}", found);
             if (kind == "if" && step["if"] is JsonObject condition)
                 Check(condition, $"{at}/if", found);

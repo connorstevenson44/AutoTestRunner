@@ -2,7 +2,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.Json.Nodes;
-using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -969,8 +968,6 @@ internal sealed partial class BuilderPanel : Window
         return new ScreenRect(rect.Left, rect.Top, rect.Right, rect.Bottom);
     }
 
-    [GeneratedRegex(@"^[A-Za-z_]\w*$")]
-    private static partial Regex Identifier();
 
     [StructLayout(LayoutKind.Sequential)]
     private struct Rect

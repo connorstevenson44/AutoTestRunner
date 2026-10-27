@@ -296,7 +296,7 @@ internal sealed partial class BuilderPanel
     private void ListMacros(ContextMenu menu)
     {
         var macros = _suite.Macros.Values.Select(macro => (macro.Name, Parameters: (IReadOnlyDictionary<string, string?>)macro.Parameters))
-            .Concat(_draft.NewMacros.Select(pair => (Name: pair.Key, Parameters: (IReadOnlyDictionary<string, string?>)MacroMaker.Read(pair.Key, "", pair.Value).Parameters)))
+            .Concat(_draft.NewMacros.Select(pair => (Name: pair.Key, Parameters: (IReadOnlyDictionary<string, string?>)Macro.From(pair.Key, "", pair.Value).Parameters)))
             .OrderBy(macro => macro.Name, StringComparer.OrdinalIgnoreCase).ToList();
         foreach (var (name, parameters) in macros)
             menu.Items.Add(Item(Icons.Macro, name, $"Run {name}, with its parameters from a form", () => UseMacro(name, parameters)));
@@ -384,7 +384,7 @@ internal sealed partial class BuilderPanel
                 break;
             case PickAction.Keep:
                 if (Ui.Prompt(this, "Keep its text", $"What to call what it says (\"{text}\"), as ${{name}} in later steps and checks:", Variable(choice, facts), "Keep", Icons.Note, tall: false) is { } kept
-                    && Identifier().IsMatch(kept.Trim()))
+                    && ScriptVocabulary.IsName(kept.Trim()))
                     Play?.Invoke(StepMaker.Keep(choice, facts, kept.Trim()), true);
                 break;
             case PickAction.CheckShows:
@@ -456,7 +456,7 @@ internal sealed partial class BuilderPanel
         name = name.Trim();
         try
         {
-            if (!Identifier().IsMatch(name))
+            if (!ScriptVocabulary.IsName(name))
                 throw new ArgumentException("A name is letters and digits, such as addOrder.");
             var named = _draft.NameControl(choice, name, _suite.Elements);
             foreach (var (step, row) in _rows)

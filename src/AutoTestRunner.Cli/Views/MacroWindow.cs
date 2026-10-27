@@ -1,8 +1,8 @@
-using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using AutoTestRunner.Building;
+using AutoTestRunner.Scripting;
 
 namespace AutoTestRunner.Cli.Views;
 
@@ -10,7 +10,7 @@ namespace AutoTestRunner.Cli.Views;
 /// Asks what a macro made of steps is called, what it does, and which of the values in the steps become its
 /// parameters, each ticked with a name, so the next case can give it other values.
 /// </summary>
-internal static partial class MacroWindow
+internal static class MacroWindow
 {
     /// <summary>The macro's name, what it does, and the values made parameters, with the names given; or null when closed.</summary>
     public static (string Name, string Description, IReadOnlyList<MacroValue> Parameters)? Ask(Window owner, IReadOnlyList<MacroValue> values, IReadOnlySet<string> taken)
@@ -62,9 +62,9 @@ internal static partial class MacroWindow
         var make = Ui.LabelledButton(Icons.Macro, "Make it", () =>
         {
             var chosen = rows.Where(row => row.Tick.IsChecked == true).Select(row => row.Value with { Name = row.Name.Text.Trim() }).ToList();
-            var why = !Identifier().IsMatch(name.Text.Trim()) ? "A macro's name is letters and digits, such as addOrder."
+            var why = !ScriptVocabulary.IsName(name.Text.Trim()) ? "A macro's name is letters and digits, such as addOrder."
                 : taken.Contains(name.Text.Trim()) ? $"The suite already has a macro called {name.Text.Trim()}."
-                : chosen.FirstOrDefault(value => !Identifier().IsMatch(value.Name)) is { } bad ? $"A parameter's name is letters and digits: \"{bad.Name}\" isn't."
+                : chosen.FirstOrDefault(value => !ScriptVocabulary.IsName(value.Name)) is { } bad ? $"A parameter's name is letters and digits: \"{bad.Name}\" isn't."
                 : chosen.GroupBy(value => value.Name).FirstOrDefault(same => same.Count() > 1) is { } twice ? $"Two parameters are called {twice.Key}."
                 : null;
             if (why is not null)
@@ -85,6 +85,4 @@ internal static partial class MacroWindow
         return answer;
     }
 
-    [GeneratedRegex(@"^[A-Za-z_]\w*$")]
-    private static partial Regex Identifier();
 }

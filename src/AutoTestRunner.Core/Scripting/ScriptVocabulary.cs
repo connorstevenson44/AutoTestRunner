@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 
 namespace AutoTestRunner.Scripting;
 
@@ -6,7 +7,7 @@ namespace AutoTestRunner.Scripting;
 /// The fixed vocabulary of steps, checks and tools, and the properties each one takes. The loader rejects anything
 /// else, and the JSON schemas in schema/ are checked against this list by a test, so the two can't drift apart.
 /// </summary>
-public static class ScriptVocabulary
+public static partial class ScriptVocabulary
 {
     /// <summary>Properties any step can have.</summary>
     public static readonly IReadOnlySet<string> CommonStepKeys = new HashSet<string>(["say", "note", "as", "what", "within", "disabled"]);
@@ -117,6 +118,15 @@ public static class ScriptVocabulary
         ["queue"] = ["count", "has"],
     };
 
+    /// <summary>The steps with a second control besides their own key's, by the property it is in.</summary>
+    public static readonly IReadOnlyDictionary<string, string> SecondTargets = new Dictionary<string, string>
+    {
+        ["drag"] = "to",
+        ["menu"] = "on",
+        ["expand"] = "in",
+        ["whileShows"] = "untilText",
+    };
+
     /// <summary>The checks whose subject is a control in the app, written as a target.</summary>
     public static readonly IReadOnlySet<string> ControlChecks = new HashSet<string>(
         ["shows", "enabled", "disabled", "ticked", "notTicked", "selected", "focused", "says", "rows"]);
@@ -131,4 +141,10 @@ public static class ScriptVocabulary
         ["console"] = ["args"],
         ["app"] = ["args"],
     };
+
+    /// <summary>Whether the text can name a variable, macro or parameter: a letter or _, then letters, digits and _.</summary>
+    public static bool IsName(string text) => Name().IsMatch(text);
+
+    [GeneratedRegex(@"^[A-Za-z_]\w*$")]
+    private static partial Regex Name();
 }

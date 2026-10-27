@@ -13,7 +13,7 @@ namespace AutoTestRunner.Building;
 /// </summary>
 public static partial class CaseWriter
 {
-    private const string SchemaFolder = "https://raw.githubusercontent.com/connorstevenson44/AutoTestRunner/main/schema/";
+    internal const string SchemaFolder = "https://raw.githubusercontent.com/connorstevenson44/AutoTestRunner/main/schema/";
 
     /// <summary>
     /// Saves the draft, and returns the case file it went in; with the controls it named, the hooks and macros it
