@@ -37,17 +37,28 @@ internal sealed class FakeMachine : IMachine
     /// <summary>What a PowerShell script prints and its exit code, by its first line.</summary>
     public Dictionary<string, ProcessOutput> Scripts { get; } = [];
 
-    /// <summary>What a program prints and its exit code, by its name, in place of its command line.</summary>
+    /// <summary>
+    /// What a program prints and its exit code, in place of its command line: by its name and first argument, such as
+    /// "winget list", else by its name.
+    /// </summary>
     public Dictionary<string, ProcessOutput> Programs { get; } = [];
+
+    /// <summary>Each program run, with its arguments, as one line.</summary>
+    public List<string> Ran { get; } = [];
 
     /// <summary>Programs that aren't installed, so don't start.</summary>
     public HashSet<string> Missing { get; } = [];
 
     // A program prints its command line.
     public ProcessOutput Run(string program, IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string>? environment = null, TimeSpan? timeout = null,
-        Action<string, bool>? output = null) =>
-        Missing.Contains(program) ? throw new System.ComponentModel.Win32Exception(2, $"{program} isn't installed.")
-        : Printed(Programs.GetValueOrDefault(program, new(0, $"{program} {string.Join(" ", arguments)}")), output);
+        Action<string, bool>? output = null)
+    {
+        if (Missing.Contains(program))
+            throw new System.ComponentModel.Win32Exception(2, $"{program} isn't installed.");
+        var line = $"{program} {string.Join(" ", arguments)}";
+        Ran.Add(line);
+        return Printed(arguments.Count > 0 && Programs.TryGetValue($"{program} {arguments[0]}", out var given) ? given : Programs.GetValueOrDefault(program, new(0, line)), output);
+    }
 
     public ProcessOutput PowerShell(string script, IReadOnlyList<string> arguments, TimeSpan? timeout = null, Action<string, bool>? output = null) =>
         Printed(Scripts.GetValueOrDefault(script.Split('\n')[0].Trim(), new(0, "")), output);

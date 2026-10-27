@@ -37,6 +37,7 @@ the scripts never turn into a programming language that a person can't read as a
 | `reset.powershell` | The script that cleans up |
 | `databases` | The databases `query` steps and `dbValue` checks use, by a name of your own: see [Databases and queues](#databases-and-queues) |
 | `queues` | The message queues `send`, `receive` and `purge` steps and `queue` checks use, by a name of your own |
+| `software` | The software the suite needs on the computer, such as SQL Server Express or RabbitMQ, which the launcher offers to install: see [Software a suite needs](#software-a-suite-needs) |
 | `builder.watch` | Controls whose text the builder watches while recording: `{ "element": "savedText", "call": "waitForSaved", "check": true }`. When it changes after a step, the builder adds a wait for its new words, through `call` (given `startsWith` when the macro takes it) or a `waitText`; with `check`, it keeps the words and checks them at the checkpoint. The app's `status`, and any element with a macro named `waitFor` and its name, such as `waitForSavedText`, are watched anyway. |
 | `builder.afterClick` | Steps the builder adds after a control is clicked, instead of a wait for the status text: `{ "element": "deploy", "call": "waitForDeploy", "with": { "within": "300" }, "delay": 0.5 }` adds a `wait` of `delay` seconds, then the call. |
 
@@ -236,6 +237,40 @@ or `:id` on Oracle. Values are read as text: numbers and dates the same on every
   "checks": [ { "dbValue": "orders", "sql": "select Status from Orders where Id = @id", "params": { "id": "1001" }, "equals": "Billed" },
               { "queue": "invoices", "count": 0 } ] }
 ```
+
+## Software a suite needs
+
+`software` names what has to be on the computer for the suite to run, each with how to find it and install it:
+
+```json
+"software": {
+  "sqlExpress": { "title": "SQL Server Express", "winget": "Microsoft.SQLServer.2022.Express", "version": "16.0" },
+  "rabbitMq": { "title": "RabbitMQ", "winget": "RabbitMQ.RabbitMQServer", "version": "3.13", "present": { "service": "RabbitMQ", "state": "Running" } },
+  "msmq": { "title": "MSMQ", "windowsFeature": "MSMQ-Server" },
+  "ibmMq": { "title": "IBM MQ", "script": "tools/Install-Mq.ps1", "args": ["-Version", "${version}"], "version": "9.4",
+             "present": { "fileExists": "C:\\Program Files\\IBM\\MQ\\bin\\dspmq.exe" }, "administrator": true }
+}
+```
+
+| Property | What it is |
+| --- | --- |
+| `title` | What a person calls it |
+| `winget` | A winget package id. It is found with `winget list`, and installed with `winget install`, silently. |
+| `version` | The version wanted: an installed version that starts with it will do, so `3.13` takes 3.13.7. Left out, any version, and the latest is installed. |
+| `windowsFeature` | A Windows feature, found with `Win32_OptionalFeature` and turned on with `Enable-WindowsOptionalFeature`, which needs administrator |
+| `script` | A `.ps1` or `.cs` file that installs it, given `args`, where `${version}` is the version |
+| `present` | A check, as a checkpoint has, that passes when it is installed. A `script` needs one; for a `winget` package it also counts what winget doesn't know about. |
+| `administrator` | The `script` needs administrator |
+
+When a suite is picked, the launcher looks for each in the background and shows a pill for it: a tick when it is
+there, an amber arrow when it is missing or at another version. The first time something is missing in a session, it
+asks, with a tick box for each: what is missing is ticked, and what is there is greyed with its version. Nothing is
+installed until **Install** is clicked; then autotest asks for administrator when one of them needs it, and shows what
+the installers print as they go. Click a pill to be asked again.
+
+`autotest setup <suite folder>` does the same at the command line: it lists what is there, then asks before it
+installs what is missing. `--install sqlExpress,msmq` picks which, or `all`; `--yes` installs without asking. It ends
+with 0 when everything picked is there, and 2 when something is still missing.
 
 ## Macros
 

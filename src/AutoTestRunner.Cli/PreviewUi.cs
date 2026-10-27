@@ -37,6 +37,14 @@ internal static class PreviewUi
                 if (shots is null)
                     return;
                 Save(launcher, Path.Combine(shots, "01-launcher.png"));
+                // What the suite needs installed, as it is offered when the suite is picked and something is missing.
+                var software = SoftwareWindow.Make(launcher, suite, new Options(), MadeUpSoftware(), out _);
+                software.Loaded += (_, _) =>
+                {
+                    Save(software, Path.Combine(shots, "15-software.png"));
+                    software.Close();
+                };
+                software.ShowDialog();
                 launcher.Close();
             };
             launcher.Closed += (_, _) => Play(app, suite, shots);
@@ -302,6 +310,15 @@ internal static class PreviewUi
         draft.Steps.Clear();
         panel.Dispatcher.Invoke(panel.Close);
     }
+
+    // The software a suite needs, found in each state: there, missing, at another version, and a feature to turn on.
+    private static List<SoftwareState> MadeUpSoftware() =>
+    [
+        new(new SoftwareSettings("sqlExpress", "SQL Server Express") { Winget = "Microsoft.SQLServer.2022.Express", Version = "16.0" }, SoftwareStatus.Installed, "16.0.1000.6"),
+        new(new SoftwareSettings("rabbitMq", "RabbitMQ") { Winget = "RabbitMQ.RabbitMQServer", Version = "3.13" }, SoftwareStatus.OtherVersion, "3.12.1"),
+        new(new SoftwareSettings("erlang", "Erlang/OTP") { Winget = "Erlang.ErlangOTP" }, SoftwareStatus.Missing),
+        new(new SoftwareSettings("msmq", "MSMQ") { WindowsFeature = "MSMQ-Server" }, SoftwareStatus.Missing),
+    ];
 
     // Three suites, as a kit puts them beside the runner: two that load, one with mistakes in its scripts.
     private static List<FoundSuite> MadeUpSuites()

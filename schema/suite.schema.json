@@ -201,6 +201,54 @@
         "additionalProperties": false
       }
     },
+    "software": {
+      "type": "object",
+      "description": "Software the suite needs on the computer, by a name of your own. The launcher looks for it when the suite is picked and offers to install what is missing; autotest setup does the same from the command line. Each has one of winget, windowsFeature or script.",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "What a person calls it, such as SQL Server Express."
+          },
+          "winget": {
+            "type": "string",
+            "description": "The winget package id, such as Microsoft.SQLServer.2022.Express."
+          },
+          "version": {
+            "type": [
+              "string",
+              "number"
+            ],
+            "description": "The version wanted: one that starts with it will do, such as 3.13 for 3.13.7. Left out, any version, and the latest is installed."
+          },
+          "windowsFeature": {
+            "type": "string",
+            "description": "A Windows feature, as Enable-WindowsOptionalFeature names it, such as MSMQ-Server. Installing it needs administrator."
+          },
+          "script": {
+            "type": "string",
+            "description": "A .ps1 or .cs file that installs it, relative to the suite folder."
+          },
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "What the script is given; ${version} is the version."
+          },
+          "present": {
+            "$ref": "case.schema.json#/definitions/check",
+            "description": "A check that passes when it is installed, such as { \"service\": \"RabbitMQ\", \"state\": \"Running\" }. A script needs one."
+          },
+          "administrator": {
+            "type": "boolean",
+            "description": "The script needs administrator, which is asked for before it runs."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
     "screen": {
       "type": "object",
       "properties": {

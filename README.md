@@ -212,6 +212,11 @@ Oracle, MySQL and SQLite, and RabbitMQ, IBM MQ and MSMQ, each named once in suit
 `query` step keeps a value, `send`, `receive` and `purge` work a queue, and the `dbValue` and `queue` checks say what
 is in them at a checkpoint: see [Databases and queues](docs/format.md#databases-and-queues).
 
+The software a suite needs, such as SQL Server Express, RabbitMQ or MSMQ, can be named in suite.json's `software`,
+as a winget package at a version, a Windows feature or an install script. The launcher looks for it when the suite is
+picked, shows a pill for each, and offers to install what is missing with a tick box for each, always asking first;
+`autotest setup` does the same from the command line. See [Software a suite needs](docs/format.md#software-a-suite-needs).
+
 Setup that is easier written as code can be a C# file instead of PowerShell: `{ "script": "tools/SeedOrders.cs",
 "args": ["${dataDir}"] }` runs it with `dotnet run`, which builds it the first time and after it changes. It gets the
 step's args as `args`, a line such as `#:package Microsoft.Data.SqlClient@7.1.1` at the top brings in a NuGet package,

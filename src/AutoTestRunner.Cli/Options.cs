@@ -28,6 +28,15 @@ public sealed record Options
     /// <summary>record: the case whose reset the new case starts after, by number or id.</summary>
     public string? AfterReset { get; init; }
 
+    /// <summary>setup: the software to install, by name, or missing or all; null to offer what is missing.</summary>
+    public string? Install { get; init; }
+
+    /// <summary>setup: install without asking.</summary>
+    public bool Yes { get; init; }
+
+    /// <summary>setup: a file to add what it prints to, which the launcher shows as it is written.</summary>
+    public string? Log { get; init; }
+
     /// <summary>record: the new case's name.</summary>
     public string? Name { get; init; }
 

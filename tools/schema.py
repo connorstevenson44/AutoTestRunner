@@ -180,6 +180,15 @@ suite = {"$schema":S,"$id":"suite.schema.json","title":"AutoTestRunner suite","d
    "user":text("IBM MQ's user, when the channel asks for one."),
    "password":text("IBM MQ's password; ${variables} allowed."),
    "format":{"enum":["xml","text"],"description":"How an MSMQ message's text is written: xml, as .NET's XmlMessageFormatter does (the default), or plain text."}},"additionalProperties":False}},
+ "software":{"type":"object","description":"Software the suite needs on the computer, by a name of your own. The launcher looks for it when the suite is picked and offers to install what is missing; autotest setup does the same from the command line. Each has one of winget, windowsFeature or script.","additionalProperties":{"type":"object","properties":{
+   "title":text("What a person calls it, such as SQL Server Express."),
+   "winget":text("The winget package id, such as Microsoft.SQLServer.2022.Express."),
+   "version":{"type":["string","number"],"description":"The version wanted: one that starts with it will do, such as 3.13 for 3.13.7. Left out, any version, and the latest is installed."},
+   "windowsFeature":text("A Windows feature, as Enable-WindowsOptionalFeature names it, such as MSMQ-Server. Installing it needs administrator."),
+   "script":text("A .ps1 or .cs file that installs it, relative to the suite folder."),
+   "args":{"type":"array","items":{"type":"string"},"description":"What the script is given; ${version} is the version."},
+   "present":{"$ref":"case.schema.json#/definitions/check","description":"A check that passes when it is installed, such as { \"service\": \"RabbitMQ\", \"state\": \"Running\" }. A script needs one."},
+   "administrator":{"type":"boolean","description":"The script needs administrator, which is asked for before it runs."}},"additionalProperties":False}},
  "screen":{"type":"object","properties":{"width":{"type":"integer"},"height":{"type":"integer"}},"description":"The smallest screen the suite is written for."},
  "builder":{"type":"object","description":"What the builder does while recording a case.","properties":{
    "watch":{"type":"array","description":"Controls whose text the builder watches: when it changes after a step, it adds a wait for the new text. The app's status, and any element with a macro named waitFor and its name, are watched anyway.","items":{"type":"object","required":["element"],"properties":{

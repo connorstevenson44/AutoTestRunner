@@ -117,6 +117,29 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not ($output -match 'succeeded: 1')) { throw 'The MSMQ test didn''t run.' }
 
+      # The software a suite needs: MSMQ, turned on above, is found, and a script's software is missing until autotest
+      # setup is told yes, then installed.
+      - name: Test autotest setup
+        run: |
+          $suite = Join-Path $env:RUNNER_TEMP 'setup-suite'
+          New-Item -ItemType Directory -Force "$suite/cases" | Out-Null
+          $marker = (Join-Path $env:RUNNER_TEMP 'marker.txt') -replace '\\', '/'
+          @{ name = 'Setup'; app = @{ exe = 'App.exe'; window = 'App' }; software = [ordered]@{
+              msmq = @{ title = 'MSMQ'; windowsFeature = 'MSMQ-Server' }
+              marker = @{ title = 'Marker'; script = 'install-marker.ps1'; args = @($marker); present = @{ fileExists = $marker } } } } |
+            ConvertTo-Json -Depth 5 | Set-Content "$suite/suite.json"
+          'param($path) Set-Content $path "installed"; "Wrote $path"' | Set-Content "$suite/install-marker.ps1"
+          '{ "name": "Start", "steps": [ { "startApp": {} } ] }' | Set-Content "$suite/cases/01-start.json"
+          $asked = 'n' | artifacts/autotest/autotest.exe setup $suite
+          $asked
+          if ($LASTEXITCODE -ne 2) { throw "autotest setup said no, and ended with $LASTEXITCODE, not 2." }
+          if (-not ($asked -match 'MSMQ: installed') -or -not ($asked -match 'Marker: not installed')) { throw 'autotest setup didn''t find what is there.' }
+          if (Test-Path $marker) { throw 'autotest setup installed without a yes.' }
+          $installed = artifacts/autotest/autotest.exe setup $suite --yes
+          $installed
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not ($installed -match 'Wrote ') -or -not ($installed -match 'Marker: installed')) { throw 'autotest setup didn''t install the marker.' }
+
       # Plays a made-up run in the launcher and the panel, and saves a picture of each state: it shows the windows
       # open and draw without an error, and what they look like, in the screenshots artifact.
       - name: Take pictures of the windows
@@ -126,7 +149,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $shots = @(Get-ChildItem artifacts/shots -Filter *.png)
           "$($shots.Count) pictures: $($shots.Name -join ', ')"
-          if ($shots.Count -lt 14) { throw "autotest preview-ui saved $($shots.Count) of 14 pictures." }
+          if ($shots.Count -lt 15) { throw "autotest preview-ui saved $($shots.Count) of 15 pictures." }
 
       - uses: actions/upload-artifact@v4
         if: always()

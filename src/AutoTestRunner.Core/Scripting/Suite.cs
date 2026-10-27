@@ -31,6 +31,9 @@ public sealed class Suite
     /// <summary>The message queues steps and checks send to and read, by their name in suite.json.</summary>
     public IReadOnlyDictionary<string, QueueSettings> Queues { get; init; } = new Dictionary<string, QueueSettings>();
 
+    /// <summary>The software the suite needs on the computer, by its name in suite.json, which the launcher offers to install.</summary>
+    public IReadOnlyDictionary<string, SoftwareSettings> Software { get; init; } = new Dictionary<string, SoftwareSettings>();
+
     /// <summary>The controls the builder watches while recording, from builder.watch in suite.json.</summary>
     public IReadOnlyList<WatchHook> Watch { get; init; } = [];
 
@@ -137,7 +140,7 @@ public sealed class Suite
             afterClick.Add(new ClickHook(element, call, hook["with"]?.DeepClone() as JsonObject, delay));
         }
 
-        var (databases, queues) = (ReadDatabases(root, problems), ReadQueues(root, problems));
+        var (databases, queues, software) = (ReadDatabases(root, problems), ReadQueues(root, problems), ReadSoftware(root, problems));
 
         var suite = new Suite
         {
@@ -163,6 +166,7 @@ public sealed class Suite
             AfterClick = afterClick,
             Databases = databases,
             Queues = queues,
+            Software = software,
         };
         suite.Check(problems);
         if (problems.Count > 0)
@@ -223,6 +227,36 @@ public sealed class Suite
                 queues[name] = settings;
         }
         return queues;
+    }
+
+    // The software suite.json says the suite needs, with what is wrong with it.
+    private static Dictionary<string, SoftwareSettings> ReadSoftware(JsonObject root, List<string> problems)
+    {
+        var software = new Dictionary<string, SoftwareSettings>(StringComparer.Ordinal);
+        foreach (var (name, node) in root["software"] as JsonObject ?? [])
+        {
+            string? Text(string key) => node?[key] is JsonValue value && value.TryGetValue(out string? text) ? text : node?[key] is JsonValue number ? number.ToString() : null;
+            var item = new SoftwareSettings(name, Text("title") ?? name)
+            {
+                Winget = Text("winget"),
+                Version = Text("version"),
+                WindowsFeature = Text("windowsFeature"),
+                Script = Text("script"),
+                Args = (node?["args"] as JsonArray ?? []).Select(arg => arg?.ToString() ?? "").ToList(),
+                Present = node?["present"] as JsonObject,
+                Administrator = node?["administrator"]?.GetValue<bool>() ?? false,
+            };
+            var ways = new[] { item.Winget, item.WindowsFeature, item.Script }.Count(way => way is not null);
+            if (ways != 1)
+                problems.Add($"suite.json: software {name} needs one of winget, a package id; windowsFeature, such as MSMQ-Server; or script, a .ps1 or .cs file that installs it.");
+            else if (item.Script is not null && item.Present is null)
+                problems.Add($"suite.json: software {name} is installed by a script, so it needs present, a check that passes when it is there, such as {{ \"service\": \"RabbitMQ\", \"state\": \"Running\" }}.");
+            else if (item.WindowsFeature is not null && item.Version is not null)
+                problems.Add($"suite.json: software {name} is a Windows feature, which has no version.");
+            else
+                software[name] = item;
+        }
+        return software;
     }
 
     // A property's text, or null when it isn't there or isn't text.
@@ -345,6 +379,8 @@ public sealed class Suite
 
     private void Check(List<string> problems)
     {
+        foreach (var item in Software.Values.Where(item => item.Present is not null))
+            CheckChecks(new JsonArray(item.Present!.DeepClone()), $"suite.json: software {item.Name}'s present", problems);
         if (App.Status is { } status && !Elements.ContainsKey(status))
             problems.Add($"suite.json: app.status names {status}, which isn't in elements.json.");
         foreach (var (element, call, where) in Watch.Select(hook => (hook.Element, hook.Call, "builder.watch"))

@@ -13,9 +13,9 @@ using AutoTestRunner.Scripting;
 namespace AutoTestRunner.Cli.Views;
 
 /// <summary>
-/// One suite in the launcher: whether the app and its files are there and the machine is clean, with a button that
-/// cleans it; then its cases to tick, each with how it went last time, a warning when it needs looking at since a case
-/// it carries on from changed, a pencil to change it, and New case.
+/// One suite in the launcher: whether the app and its files are there, the machine is clean, with a button that
+/// cleans it, and the software it needs is installed; then its cases to tick, each with how it went last time, a
+/// warning when it needs looking at since a case it carries on from changed, a pencil to change it, and New case.
 /// </summary>
 internal sealed class SuitePane : Grid
 {
@@ -29,6 +29,12 @@ internal sealed class SuitePane : Grid
     private readonly ActivityFeed _cleaning;
     private readonly Border _cleaningBox;
     private readonly Dictionary<int, CaseStatus> _last;
+
+    // The software the suite needs, each a pill that says whether it is there.
+    private readonly WrapPanel _software = new() { Visibility = Visibility.Collapsed };
+
+    // The suites whose missing software was offered this session, so it is asked once, not each time the suite is picked.
+    private static readonly HashSet<string> Offered = new(StringComparer.OrdinalIgnoreCase);
     private bool _missing, _busy;
 
     /// <param name="suite">The suite to show.</param>
@@ -65,6 +71,7 @@ internal sealed class SuitePane : Grid
             state.Children.Add(admin);
         }
         state.Children.Add(_clean);
+        state.Children.Add(_software);
         _cleaning = new ActivityFeed("Clean up");
         // At most so tall, so that folding the log away gives the space back to the cases.
         var cleaningLog = new Grid();
@@ -134,7 +141,11 @@ internal sealed class SuitePane : Grid
 
         Tick(item => options.Cases is null && options.Tags.Count == 0 || options.Pick(suite).Contains(item));
         CheckFiles();
-        Loaded += (_, _) => CheckMachine();
+        Loaded += (_, _) =>
+        {
+            CheckMachine();
+            CheckSoftware();
+        };
     }
 
     public Suite Suite => _suite;
@@ -449,6 +460,62 @@ internal sealed class SuitePane : Grid
             _machine.ToolTip = problem ?? (clean ? "Nothing left over from an earlier run" : string.Join("\n", leftovers) + "\n\nClean up removes these. Running from case 1 also does.");
             _clean.Visibility = clean ? Visibility.Collapsed : Visibility.Visible;
         }));
+    }
+
+    // Looks for the suite's software in the background, as winget takes a few seconds, and shows a pill for each: a tick
+    // when it is there, an amber arrow when it isn't. Clicking one offers to install; the first time this session that
+    // something is missing, the offer comes by itself.
+    private void CheckSoftware()
+    {
+        if (_suite.Software.Count == 0)
+            return;
+        _software.Visibility = Visibility.Visible;
+        _software.Children.Clear();
+        var checking = new StackPanel { Orientation = Orientation.Horizontal };
+        checking.Children.Add(Ui.Spinner(12, Ui.Muted));
+        checking.Children.Add(new TextBlock { Text = "Looking for the software it needs", Foreground = Ui.Muted, FontSize = 12, Margin = new Thickness(6, 0, 0, 0) });
+        _software.Children.Add(Pill(checking, Ui.Surface));
+        var globals = Runner.Variables(_suite, Path.GetTempPath(), _options.Variables);
+        Task.Run(() => Software.Detect(_suite, new WindowsMachine(), globals)).ContinueWith(task => Dispatcher.BeginInvoke(() =>
+        {
+            _software.Children.Clear();
+            if (task.Exception is { } failed)
+            {
+                Crashes.Log(failed, $"Looking for {_suite.Name}'s software.");
+                _software.Children.Add(Pill(Ui.IconText(Icons.Warning, "Couldn't look for its software", Ui.Hold), Ui.HoldSoft));
+                return;
+            }
+            var states = task.Result;
+            foreach (var state in states)
+            {
+                var (glyph, color, background) = state.Status switch
+                {
+                    SoftwareStatus.Installed => (Icons.Passed, Ui.Pass, Ui.PassSoft),
+                    SoftwareStatus.Unknown => (Icons.Warning, Ui.Muted, Ui.Surface),
+                    _ => (Icons.Download, Ui.AmberInk, Ui.AmberSoft),
+                };
+                var pill = Pill(Ui.IconText(glyph, state.Item.Title, color), background);
+                pill.ToolTip = state.Line + (state.Wanted ? "\nClick to install it." : "");
+                pill.Cursor = System.Windows.Input.Cursors.Hand;
+                pill.MouseLeftButtonUp += (_, _) => OfferSoftware(states);
+                _software.Children.Add(pill);
+            }
+            if (states.Any(state => state.Wanted) && Offered.Add(_suite.Folder))
+                OfferSoftware(states);
+        }));
+    }
+
+    private void OfferSoftware(IReadOnlyList<SoftwareState> states)
+    {
+        if (SoftwareWindow.Ask(Window.GetWindow(this), _suite, _options, states))
+            CheckSoftware();
+    }
+
+    private static Border Pill(UIElement child, Brush background)
+    {
+        var pill = Ui.Pill(child, background, 12, new Thickness(10, 4, 12, 4));
+        pill.Margin = new Thickness(0, 0, 8, 6);
+        return pill;
     }
 
     // Closes the app and runs the reset script, showing it run as the panel shows commands.
