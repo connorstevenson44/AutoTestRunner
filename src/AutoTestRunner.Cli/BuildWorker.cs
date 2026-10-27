@@ -1,5 +1,4 @@
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Text.Json.Nodes;
 using AutoTestRunner.Building;
 using AutoTestRunner.Cli.Views;
@@ -58,12 +57,13 @@ internal sealed partial class BuildWorker
     // keeps still.
     private readonly Dictionary<string, Watching> _watching = new(StringComparer.Ordinal);
 
-    // Where the mouse was, the app's control there once it was read, and whether that is outlined, with how a step
-    // would find the control outlined: naming one asks the app about each way to find it, so it is done once a control.
+    // Where the mouse was, the app's control there once it was read, and whether that is outlined, with the control
+    // outlined for it and how a step would find that: naming one asks the app about each way to find it, so it is done
+    // once a control, and again only when Shift goes down or up.
     private (int X, int Y) _pointer = (int.MinValue, int.MinValue);
     private InspectedControl? _under;
     private bool _read, _outlined;
-    private (ControlFacts Facts, TargetChoice Choice)? _named;
+    private (ControlFacts Pointed, bool Exact, ControlFacts Facts, TargetChoice Choice)? _named;
 
     public BuildWorker(BuildSession session, BuildRequest request, CaseDraft draft, BuilderPanel panel, BuilderView view, FlaUiDriver driver, Runner runner)
     {
@@ -87,53 +87,69 @@ internal sealed partial class BuildWorker
         GetReady();
         while (_session.Next(out var input))
         {
-            if (input is null)
+            try
             {
-                KeepUp();
-                continue;
+                if (input is null)
+                    KeepUp();
+                else
+                    Handle(input);
             }
-            Settle();
-            switch (input.Kind)
+            catch (Exception ex) when (FlaUiDriver.Gone(ex) || ex is StuckException)
             {
-                case BuildInputKind.Click:
-                    Clicked(input);
-                    break;
-                case BuildInputKind.RightClick:
-                    RightClicked(input);
-                    break;
-                case BuildInputKind.Pick:
-                    Picked(input.X, input.Y);
-                    break;
-                case BuildInputKind.Key when input.Keys is { } keys:
-                    Pressed(keys, input.PassOn);
-                    break;
-                case BuildInputKind.Play when input.Step is { } step:
-                    Play(step, input.Add);
-                    break;
-                case BuildInputKind.Locate:
-                    Locate(input.Step);
-                    break;
-                case BuildInputKind.Add when input.Step is { } step:
-                    LeaveBox();
-                    _panel.Add(_recorder.Add(step, changesStatus: false));
-                    _panel.Ready();
-                    break;
-                case BuildInputKind.RunTo when input.Step is { } step:
-                    GoTo(step, rewind: false);
-                    break;
-                case BuildInputKind.RollBack when input.Step is { } step:
-                    GoTo(step, rewind: true);
-                    break;
-                case BuildInputKind.EditFrom when input.Step is { } step:
-                    GoTo(step, input.Rewind, record: true);
-                    break;
-                case BuildInputKind.Try when input.Check is { } check:
-                    Try(check, input.Answer);
-                    break;
-                case BuildInputKind.Use when input.Macro is { } macro:
-                    _runner.Use(macro);
-                    break;
+                // The app changed while it was read, as when a window closes or the app is too busy to answer: the
+                // builder carries on, and the next look sees the app as it is now.
+                (_under, _read) = (null, false);
+                if (input is not null)
+                    _panel.Ready($"{_suite.App.Window} changed while the builder was reading it, so that was missed. Try it again. ({ex.Message})");
             }
+        }
+    }
+
+    private void Handle(BuildInput input)
+    {
+        // A Stop pressed as the last steps finished by themselves is not for these.
+        _runner.Control.PlayAgain();
+        Settle();
+        switch (input.Kind)
+        {
+            case BuildInputKind.Click:
+                Clicked(input);
+                break;
+            case BuildInputKind.RightClick:
+                RightClicked(input);
+                break;
+            case BuildInputKind.Pick:
+                Picked(input.X, input.Y, input.Exact);
+                break;
+            case BuildInputKind.Key when input.Keys is { } keys:
+                Pressed(keys, input.PassOn);
+                break;
+            case BuildInputKind.Play when input.Step is { } step:
+                Play(step, input.Add);
+                break;
+            case BuildInputKind.Locate:
+                Locate(input.Step);
+                break;
+            case BuildInputKind.Add when input.Step is { } step:
+                LeaveBox();
+                _panel.Add(_recorder.Add(step, changesStatus: false));
+                _panel.Ready();
+                break;
+            case BuildInputKind.RunTo when input.Step is { } step:
+                GoTo(step, rewind: false);
+                break;
+            case BuildInputKind.RollBack when input.Step is { } step:
+                GoTo(step, rewind: true);
+                break;
+            case BuildInputKind.EditFrom when input.Step is { } step:
+                GoTo(step, input.Rewind, record: true);
+                break;
+            case BuildInputKind.Try when input.Check is { } check:
+                Try(check, input.Answer);
+                break;
+            case BuildInputKind.Use when input.Macro is { } macro:
+                _runner.Use(macro);
+                break;
         }
     }
 
@@ -218,12 +234,14 @@ internal sealed partial class BuildWorker
             var step = steps[index];
             if (step.State == DraftStepState.Played)
                 continue;
+            if (_runner.Control.PlayStopped)
+                return $"You stopped it before step {index + 1}, {step.Text}.";
             _panel.Playing(step);
             var problem = Played(() => _runner.Play(new JsonArray(Inline(step)), $"Step {index + 1}"));
             (step.State, step.Problem) = problem is null ? (DraftStepState.Played, null) : (DraftStepState.Failed, problem);
             _panel.Refresh(step);
             if (problem is not null)
-                return $"Step {index + 1}, {step.Text}, didn't work: {problem}";
+                return _runner.Control.PlayStopped ? $"You stopped step {index + 1}, {step.Text}." : $"Step {index + 1}, {step.Text}, didn't work: {problem}";
         }
         return null;
     }
@@ -241,6 +259,7 @@ internal sealed partial class BuildWorker
 
     private void Clicked(BuildInput click)
     {
+        FollowWindow(Native.WindowAt(click.X, click.Y));
         // The control the mouse stopped on, read before the click; a message box is read now, as the click waited.
         var hit = !click.PassOn && _under is not null && _pointer == (click.X, click.Y) ? _under : _inspector.At(click.X, click.Y);
         _under = null;
@@ -291,12 +310,13 @@ internal sealed partial class BuildWorker
         _menuSince = Environment.TickCount64;
     }
 
-    private void Picked(int x, int y)
+    private void Picked(int x, int y, bool exact)
     {
+        FollowWindow(Native.WindowAt(x, y));
         if (_inspector.At(x, y) is not { } hit)
             return;
-        var meant = hit.Facts.Meant();
-        _panel.ShowPicked(meant, Name(meant));
+        var (picked, choice) = _named is { } named && named.Exact == exact && Same(named.Pointed, hit.Facts) ? (named.Facts, named.Choice) : Pick(hit.Facts, exact);
+        _panel.ShowPicked(picked, choice);
         _outlined = true;
     }
 
@@ -327,7 +347,9 @@ internal sealed partial class BuildWorker
         }
         else if (problem is null)
             _panel.Add(_recorder.Add(step, changesStatus: step.Verb == "click"));
-        _panel.Ready(add && problem is not null ? $"That didn't work, so it isn't a step: {problem}" : null);
+        _panel.Ready(!add || problem is null ? null
+            : _runner.Control.PlayStopped ? "You stopped it, so it isn't a step."
+            : $"That didn't work, so it isn't a step: {problem}");
     }
 
     // Runs a check from a form against the app as it is, and says how it went.
@@ -373,7 +395,8 @@ internal sealed partial class BuildWorker
         {
             return _view.Problem ?? ex.Message;
         }
-        catch (Exception ex) when (ex is ScriptException or InvalidOperationException or ArgumentException or IOException or FormatException or KeyNotFoundException)
+        // A control or window going away as a step used it, too, is the step's problem, not the builder's.
+        catch (Exception ex) when (ex is ScriptException or ArgumentException or IOException or FormatException or KeyNotFoundException || FlaUiDriver.Gone(ex))
         {
             return ex.Message;
         }
@@ -401,6 +424,10 @@ internal sealed partial class BuildWorker
 
     // How a step would find a control, asking the app how many controls each way finds.
     private TargetChoice Name(ControlFacts control) => _inspector.Suggest(control, Elements(), _runner.Globals);
+
+    // The control a person means by pointing at one, and how a step would find it: the control around it, such as a
+    // text box, when no way finds the one under the mouse, unless exact.
+    private (ControlFacts Control, TargetChoice Choice) Pick(ControlFacts pointed, bool exact) => _inspector.Pick(pointed, Elements(), _runner.Globals, exact);
 
     private Dictionary<string, JsonNode> Elements() => _draft.ElementsWith(_suite.Elements);
 
@@ -445,7 +472,7 @@ internal sealed partial class BuildWorker
             var elements = Elements();
             return _driver.TryFind(Targets.Resolve(element, _runner.Globals, elements)) is { } control ? control.Value ?? control.Name : null;
         }
-        catch (Exception ex) when (ex is StuckException or ScriptException or COMException or InvalidOperationException)
+        catch (Exception ex) when (ex is StuckException or ScriptException || FlaUiDriver.Gone(ex))
         {
             return null;
         }

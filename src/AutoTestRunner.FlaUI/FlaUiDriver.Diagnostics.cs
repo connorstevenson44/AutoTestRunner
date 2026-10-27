@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Runtime.InteropServices;
 using System.Text;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
@@ -33,7 +32,7 @@ public sealed partial class FlaUiDriver
                         + (properties.ClassName.ValueOrDefault is { Length: > 0 } className ? $" class={className}" : "")
                         + $" ({box.Left},{box.Top},{box.Right},{box.Bottom})";
                 }
-                catch (COMException ex)
+                catch (Exception ex) when (Gone(ex))
                 {
                     line = $"(couldn't be read: {ex.Message})";
                 }
@@ -45,7 +44,7 @@ public sealed partial class FlaUiDriver
             {
                 Walk(_automation.FromHandle(hwnd), 0);
             }
-            catch (COMException ex)
+            catch (Exception ex) when (Gone(ex))
             {
                 text.Append(CultureInfo.InvariantCulture, $"(the window couldn't be read: {ex.Message})\r\n");
             }
@@ -53,7 +52,10 @@ public sealed partial class FlaUiDriver
         return text.ToString();
     }
 
-    /// <summary>Whether the keyboard is in a text box that can be typed in, in any app, so the panel's keys stay out of it.</summary>
+    /// <summary>
+    /// Whether the keyboard is in a text box that can be typed in, in any app, so the panel's keys stay out of it. It is
+    /// asked on a timer's thread, where an error would end autotest: a busy app is taken as not typing.
+    /// </summary>
     public bool IsTyping()
     {
         try
@@ -63,7 +65,7 @@ public sealed partial class FlaUiDriver
             return (type == ControlType.Edit || type == ControlType.Document)
                 && !(focused!.Patterns.Value.IsSupported && focused.Patterns.Value.Pattern.IsReadOnly.ValueOrDefault);
         }
-        catch (Exception ex) when (ex is COMException or InvalidOperationException)
+        catch (Exception ex) when (Gone(ex))
         {
             return false;
         }

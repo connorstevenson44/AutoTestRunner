@@ -5,6 +5,7 @@ using AutoTestRunner.Driving;
 using AutoTestRunner.Scripting;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Conditions;
+using FlaUI.Core.Exceptions;
 using FlaUI.UIA3;
 
 namespace AutoTestRunner.FlaUI;
@@ -100,12 +101,14 @@ public sealed partial class FlaUiDriver : IDriver
 
     /// <summary>
     /// Drives another of the app's windows once the one driven has closed, as when a sign-in window opens the main
-    /// window. Nothing changes while the window driven is still open.
+    /// window. Nothing changes while the window driven is still open. True when the window driven changed.
     /// </summary>
-    public void Follow(nint window)
+    public bool Follow(nint window)
     {
-        if (!Native.Exists(_main) && AppWindows().Contains(window))
-            (_main, _windowTitle) = (window, Native.Title(window));
+        if (Native.Exists(_main) || !AppWindows().Contains(window))
+            return false;
+        (_main, _windowTitle) = (window, Native.Title(window));
+        return true;
     }
 
     public void UseWindow(string title, TimeSpan timeout)
@@ -190,8 +193,12 @@ public sealed partial class FlaUiDriver : IDriver
         return _automation.FromHandle(_main);
     }
 
-    /// <summary>Whether an error means a control or window went away while it was read, as they do while the app changes.</summary>
-    internal static bool Gone(Exception ex) => ex is COMException or InvalidOperationException or TimeoutException;
+    /// <summary>
+    /// Whether an error means a control or window went away while it was read, as they do while the app changes, or
+    /// the app was too busy to answer. FlaUI turns UI Automation's "element not available" into an exception of its
+    /// own, and its timeout into a TimeoutException.
+    /// </summary>
+    public static bool Gone(Exception ex) => ex is COMException or InvalidOperationException or TimeoutException or ElementNotAvailableException;
 
     // What a control says about itself, or otherwise when it went away while it was being read.
     private static T OrIfGone<T>(Func<T> read, T otherwise)
@@ -200,7 +207,7 @@ public sealed partial class FlaUiDriver : IDriver
         {
             return read();
         }
-        catch (COMException)
+        catch (Exception ex) when (Gone(ex))
         {
             return otherwise;
         }

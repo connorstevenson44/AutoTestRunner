@@ -19,7 +19,7 @@ public sealed class InspectedControl
         {
             return other is not null && Element.Equals(other.Element);
         }
-        catch (System.Runtime.InteropServices.COMException)
+        catch (Exception ex) when (FlaUiDriver.Gone(ex))
         {
             return false;
         }

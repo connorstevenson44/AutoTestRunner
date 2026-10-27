@@ -59,6 +59,10 @@ public static class StepMaker
         _ => ActivityKind.Say,
     };
 
+    /// <summary>Drives another of the app's windows from now on, as after a sign-in window opens the main one.</summary>
+    public static DraftStep UseWindow(string title) =>
+        new(new JsonObject { ["useWindow"] = title, ["say"] = $"Use the {title} window" }, ActivityKind.Say);
+
     public static DraftStep StartApp(Suite suite) =>
         new(new JsonObject { ["startApp"] = new JsonObject(), ["say"] = $"Start {suite.App.Window}" }, ActivityKind.App);
 

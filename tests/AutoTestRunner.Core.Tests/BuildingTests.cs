@@ -89,6 +89,43 @@ public sealed class BuildingTests : IDisposable
     }
 
     [Fact]
+    public void A_text_box_is_picked_for_the_part_of_its_look_under_the_mouse()
+    {
+        var suite = Suite.Load(Tour);
+        var box = new ControlFacts("Edit", "User name", Id: "UserBox") { Bounds = new(10, 10, 200, 30) };
+        var inside = new ControlFacts("Pane", Id: "PART_ContentHost", ClassName: "ScrollViewer") { Ancestors = [box, new("Window", "Sign in to Order Desk")] };
+        var parts = Count(("""{ "id": "PART_ContentHost" }""", 2));
+
+        var (picked, choice) = TargetSuggester.Pick(inside, suite.Elements, Globals(suite), parts);
+        Assert.Equal("Edit", picked.Type);
+        Assert.Equal(box.Bounds, picked.Bounds);
+        Assert.Equal("\"userName\"", JsonLine.Write(choice.Json));
+        Assert.Equal(TargetQuality.Sturdy, choice.Quality);
+
+        // Even when the part can be found inside its text box, the box is what a step should use.
+        (picked, _) = TargetSuggester.Pick(inside, suite.Elements, Globals(suite), Count());
+        Assert.Equal("Edit", picked.Type);
+
+        (picked, choice) = TargetSuggester.Pick(inside, suite.Elements, Globals(suite), parts, exact: true);
+        Assert.Equal("Pane", picked.Type);
+        Assert.Equal("id PART_ContentHost in userName", choice.Shown);
+    }
+
+    [Fact]
+    public void A_control_no_way_finds_is_picked_as_it_is_when_nothing_around_it_can_be_used()
+    {
+        var suite = Suite.Load(Tour);
+        var text = new ControlFacts("Text", "Total") { Ancestors = [new("Pane"), new("Window", "Order Desk")] };
+        var (picked, choice) = TargetSuggester.Pick(text, suite.Elements, Globals(suite), _ => 3);
+        Assert.Same(text, picked);
+        Assert.Equal(TargetQuality.Ambiguous, choice.Quality);
+
+        // A control that can be found keeps to itself, though a button is around it.
+        var picture = new ControlFacts("Image", HelpText: "Refresh") { Ancestors = [new("Pane"), new("Pane"), new("Button", "Refresh", Id: "RefreshButton")] };
+        Assert.Same(picture, TargetSuggester.Pick(picture, suite.Elements, Globals(suite), Count()).Control);
+    }
+
+    [Fact]
     public void An_element_that_is_only_parameters_doesnt_match_everything_of_its_type()
     {
         var suite = Suite.Load(Tour);
