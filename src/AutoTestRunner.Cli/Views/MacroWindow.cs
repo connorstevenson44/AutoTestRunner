@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 using AutoTestRunner.Building;
 using AutoTestRunner.Scripting;
 
@@ -16,12 +15,7 @@ internal static class MacroWindow
     public static (string Name, string Description, IReadOnlyList<MacroValue> Parameters)? Ask(Window owner, IReadOnlyList<MacroValue> values, IReadOnlySet<string> taken)
     {
         (string, string, IReadOnlyList<MacroValue>)? answer = null;
-        var window = new Window
-        {
-            Title = "Make a macro", Owner = owner, Topmost = true, SizeToContent = SizeToContent.Height, Width = 440, ResizeMode = ResizeMode.NoResize,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = Brushes.White, FontFamily = Ui.Text, Foreground = Ui.Ink,
-        };
-        window.Resources.MergedDictionaries.Add(Ui.Theme);
+        var window = Ui.Dialog("Make a macro", owner, 440, topmost: true);
         var stack = new StackPanel { Margin = new Thickness(18, 14, 18, 16) };
         stack.Children.Add(Ui.IconText(Icons.Macro, "Make a macro", Ui.Ink, 14));
         stack.Children.Add(Ui.Heading("Name, such as addOrder", 12));

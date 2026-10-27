@@ -1,8 +1,6 @@
 using System.IO;
 using AutoTestRunner.Cli.Views;
-using AutoTestRunner.Data;
 using AutoTestRunner.Driving;
-using AutoTestRunner.FlaUI;
 using AutoTestRunner.Running;
 using AutoTestRunner.Scripting;
 
@@ -250,8 +248,8 @@ public static class Program
         // UI Automation is used from a thread of its own, as in a watched run.
         var worker = new Thread(() =>
         {
-            using var driver = new FlaUiDriver(control, () => null, _ => { }, note => results.Log("NOTE", note));
-            var runner = new Runner(suite, driver, new WindowsMachine(), new ConsoleRunView(), control, results, options.Variables) { Connections = new Connections(new WindowsMachine()) };
+            using var driver = Runs.Driver(control, results);
+            var runner = Runs.Runner(suite, driver, new ConsoleRunView(), control, results, options);
             results.Log("START", $"{suite.Name}: {runner.Exe}");
             if (runner.Missing() is [_, ..] missing)
             {

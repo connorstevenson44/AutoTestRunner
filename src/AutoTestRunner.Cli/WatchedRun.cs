@@ -2,9 +2,7 @@ using System.Globalization;
 using System.IO;
 using System.Windows;
 using AutoTestRunner.Cli.Views;
-using AutoTestRunner.Data;
 using AutoTestRunner.Driving;
-using AutoTestRunner.FlaUI;
 using AutoTestRunner.Running;
 using AutoTestRunner.Scripting;
 
@@ -133,8 +131,8 @@ internal static class WatchedRun
         {
             var worker = new Thread(() =>
             {
-                using var driver = new FlaUiDriver(control, () => panel.Bounds, panel.KeepClear, note => results.Log("NOTE", note));
-                var runner = new Runner(suite, driver, new WindowsMachine(), panel, control, results, options.Variables) { Connections = new Connections(new WindowsMachine()) };
+                using var driver = Runs.Driver(control, results, () => panel.Bounds, panel.KeepClear);
+                var runner = Runs.Runner(suite, driver, panel, control, results, options);
                 panel.Attach(runner, driver);
                 results.Log("START", $"{suite.Name}: {runner.Exe}");
                 var code = ExitCode.Passed;

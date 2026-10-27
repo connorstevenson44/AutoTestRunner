@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Text.Json.Nodes;
 using AutoTestRunner.Building;
 using AutoTestRunner.Driving;
 using AutoTestRunner.Scripting;
@@ -124,6 +125,20 @@ public sealed class FlaUiInspector(FlaUiDriver driver)
             return null;
         }
     }
+
+    /// <summary>The best way to find a control, from how many controls in the app each way finds now.</summary>
+    public TargetChoice Suggest(ControlFacts control, IReadOnlyDictionary<string, JsonNode> elements, VariableScope globals) =>
+        TargetSuggester.Suggest(control, elements, globals, node =>
+        {
+            try
+            {
+                return driver.Count(Targets.Resolve(node, globals, elements));
+            }
+            catch (Exception ex) when (FlaUiDriver.Gone(ex) || ex is ScriptException)
+            {
+                return 0;
+            }
+        });
 
     /// <summary>Where a target's control is on the screen, to outline it, or null when it isn't there.</summary>
     public ScreenRect? Locate(Target target)

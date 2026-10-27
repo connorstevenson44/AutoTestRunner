@@ -547,21 +547,7 @@ internal sealed class BuildWorker
     }
 
     // How a step would find a control, asking the app how many controls each way finds.
-    private TargetChoice Name(ControlFacts control)
-    {
-        var elements = Elements();
-        return TargetSuggester.Suggest(control, elements, _runner.Globals, node =>
-        {
-            try
-            {
-                return _driver.Count(Targets.Resolve(node, _runner.Globals, elements));
-            }
-            catch (Exception ex) when (ex is ScriptException or COMException or InvalidOperationException)
-            {
-                return 0;
-            }
-        });
-    }
+    private TargetChoice Name(ControlFacts control) => _inspector.Suggest(control, Elements(), _runner.Globals);
 
     private Dictionary<string, JsonNode> Elements() => _draft.ElementsWith(_suite.Elements);
 
