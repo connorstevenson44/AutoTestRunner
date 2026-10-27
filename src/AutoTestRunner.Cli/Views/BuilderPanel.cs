@@ -86,7 +86,7 @@ internal sealed partial class BuilderPanel : Window
         header.ColumnDefinitions.Add(new ColumnDefinition());
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var named = new StackPanel();
-        named.Children.Add(Ui.Heading(request.Edit is { } changing ? $"Changing case {changing.Number}" : request.After is { } after ? $"New case, after {after.Number}. {after.Name}" : $"New case in {_suite.Name}"));
+        named.Children.Add(Ui.Heading(request.Edit is { } changing ? $"Changing case {changing.Number}" : request.After is { } after ? $"New case, after {after.Number}. {after.Name}{(request.Reset ? "'s reset" : "")}" : $"New case in {_suite.Name}"));
         if (request.Edit is { } existing)
             named.Children.Add(Ui.Words(existing.Name, 16, Ui.Ink, FontWeights.Bold));
         else
@@ -584,10 +584,15 @@ internal sealed partial class BuilderPanel : Window
 
     // Draws a step's row: a chevron that folds out its details, its number and icon, what it says (click to change
     // it), how it finds its control, and its buttons, which show while the mouse is over it. A step not played yet is
-    // greyed; one that didn't work is red; one picked is tinted; one switched off is struck through.
+    // greyed; one that didn't work is red; one picked is tinted; one switched off is struck through. The case's reset
+    // steps have purple icons, under a band at the first of them.
     private void Refresh(DraftStep step, Border row)
     {
         var played = step.State != DraftStepState.NotPlayed;
+        int index, resetAt;
+        lock (_draft.Steps)
+            (index, resetAt) = (_draft.Steps.IndexOf(step), _draft.Steps.FindIndex(each => each.Reset));
+        var inReset = resetAt >= 0 && index >= resetAt;
         var off = step.Json["disabled"]?.GetValue<bool>() == true;
         Mark(row, step.State == DraftStepState.Failed ? step.Problem ?? "It didn't work." : null);
         if (_selected.Contains(step))
@@ -607,7 +612,8 @@ internal sealed partial class BuilderPanel : Window
         var chevron = Ui.IconButton(open ? Icons.Expand : Icons.Collapse, open ? "Fold the details away" : "Change this step's details", () => Fold(step), 9);
         chevron.Padding = new Thickness(3);
         chevron.VerticalAlignment = VerticalAlignment.Top;
-        var icon = Ui.Glyph(off ? Icons.Blocked : step.Waits ? Icons.Wait : step.Verb == "repeat" ? Icons.Repeat : step.Verb == "if" ? Icons.Branch : Icons.Of(step.Kind), 14, played && !off ? Ui.Accent : Ui.Faint);
+        var icon = Ui.Glyph(off ? Icons.Blocked : step.Waits ? Icons.Wait : step.Verb == "repeat" ? Icons.Repeat : step.Verb == "if" ? Icons.Branch : Icons.Of(step.Kind), 14,
+            played && !off ? inReset ? Ui.Step : Ui.Accent : Ui.Faint);
         icon.VerticalAlignment = VerticalAlignment.Top;
         icon.Margin = new Thickness(0, 2, 0, 0);
         var words = new StackPanel();
@@ -646,6 +652,10 @@ internal sealed partial class BuilderPanel : Window
             actions.Add((Icons.Document, "Open the script in Notepad++ or Notepad", () => OpenScript(script)));
         if (step.Verb is "repeat" or "if")
             actions.Add((Icons.Back, "Take the steps out of it", () => Unwrap(step)));
+        if (index == resetAt)
+            actions.Add((Icons.Reset, "Not a reset\nThese steps become the case's own again.", () => MarkReset(step, false)));
+        else if (!inReset)
+            actions.Add((Icons.Reset, "Reset from here\nThis step and those after it take the app back to where this case leaves it. The cases that start after this one play them instead of starting the app again.", () => MarkReset(step, true)));
         actions.Add((Icons.Blocked, off ? "Switch this step back on" : "Switch this step off: it is skipped when the case runs, and kept in the file", () => SwitchOff(step, !off)));
         actions.Add((Icons.Up, "Move up", () => Move(step, -1)));
         actions.Add((Icons.Down, "Move down", () => Move(step, 1)));
@@ -665,11 +675,37 @@ internal sealed partial class BuilderPanel : Window
         grid.Children.Add(icon);
         grid.Children.Add(words);
         grid.Children.Add(buttons);
+        if (index == resetAt)
+        {
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            foreach (UIElement child in grid.Children)
+                Grid.SetRow(child, 1);
+            var band = new Border
+            {
+                BorderBrush = Ui.Step, BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(0, 2, 0, 6), Padding = new Thickness(0, 4, 0, 0),
+                Child = Ui.IconText(Icons.Reset, "Reset", Ui.Step, 11.5, FontWeights.SemiBold),
+                ToolTip = "The case's reset: these steps take the app back to where it leaves it, and play again before each case that starts after it.",
+            };
+            Grid.SetColumnSpan(band, 5);
+            grid.Children.Add(band);
+        }
         var stack = new StackPanel();
         stack.Children.Add(grid);
         if (open)
             stack.Children.Add(Details(step));
         row.Child = stack;
+    }
+
+    // Makes a step the first of the case's reset, or makes the reset steps the case's own again.
+    private void MarkReset(DraftStep step, bool reset)
+    {
+        lock (_draft.Steps)
+            foreach (var each in _draft.Steps)
+                each.Reset = reset && each == step;
+        _changes++;
+        foreach (var (each, row) in _rows)
+            Refresh(each, row);
     }
 
     // What a step without a control shows under it: the message box it answers, the file it picks, the wait.
@@ -795,7 +831,12 @@ internal sealed partial class BuilderPanel : Window
     {
         Deselect(step);
         lock (_draft.Steps)
+        {
+            var index = _draft.Steps.IndexOf(step);
+            if (step.Reset && index + 1 < _draft.Steps.Count)
+                _draft.Steps[index + 1].Reset = true;
             _draft.Steps.Remove(step);
+        }
         _changes++;
         _steps.Children.Remove(_rows[step]);
         _rows.Remove(step);
@@ -804,8 +845,15 @@ internal sealed partial class BuilderPanel : Window
         UpdateCount();
     }
 
+    // Numbers the steps again, and redraws them all when the case has a reset, whose band moves with its first step.
     private void Renumber()
     {
+        if (_draft.Steps.Any(step => step.Reset))
+        {
+            foreach (var (step, row) in _rows)
+                Refresh(step, row);
+            return;
+        }
         foreach (var (step, row) in _rows)
             if (Line(row)?.Children[0] is TextBlock number)
                 number.Text = $"{_draft.Steps.IndexOf(step) + 1}";

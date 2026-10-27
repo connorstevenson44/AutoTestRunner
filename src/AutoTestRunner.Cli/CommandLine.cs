@@ -23,10 +23,20 @@ internal static class CommandLine
     private static readonly Option<bool> Start = new("--start") { Description = "Starts the cases given straight away.", Hidden = true };
     private static readonly Option<string?> Name = new("--name") { Description = "What the new case is called." };
     private static readonly Option<string?> After = new("--after") { Description = "The new case carries on from where this case leaves off, by number or id." };
+    private static readonly Option<string?> AfterReset = new("--after-reset")
+    {
+        Description = "The new case starts after this case has run, from its reset steps, by number or id: the cases after its reset don't start the app again.",
+    };
     private static readonly Option<string?> Edit = new("--edit", "--add-to")
     {
         Description = "Opens this case to change it, by number or id: the app is taken to where it starts, and its steps can be played to any of them, and recorded again from there.",
     };
+    private static readonly Option<string?> Install = new("--install")
+    {
+        Description = "The software to install, by its name in suite.json, such as sqlExpress,rabbitMq; missing for what isn't there, or all. Without it, autotest setup offers what is missing.",
+    };
+    private static readonly Option<bool> Yes = new("--yes") { Description = "Installs without asking first." };
+    private static readonly Option<string?> Log = new("--log") { Description = "A file to add what autotest setup prints to, as it prints it.", Hidden = true };
     private static readonly Option<string?> Shots = new("--shots") { Description = "Saves a picture of each window in this folder." };
 
     // The options of a run, which the launcher and the builder pass on to the runs they start.
@@ -61,7 +71,9 @@ internal static class CommandLine
         root.Subcommands.Add(launcher);
 
         root.Subcommands.Add(SuiteCommand("run", "Runs a suite's cases while you watch, or unattended.", [.. RunOptions, Unattended], suite));
-        root.Subcommands.Add(SuiteCommand("record", "Builds a new case by using the app, or changes one.", [.. RunOptions, Name, After, Edit], suite));
+        root.Subcommands.Add(SuiteCommand("record", "Builds a new case by using the app, or changes one.", [.. RunOptions, Name, After, AfterReset, Edit], suite));
+        root.Subcommands.Add(SuiteCommand("setup", "Looks for the software a suite needs, such as SQL Server Express or RabbitMQ, and installs what you say.",
+            [Variables, Install, Yes, Log], suite));
         root.Subcommands.Add(SuiteCommand("validate", "Reads every script in a suite and says what is wrong with them, without running anything.", [], suite));
         root.Subcommands.Add(SuiteCommand("list", "Lists a suite's cases in order.", [], suite));
 
@@ -102,6 +114,10 @@ internal static class CommandLine
             Start = Get(Start),
             Name = Get(Name),
             After = Get(After),
+            AfterReset = Get(AfterReset),
+            Install = Get(Install),
+            Yes = Get(Yes),
+            Log = Get(Log),
             Edit = Get(Edit),
         };
         foreach (var pair in Get(Variables) ?? [])

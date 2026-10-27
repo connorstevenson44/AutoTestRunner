@@ -44,6 +44,14 @@
     },
     "steps": {
       "$ref": "#/definitions/steps"
+    },
+    "reset": {
+      "$ref": "#/definitions/steps",
+      "description": "Steps that take the app back to where this case leaves it, such as going to the home screen after signing in. They play after its checkpoint, and again before each case that starts after its reset, instead of starting the app again. No checkpoint."
+    },
+    "afterReset": {
+      "type": "string",
+      "description": "The id of the case this one starts after the reset of, such as log-in: once that case has run, its reset steps take the app back there. When it hasn't run, the run plays it first. Not with needs."
     }
   },
   "additionalProperties": false,
@@ -378,6 +386,18 @@
           "$ref": "#/definitions/setAppSettingStep"
         },
         {
+          "$ref": "#/definitions/queryStep"
+        },
+        {
+          "$ref": "#/definitions/sendStep"
+        },
+        {
+          "$ref": "#/definitions/receiveStep"
+        },
+        {
+          "$ref": "#/definitions/purgeStep"
+        },
+        {
           "$ref": "#/definitions/checkpointStep"
         }
       ]
@@ -488,6 +508,12 @@
         },
         {
           "$ref": "#/definitions/atLeastCheck"
+        },
+        {
+          "$ref": "#/definitions/dbValueCheck"
+        },
+        {
+          "$ref": "#/definitions/queueCheck"
         }
       ]
     },
@@ -2438,6 +2464,202 @@
       },
       "additionalProperties": false
     },
+    "queryStep": {
+      "type": "object",
+      "required": [
+        "query",
+        "sql"
+      ],
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Runs SQL on a database named in suite.json's databases. With as, keeps the first value it reads, its rows as ${name.rows} and all it read as ${name.output}."
+        },
+        "sql": {
+          "type": "string",
+          "description": "The SQL. Values go in params and are written in it by name, such as @id, or :id for Oracle."
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          },
+          "description": "Values for the SQL's parameters, by name."
+        },
+        "say": {
+          "type": "string",
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "sendStep": {
+      "type": "object",
+      "required": [
+        "send"
+      ],
+      "properties": {
+        "send": {
+          "type": "string",
+          "description": "Puts a message on a queue named in suite.json's queues."
+        },
+        "message": {
+          "type": "string",
+          "description": "The message's text."
+        },
+        "file": {
+          "type": "string",
+          "description": "A file in the suite whose text is the message."
+        },
+        "say": {
+          "type": "string",
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "receiveStep": {
+      "type": "object",
+      "required": [
+        "receive"
+      ],
+      "properties": {
+        "receive": {
+          "type": "string",
+          "description": "Takes the next message off a queue named in suite.json's queues, waiting within seconds (10 when left out) for one. With as, keeps its text."
+        },
+        "equals": {
+          "type": "string",
+          "description": "The text the message should be."
+        },
+        "contains": {
+          "type": "string",
+          "description": "Text the message should have."
+        },
+        "matches": {
+          "type": "string",
+          "description": "A regex the message should match."
+        },
+        "say": {
+          "type": "string",
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
+    "purgeStep": {
+      "type": "object",
+      "required": [
+        "purge"
+      ],
+      "properties": {
+        "purge": {
+          "type": "string",
+          "description": "Takes every message off a queue named in suite.json's queues."
+        },
+        "say": {
+          "type": "string",
+          "description": "Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."
+        },
+        "note": {
+          "type": "string",
+          "description": "For whoever maintains the script. Not shown."
+        },
+        "as": {
+          "type": "string",
+          "description": "Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."
+        },
+        "what": {
+          "type": "string",
+          "description": "What to call the control in a message, such as \"the start screen\"."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Skips the step."
+        }
+      },
+      "additionalProperties": false
+    },
     "checkpointStep": {
       "type": "object",
       "required": [
@@ -3496,6 +3718,100 @@
         "to": {
           "type": "string",
           "description": "The least it may be."
+        },
+        "label": {
+          "type": "string",
+          "description": "What the check says instead of its own wording."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        }
+      },
+      "additionalProperties": false
+    },
+    "dbValueCheck": {
+      "type": "object",
+      "required": [
+        "dbValue",
+        "sql"
+      ],
+      "properties": {
+        "dbValue": {
+          "type": "string",
+          "description": "A database named in suite.json's databases. With none of equals, contains, matches or rows, the query should read a row."
+        },
+        "sql": {
+          "type": "string",
+          "description": "The SQL that reads the value: the first column of the first row."
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          },
+          "description": "Values for the SQL's parameters, by name."
+        },
+        "equals": {
+          "type": "string",
+          "description": "What the value should be. <null> for a database null."
+        },
+        "contains": {
+          "type": "string",
+          "description": "Text the value should have."
+        },
+        "matches": {
+          "type": "string",
+          "description": "A regex the value should match."
+        },
+        "rows": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "How many rows it should read, or change."
+        },
+        "label": {
+          "type": "string",
+          "description": "What the check says instead of its own wording."
+        },
+        "within": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."
+        }
+      },
+      "additionalProperties": false
+    },
+    "queueCheck": {
+      "type": "object",
+      "required": [
+        "queue"
+      ],
+      "properties": {
+        "queue": {
+          "type": "string",
+          "description": "A queue named in suite.json's queues. Looks without taking messages off it."
+        },
+        "count": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "How many messages should be waiting."
+        },
+        "has": {
+          "type": "string",
+          "description": "Text one of the waiting messages should have."
         },
         "label": {
           "type": "string",

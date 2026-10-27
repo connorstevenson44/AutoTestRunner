@@ -25,6 +25,15 @@ public sealed class Suite
     public required IReadOnlyList<Case> Cases { get; init; }
     public (int Width, int Height)? Screen { get; init; }
 
+    /// <summary>The databases steps and checks read and change, by their name in suite.json.</summary>
+    public IReadOnlyDictionary<string, DatabaseSettings> Databases { get; init; } = new Dictionary<string, DatabaseSettings>();
+
+    /// <summary>The message queues steps and checks send to and read, by their name in suite.json.</summary>
+    public IReadOnlyDictionary<string, QueueSettings> Queues { get; init; } = new Dictionary<string, QueueSettings>();
+
+    /// <summary>The software the suite needs on the computer, by its name in suite.json, which the launcher offers to install.</summary>
+    public IReadOnlyDictionary<string, SoftwareSettings> Software { get; init; } = new Dictionary<string, SoftwareSettings>();
+
     /// <summary>The controls the builder watches while recording, from builder.watch in suite.json.</summary>
     public IReadOnlyList<WatchHook> Watch { get; init; } = [];
 
@@ -99,6 +108,8 @@ public sealed class Suite
             {
                 Review = item["review"]?.GetValue<string>(),
                 Tags = (item["tags"] as JsonArray ?? []).Select(tag => tag!.GetValue<string>()).ToList(),
+                Reset = item["reset"] as JsonArray ?? [],
+                AfterReset = item["afterReset"]?.GetValue<string>(),
             });
         }
 
@@ -129,6 +140,8 @@ public sealed class Suite
             afterClick.Add(new ClickHook(element, call, hook["with"]?.DeepClone() as JsonObject, delay));
         }
 
+        var (databases, queues, software) = (ReadDatabases(root, problems), ReadQueues(root, problems), ReadSoftware(root, problems));
+
         var suite = new Suite
         {
             Folder = folder,
@@ -151,12 +164,103 @@ public sealed class Suite
             Screen = screen,
             Watch = watch,
             AfterClick = afterClick,
+            Databases = databases,
+            Queues = queues,
+            Software = software,
         };
         suite.Check(problems);
         if (problems.Count > 0)
             throw new SuiteException(problems);
         return suite;
     }
+
+    private static Dictionary<string, DatabaseSettings> ReadDatabases(JsonObject root, List<string> problems)
+    {
+        var databases = new Dictionary<string, DatabaseSettings>(StringComparer.Ordinal);
+        foreach (var (name, node) in root["databases"] as JsonObject ?? [])
+        {
+            var (kind, connection) = (Words(node?["kind"]), Words(node?["connection"]));
+            if (kind is null || !DatabaseSettings.Kinds.ContainsKey(kind))
+                problems.Add($"suite.json: database {name} needs kind, one of: {string.Join(", ", DatabaseSettings.Kinds.Keys)}.");
+            else if (connection is null)
+                problems.Add($"suite.json: database {name} needs connection, its connection string.");
+            else
+                databases[name] = new DatabaseSettings(name, kind, connection);
+        }
+        return databases;
+    }
+
+    private static Dictionary<string, QueueSettings> ReadQueues(JsonObject root, List<string> problems)
+    {
+        var queues = new Dictionary<string, QueueSettings>(StringComparer.Ordinal);
+        foreach (var (name, node) in root["queues"] as JsonObject ?? [])
+        {
+            var (kind, queue) = (Words(node?["kind"]), Words(node?["queue"]));
+            if (kind is null || !QueueSettings.Kinds.ContainsKey(kind))
+            {
+                problems.Add($"suite.json: queue {name} needs kind, one of: {string.Join(", ", QueueSettings.Kinds.Keys)}.");
+                continue;
+            }
+            var settings = new QueueSettings(name, kind, queue ?? "")
+            {
+                Connection = Words(node?["connection"]),
+                Channel = Words(node?["channel"]),
+                QueueManager = Words(node?["queueManager"]),
+                User = Words(node?["user"]),
+                Password = Words(node?["password"]),
+                Format = Words(node?["format"]),
+            };
+            var missing = new List<string>();
+            if (queue is null)
+                missing.Add("queue, the queue's name" + (kind == "msmq" ? @" or path, such as .\private$\orders" : ""));
+            if (kind != "msmq" && settings.Connection is null)
+                missing.Add(kind == "rabbitMq" ? "connection, such as amqp://guest:guest@localhost:5672/" : "connection, such as localhost(1414)");
+            if (kind == "ibmMq" && settings.Channel is null)
+                missing.Add("channel, such as DEV.APP.SVRCONN");
+            if (kind == "ibmMq" && settings.QueueManager is null)
+                missing.Add("queueManager, such as QM1");
+            foreach (var what in missing)
+                problems.Add($"suite.json: queue {name} needs {what}.");
+            if (settings.Format is { } format && format is not ("xml" or "text"))
+                problems.Add($"suite.json: queue {name}'s format is xml or text, not {format}.");
+            if (missing.Count == 0)
+                queues[name] = settings;
+        }
+        return queues;
+    }
+
+    // The software suite.json says the suite needs, with what is wrong with it.
+    private static Dictionary<string, SoftwareSettings> ReadSoftware(JsonObject root, List<string> problems)
+    {
+        var software = new Dictionary<string, SoftwareSettings>(StringComparer.Ordinal);
+        foreach (var (name, node) in root["software"] as JsonObject ?? [])
+        {
+            string? Text(string key) => node?[key] is JsonValue value && value.TryGetValue(out string? text) ? text : node?[key] is JsonValue number ? number.ToString() : null;
+            var item = new SoftwareSettings(name, Text("title") ?? name)
+            {
+                Winget = Text("winget"),
+                Version = Text("version"),
+                WindowsFeature = Text("windowsFeature"),
+                Script = Text("script"),
+                Args = (node?["args"] as JsonArray ?? []).Select(arg => arg?.ToString() ?? "").ToList(),
+                Present = node?["present"] as JsonObject,
+                Administrator = node?["administrator"]?.GetValue<bool>() ?? false,
+            };
+            var ways = new[] { item.Winget, item.WindowsFeature, item.Script }.Count(way => way is not null);
+            if (ways != 1)
+                problems.Add($"suite.json: software {name} needs one of winget, a package id; windowsFeature, such as MSMQ-Server; or script, a .ps1 or .cs file that installs it.");
+            else if (item.Script is not null && item.Present is null)
+                problems.Add($"suite.json: software {name} is installed by a script, so it needs present, a check that passes when it is there, such as {{ \"service\": \"RabbitMQ\", \"state\": \"Running\" }}.");
+            else if (item.WindowsFeature is not null && item.Version is not null)
+                problems.Add($"suite.json: software {name} is a Windows feature, which has no version.");
+            else
+                software[name] = item;
+        }
+        return software;
+    }
+
+    // A property's text, or null when it isn't there or isn't text.
+    private static string? Words(JsonNode? node) => node is JsonValue value && value.TryGetValue(out string? text) ? text : null;
 
     /// <summary>
     /// Finds an element another way from now on, as when a run stuck on it has it picked again; elements.json is
@@ -211,7 +315,7 @@ public sealed class Suite
         {
             if (!ids.Add(item.Id))
                 continue;
-            foreach (var need in item.Needs)
+            foreach (var need in item.Needs.Append(item.AfterReset).OfType<string>())
                 if (Find(need) is { } needed)
                     waiting.Push(needed);
         }
@@ -226,7 +330,7 @@ public sealed class Suite
         {
             grew = false;
             foreach (var item in Cases)
-                if (!after.Contains(item.Id) && item.Needs.Any(after.Contains))
+                if (!after.Contains(item.Id) && (item.Needs.Any(after.Contains) || item.AfterReset is { } setup && after.Contains(setup)))
                     grew = after.Add(item.Id) || grew;
         }
         return [.. Cases.Where(item => item != first && after.Contains(item.Id))];
@@ -275,6 +379,8 @@ public sealed class Suite
 
     private void Check(List<string> problems)
     {
+        foreach (var item in Software.Values.Where(item => item.Present is not null))
+            CheckChecks(new JsonArray(item.Present!.DeepClone()), $"suite.json: software {item.Name}'s present", problems);
         if (App.Status is { } status && !Elements.ContainsKey(status))
             problems.Add($"suite.json: app.status names {status}, which isn't in elements.json.");
         foreach (var (element, call, where) in Watch.Select(hook => (hook.Element, hook.Call, "builder.watch"))
@@ -298,7 +404,22 @@ public sealed class Suite
                 else if (Find(need) is { } needed && needed.Number >= item.Number)
                     problems.Add($"{Path.GetFileName(item.File)}: needs {need}, which runs after it. Cases run in file order, so give it a lower number.");
             }
+            if (item.AfterReset is { } setup)
+            {
+                var file = Path.GetFileName(item.File);
+                if (Find(setup) is not { } from || int.TryParse(setup, out _))
+                    problems.Add($"{file}: afterReset is {setup}, and there is no case with that id.");
+                else if (from.Number >= item.Number)
+                    problems.Add($"{file}: afterReset is {setup}, which runs after it. Cases run in file order, so give it a lower number.");
+                else if (from.Reset.Count == 0)
+                    problems.Add($"{file}: afterReset is {setup}, which has no reset steps to take the app back.");
+                if (item.Needs.Count > 0)
+                    problems.Add($"{file}: has needs and afterReset. A case starts at the end of others, or after a reset, not both.");
+            }
             CheckSteps(item.Steps, Path.GetFileName(item.File), problems);
+            CheckSteps(item.Reset, Path.GetFileName(item.File) + ", reset", problems);
+            if (item.Reset.Any(step => step?["checkpoint"] is not null))
+                problems.Add($"{Path.GetFileName(item.File)}: a reset step can't be a checkpoint. The case's checkpoint goes at the end of its steps.");
         }
         foreach (var macro in Macros.Values)
             CheckSteps(macro.Steps, Path.GetFileName(macro.File), problems);
@@ -380,6 +501,18 @@ public sealed class Suite
                     CheckSteps(step["steps"] as JsonArray ?? [], at, problems);
                     CheckSteps(step["else"] as JsonArray ?? [], at + ", else", problems);
                     break;
+                case "query":
+                    CheckSource(step["query"], Databases, "database", at, problems);
+                    if (step["sql"] is null)
+                        problems.Add($"{at}: query needs sql, what to run.");
+                    if (step["params"] is { } parameters && parameters is not JsonObject)
+                        problems.Add($"{at}: params is an object of names and values, such as {{ \"id\": \"1001\" }}.");
+                    break;
+                case "send" or "receive" or "purge":
+                    CheckSource(step[kind], Queues, "queue", at, problems);
+                    if (kind == "send" && (step["message"] is null) == (step["file"] is null))
+                        problems.Add($"{at}: send needs message, the text to send, or file, a file with it in.");
+                    break;
                 case "checkpoint":
                     CheckChecks(step["checks"] as JsonArray, at, problems);
                     CheckItems(step["tools"] as JsonArray, ScriptVocabulary.Tools, new HashSet<string>(["label"]), "tool", at, problems);
@@ -392,8 +525,35 @@ public sealed class Suite
     {
         CheckItems(checks, ScriptVocabulary.Checks, ScriptVocabulary.CommonCheckKeys, "check", at, problems);
         foreach (var check in checks ?? [])
-            if (check is JsonObject { } item && Kinds.Of(item, ScriptVocabulary.Checks) is { } kind && ScriptVocabulary.ControlChecks.Contains(kind))
+        {
+            if (check is not JsonObject { } item || Kinds.Of(item, ScriptVocabulary.Checks) is not { } kind)
+                continue;
+            if (ScriptVocabulary.ControlChecks.Contains(kind))
                 CheckTarget(item[kind], at, problems);
+            else if (kind == "dbValue")
+            {
+                CheckSource(item[kind], Databases, "database", at, problems);
+                if (item["sql"] is null)
+                    problems.Add($"{at}: dbValue needs sql, the query that reads the value.");
+            }
+            else if (kind == "queue")
+            {
+                CheckSource(item[kind], Queues, "queue", at, problems);
+                if ((item["count"] is null) == (item["has"] is null))
+                    problems.Add($"{at}: the queue check needs count, how many messages are waiting, or has, text one of them has.");
+            }
+        }
+    }
+
+    // A database or queue named in suite.json, unless it is a ${variable} filled in when it runs.
+    private static void CheckSource<T>(JsonNode? node, IReadOnlyDictionary<string, T> named, string noun, string at, List<string> problems)
+    {
+        if (Written(node) is not { } name)
+            return;
+        if (!named.ContainsKey(name))
+            problems.Add(named.Count == 0
+                ? $"{at}: there is no {noun} called {name}. Name it in suite.json's {noun}s."
+                : $"{at}: there is no {noun} called {name} in suite.json. It is one of: {string.Join(", ", named.Keys)}.");
     }
 
     private void CheckTarget(JsonNode? target, string at, List<string> problems)

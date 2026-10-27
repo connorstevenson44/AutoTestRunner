@@ -1,5 +1,6 @@
 using System.IO;
 using AutoTestRunner.Cli.Views;
+using AutoTestRunner.Data;
 using AutoTestRunner.Driving;
 using AutoTestRunner.FlaUI;
 using AutoTestRunner.Running;
@@ -16,6 +17,7 @@ namespace AutoTestRunner.Cli;
 ///   autotest run &lt;suite folder&gt; [--cases 1-5,8] [--unattended] [--speed Slow|Modest|Fast]
 ///            [--mode auto|pause-at-checkpoints|step-by-step] [--results &lt;folder&gt;] [--var name=value]...
 ///   autotest record &lt;suite folder&gt; [--name &lt;name&gt;] [--after &lt;case&gt;] [--edit &lt;case&gt;]   builds or changes a case
+///   autotest setup &lt;suite folder&gt; [--install a,b|missing|all] [--yes]   finds the software it needs, and installs it
 ///   autotest validate &lt;suite folder&gt;   reads every script and reports what is wrong with them
 ///   autotest list &lt;suite folder&gt;    lists the cases
 ///   autotest preview-ui [--shots &lt;folder&gt;]   plays a made-up run in the panel, and saves pictures of it
@@ -69,6 +71,8 @@ public static class Program
                 return (int)ExitCode.Passed;
             case "record":
                 return Record(suite, options, args);
+            case "setup":
+                return Setup(suite, options, args);
         }
 
         IReadOnlyList<Case> cases;
@@ -145,9 +149,11 @@ public static class Program
         BuildRequest request;
         try
         {
-            if (options.Edit is not null && options.After is not null)
-                throw new SuiteException(["--edit changes a case, and --after starts a new one: give one of them."]);
-            request = new BuildRequest(suite, options.Name ?? "New case", Named(options.After, "--after"), Named(options.Edit, "--edit"));
+            if (new[] { options.Edit, options.After, options.AfterReset }.Count(given => given is not null) > 1)
+                throw new SuiteException(["--edit changes a case, and --after and --after-reset start a new one: give one of them."]);
+            request = options.AfterReset is { } setup
+                ? new BuildRequest(suite, options.Name ?? "New case", Named(setup, "--after-reset"), Reset: true)
+                : new BuildRequest(suite, options.Name ?? "New case", Named(options.After, "--after"), Named(options.Edit, "--edit"));
         }
         catch (SuiteException ex)
         {
@@ -159,7 +165,67 @@ public static class Program
         var found = SuiteFinder.Find(SuiteFinder.Places(AppContext.BaseDirectory, Environment.CurrentDirectory, suite.Folder)).Select(FoundSuite.Load).ToList();
         if (!found.Any(each => SamePath(each.Folder, suite.Folder)))
             found.Insert(0, FoundSuite.Load(suite.Folder));
-        return WatchedRun.Launch(found, found.First(each => SamePath(each.Folder, suite.Folder)), options with { Edit = null, After = null, Name = null }, request);
+        return WatchedRun.Launch(found, found.First(each => SamePath(each.Folder, suite.Folder)), options with { Edit = null, After = null, AfterReset = null, Name = null }, request);
+    }
+
+    // Says what of the suite's software is there, then installs what was asked for, or what is missing once the person
+    // says yes. A Windows feature needs administrator, which it asks for after the yes, so it isn't asked twice.
+    private static int Setup(Suite suite, Options options, string[] args)
+    {
+        Console.OutputEncoding = System.Text.Encoding.UTF8;
+        using var log = options.Log is { } file ? new StreamWriter(file, append: true) { AutoFlush = true } : null;
+        void Say(string line)
+        {
+            Console.WriteLine(line);
+            log?.WriteLine(line);
+        }
+        if (suite.Software.Count == 0)
+        {
+            Say($"{suite.Name} needs no software: its suite.json has none.");
+            return (int)ExitCode.Passed;
+        }
+        var machine = new WindowsMachine();
+        var scope = Runner.Variables(suite, Path.GetTempPath(), options.Variables);
+        static string Mark(SoftwareState state) => state.Status switch { SoftwareStatus.Installed => "✓", SoftwareStatus.Unknown => "?", _ => "↓" };
+        var states = Software.Detect(suite, machine, scope);
+        foreach (var state in states)
+            Say($"  {Mark(state)} {state.Line}");
+        IReadOnlyList<SoftwareState> picked;
+        try
+        {
+            picked = Software.Picked(states, options.Install ?? "missing");
+        }
+        catch (SuiteException ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return (int)ExitCode.ScriptError;
+        }
+        if (picked.Count == 0)
+        {
+            Say("Nothing to install.");
+            return states.Any(state => state.Wanted) ? (int)ExitCode.Missing : (int)ExitCode.Passed;
+        }
+        if (!options.Yes)
+        {
+            Console.Write($"Install {string.Join(", ", picked.Select(state => state.Item.Title))}? [y/N] ");
+            if (Console.ReadLine()?.Trim().StartsWith('y') != true)
+                return (int)ExitCode.Missing;
+        }
+        if (!Elevation.IsAdministrator && picked.Any(state => SoftwareWindow.NeedsAdministrator(state.Item)))
+        {
+            Say("Installing needs administrator: asking for it.");
+            return Elevate([.. args.Where(arg => arg != "--yes"), "--yes"]);
+        }
+        var done = true;
+        foreach (var state in picked)
+        {
+            Say($"Installing {state.Item.Title} with {state.Item.How}");
+            var output = Software.Install(state.Item, machine, suite.Folder, scope, (line, _) => Say("    " + line));
+            var now = Software.Detect(state.Item, machine, scope);
+            done &= now.Status == SoftwareStatus.Installed;
+            Say($"  {(now.Status == SoftwareStatus.Installed ? "✓" : "✗")} {now.Line}{(output.ExitCode == 0 ? "" : $" (exit code {output.ExitCode})")}");
+        }
+        return done ? (int)ExitCode.Passed : (int)ExitCode.Missing;
     }
 
     // A suite that installs services needs administrator, and so does driving an app that runs as administrator.
@@ -185,7 +251,7 @@ public static class Program
         var worker = new Thread(() =>
         {
             using var driver = new FlaUiDriver(control, () => null, _ => { }, note => results.Log("NOTE", note));
-            var runner = new Runner(suite, driver, new WindowsMachine(), new ConsoleRunView(), control, results, options.Variables);
+            var runner = new Runner(suite, driver, new WindowsMachine(), new ConsoleRunView(), control, results, options.Variables) { Connections = new Connections(new WindowsMachine()) };
             results.Log("START", $"{suite.Name}: {runner.Exe}");
             if (runner.Missing() is [_, ..] missing)
             {

@@ -66,7 +66,9 @@ whether its app is there, and how its last run went; a suite with mistakes in it
 on Start means the suite needs administrator, which autotest asks for when it starts.
 
 A case that runs after others shows their numbers in a small pill with an arrow, such as ← 1, 2: amber when one of
-them isn't ticked. Click the pill to tick the case with every case it needs. **Clean up** runs the suite's reset
+them isn't ticked. Click the pill to tick the case with every case it needs. A case with reset steps has ↻ after its
+name, and a case that starts after its reset has ↻ and its number in the pill: the run plays that case first when it
+isn't ticked. **Clean up** runs the suite's reset
 script and shows its log, which folds away, or hides with ✕.
 
 A chip for each tag picks the cases tagged with it. The **⋯** on a case copies, renames, moves or deletes it: moving
@@ -109,7 +111,7 @@ buttons still pause, step and stop. Changing the speed from Manual while a step 
 ## Building a case
 
 **New case** in the launcher opens the builder: a panel beside the app, which gets the app to where the case starts
-(a fresh start, or where another case leaves off), then records.
+(a fresh start, where another case leaves off, or after another case has run, from its reset), then records.
 
 - **Record** (on at the start), or **F9** in the app or the panel: use the app. Each click, pick from a drop-down, tick
   and tab becomes a step, what you type becomes one when you leave the box, and keys such as Enter or Ctrl+S become key
@@ -134,7 +136,8 @@ buttons still pause, step and stop. Changing the speed from Manual while a step 
   opens it, in Notepad++ when it is installed, else Notepad, and its step plays once you've written it. The page icon on
   a script step opens its file. **Use a macro** › asks for a macro's parameters. **In the app** › and **On this
   computer** › offer every other step, such as opening tree items, a drag, copying a file or setting a JSON value, each
-  with a form: browse for a file, pick a control.
+  with a form: browse for a file, pick a control. **Databases and queues** › queries a database, or sends, receives
+  or empties a queue, picked from those in suite.json.
 - The chevron on a step folds out its details, as a form; the circle switches it off, so the case skips it and keeps
   it. **+** by the checkpoint adds any check, from a form whose **Try now** runs it against the app as it is. The `{x}`
   by a box, and over the steps, lists the kept values and suite variables with what each holds now, to put one in.
@@ -156,6 +159,9 @@ carries on from, and its steps are listed, greyed until they have been played. O
 - **Run to here** plays the case up to that step.
 - **Roll back to here**, on a step already played, starts the app again from where the case starts, after the
   suite's reset, and plays up to that step. The steps after it stay, greyed, to play again.
+- **Reset from here** makes that step and those after it the case's reset, under a purple ↻ Reset band: the steps
+  that take the app back to where the case leaves it, for the cases that start after it. On the band's first step,
+  **Not a reset** makes them the case's own again.
 - **Edit from here** takes the app to just after that step, removes the steps after it, and records new ones. It
   first lists the steps that will be removed, and the cases that start where this one ends, ticked: those ticked get
   a warning in the launcher, saying why, until they are changed too or the warning is cleared. **Confirm** goes on;
@@ -165,7 +171,8 @@ Record and the pick tools wait until the app is at the last step. Saving writes 
 one changed, the checkpoint, and everything else in the file stay as they were written.
 
 `autotest record <suite folder>` opens the builder straight away: `--name` names a new case, `--after <case>` starts it
-where that case leaves off, and `--edit <case>` opens that case to change it. CI builds a case in Order Desk this way,
+where that case leaves off, `--after-reset <case>` after that case's reset, and `--edit <case>` opens that case to
+change it. CI builds a case in Order Desk this way,
 with clicks and keys sent to the screen, then changes case 1 from a step, and runs them:
 [tools/Try-Builder.ps1](tools/Try-Builder.ps1).
 
@@ -200,6 +207,16 @@ A case reads like the manual test it automates:
 }
 ```
 
+A case can read and change the app's database, and send and take messages from its queues: SQL Server, PostgreSQL,
+Oracle, MySQL and SQLite, and RabbitMQ, IBM MQ and MSMQ, each named once in suite.json with its connection. A
+`query` step keeps a value, `send`, `receive` and `purge` work a queue, and the `dbValue` and `queue` checks say what
+is in them at a checkpoint: see [Databases and queues](docs/format.md#databases-and-queues).
+
+The software a suite needs, such as SQL Server Express, RabbitMQ or MSMQ, can be named in suite.json's `software`,
+as a winget package at a version, a Windows feature or an install script. The launcher looks for it when the suite is
+picked, shows a pill for each, and offers to install what is missing with a tick box for each, always asking first;
+`autotest setup` does the same from the command line. See [Software a suite needs](docs/format.md#software-a-suite-needs).
+
 Setup that is easier written as code can be a C# file instead of PowerShell: `{ "script": "tools/SeedOrders.cs",
 "args": ["${dataDir}"] }` runs it with `dotnet run`, which builds it the first time and after it changes. It gets the
 step's args as `args`, a line such as `#:package Microsoft.Data.SqlClient@7.1.1` at the top brings in a NuGet package,
@@ -216,6 +233,7 @@ keep working when the wording changes.
 | Project | What it is |
 | --- | --- |
 | `AutoTestRunner.Core` | The script format, its loader and checks, the runner (pace, pausing, checkpoints, stuck, results) and the builder's engine (naming controls, turning what a person does into steps, writing the case). Plain .NET, tested on any OS against a fake app. |
+| `AutoTestRunner.Data` | The databases and queues: each kind through its vendor's own .NET driver, and MSMQ through Windows PowerShell. Its tests run against real servers in containers in CI. |
 | `AutoTestRunner.FlaUI` | The driver: finding controls, scrolling virtualised lists, buttons that only show on hover, Win32 message boxes and file pickers, screenshots and tree dumps; and the inspector, which reads the control under the mouse for the builder. |
 | `AutoTestRunner.Cli` | `autotest`: the command line, the launcher, the panel and keys of a watched run, and the builder. |
 | `schema/` | JSON schemas for suite.json, elements.json, macros and cases, written by `python3 tools/schema.py`. A test keeps them in step with the runner. |

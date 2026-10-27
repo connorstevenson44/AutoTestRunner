@@ -63,12 +63,21 @@ public static partial class CaseWriter
         text.Append(CultureInfo.InvariantCulture, $"  \"name\": {JsonLine.Quote(draft.Name)},").Append(newline);
         if (draft.Needs.Count > 0)
             text.Append(CultureInfo.InvariantCulture, $"  \"needs\": {JsonLine.Write(new JsonArray([.. draft.Needs.Select(need => (JsonNode?)JsonValue.Create(need))]))},").Append(newline);
+        if (draft.AfterReset is { } setup)
+            text.Append(CultureInfo.InvariantCulture, $"  \"afterReset\": {JsonLine.Quote(setup)},").Append(newline);
         var steps = Steps(draft).Select(step => "    " + JsonLine.Step(step, "    ", newline)).ToList();
         text.Append("  \"steps\": [");
         if (steps.Count > 0)
             text.Append(newline).Append(string.Join("," + newline, steps)).Append(newline).Append("  ");
-        return text.Append(']').Append(newline).Append('}').Append(newline).ToString();
+        text.Append(']');
+        if (draft.Split().Reset is [_, ..] reset)
+            text.Append(',').Append(newline).Append("  \"reset\": ").Append(ResetArray(reset, newline));
+        return text.Append(newline).Append('}').Append(newline).ToString();
     }
+
+    // A case's reset steps as an array, one to a line, as its steps are.
+    private static string ResetArray(IReadOnlyList<DraftStep> reset, string newline) =>
+        "[" + newline + string.Join("," + newline, reset.Select(step => "    " + JsonLine.Step(step.Json, "    ", newline))) + newline + "  ]";
 
     /// <summary>
     /// A case's text with its steps as the draft has them, and the draft's checks and things to look at put into its
@@ -90,7 +99,7 @@ public static partial class CaseWriter
                 : null;
 
         // The steps kept as they were, from the first, and those after them.
-        var steps = draft.Steps.ToList();
+        var (steps, reset) = draft.Split();
         var kept = 0;
         while (kept < steps.Count && kept < written.Count && steps[kept].Source == kept && Written(steps[kept]) is not null)
             kept++;
@@ -119,6 +128,18 @@ public static partial class CaseWriter
             var itemIndent = IndentAt(bytes, checkpoint.Start) + "    ";
             AddItems(edits, bytes, checkpoint, "checks", draft.Checks.Select(check => (JsonNode)check), itemIndent, newline);
             AddItems(edits, bytes, checkpoint, "look", draft.Look.Select(line => (JsonNode)JsonValue.Create(line)), itemIndent, newline);
+        }
+
+        // The reset steps stay as written while they are the same; else they are written afresh, or taken out.
+        var wasReset = layout.Reset is { } array
+            ? JsonNode.Parse(bytes.AsSpan(array.Start, array.End - array.Start), documentOptions: new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true }) as JsonArray ?? []
+            : [];
+        if (!JsonNode.DeepEquals(wasReset, new JsonArray([.. reset.Select(step => step.Json.DeepClone())])))
+        {
+            if (layout.Reset is { } was)
+                edits.Add((was.Start, was.End - was.Start, reset.Count > 0 ? ResetArray(reset, newline) : "[]"));
+            else
+                edits.Add((layout.StepsEnd + 1, 0, "," + newline + "  \"reset\": " + ResetArray(reset, newline)));
         }
 
         foreach (var (at, length, insert) in edits.OrderByDescending(edit => edit.At))
@@ -281,7 +302,7 @@ public static partial class CaseWriter
 
     private static IEnumerable<JsonObject> Steps(CaseDraft draft)
     {
-        foreach (var step in draft.Steps)
+        foreach (var step in draft.Split().Own)
             yield return step.Json;
         if (draft.Checkpoint() is { } checkpoint)
             yield return checkpoint;
@@ -326,6 +347,11 @@ public static partial class CaseWriter
                     continue;
                 case JsonTokenType.StartArray when depth == 1 && property == "steps":
                     inSteps = true;
+                    break;
+                case JsonTokenType.StartArray when depth == 1 && property == "reset":
+                    layout.Reset = new ArrayLayout { Start = (int)reader.TokenStartIndex };
+                    reader.Skip();
+                    layout.Reset.End = (int)reader.BytesConsumed;
                     break;
                 case JsonTokenType.EndArray when depth == 1 && inSteps:
                     inSteps = false;
@@ -410,6 +436,7 @@ public static partial class CaseWriter
     {
         public List<StepLayout> Steps { get; } = [];
         public int StepsEnd { get; set; }
+        public ArrayLayout? Reset { get; set; }
     }
 
     private sealed class StepLayout

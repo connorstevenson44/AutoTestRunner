@@ -1,4 +1,7 @@
+using System.Windows;
+using System.Windows.Data;
 using System.Windows.Media;
+using System.Windows.Shapes;
 using AutoTestRunner.Running;
 
 namespace AutoTestRunner.Cli.Views;
@@ -26,6 +29,41 @@ internal static class Icons
     public const string Setting = "", Service = "", Calendar = "", Log = "", Globe = "", Paste = "";
     public const string Computer = "", Process = "", History = "";
     public const string Mouse = "", Menu = "", Clock = "", Slider = "";
+    public const string Send = "", Receive = "", Mail = "", Package = "", Download = "";
+    public const string Power = "", Reset = "", Forward = "";
+
+    // Icons the font doesn't have, drawn instead: a database as a cylinder. Each is named by a word that no glyph is.
+    public const string Database = "database";
+
+    private static readonly Dictionary<string, Geometry> Drawings = new(StringComparer.Ordinal)
+    {
+        [Database] = Geometry.Parse("M2,3.5 A6,2 0 1 0 14,3.5 A6,2 0 1 0 2,3.5 M2,3.5 L2,12.5 A6,2 0 0 0 14,12.5 L14,3.5 M2,8 A6,2 0 0 0 14,8"),
+    };
+
+    /// <summary>
+    /// A drawn icon at the font's size, in the colour of the text it is in, as a glyph would be; null for a glyph of
+    /// the font.
+    /// </summary>
+    public static FrameworkElement? Drawn(string glyph, double size, Brush? color = null)
+    {
+        if (!Drawings.TryGetValue(glyph, out var geometry))
+            return null;
+        var path = new Path
+        {
+            Data = geometry, Stretch = Stretch.Uniform, Width = size * 0.82, Height = size * 0.9, StrokeThickness = Math.Max(1, size / 13),
+            StrokeLineJoin = PenLineJoin.Round, SnapsToDevicePixels = true, Margin = new Thickness(size * 0.09, 0, size * 0.09, 0),
+        };
+        if (color is not null)
+            path.Stroke = color;
+        else
+        {
+            path.SetBinding(Shape.StrokeProperty, new Binding(nameof(System.Windows.Controls.TextBlock.Foreground))
+            {
+                RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(System.Windows.Controls.TextBlock), 1),
+            });
+        }
+        return path;
+    }
 
     public static string Of(ActivityKind kind) => kind switch
     {
@@ -40,6 +78,9 @@ internal static class Icons
         ActivityKind.Command => Console,
         ActivityKind.Wait => Wait,
         ActivityKind.Check => CheckList,
+        ActivityKind.Database => Database,
+        ActivityKind.Queue => Mail,
+        ActivityKind.Reset => Reset,
         _ => Info,
     };
 
@@ -58,6 +99,8 @@ internal static class Icons
         SubjectKind.Web => Globe,
         SubjectKind.Clipboard => Paste,
         SubjectKind.Machine => Computer,
+        SubjectKind.Database => Database,
+        SubjectKind.Queue => Mail,
         _ => Values,
     };
 

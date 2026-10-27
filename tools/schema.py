@@ -6,7 +6,7 @@ S = "http://json-schema.org/draft-07/schema#"
 def text(d): return {"type": "string", "description": d}
 seconds = {"type": ["number", "string"], "description": "How long to wait, in seconds, before it counts as stuck. An unattended run triples it."}
 common = {
-  "say": text("What the panel says. On an action, it is shown before the action; on find, waitText and waitGone, after, with time to read it; alone, it is narration."),
+  "say": text("Your words for the step, shown when pointing at its row; on a wait, read after it, so it can use what was found. Alone, it is a line of its own, for what isn't a step."),
   "note": text("For whoever maintains the script. Not shown."),
   "as": text("Keeps what the step found or printed in a variable of this name, as ${name} and ${name.part}."),
   "what": text("What to call the control in a message, such as \"the start screen\"."),
@@ -49,7 +49,7 @@ steps = {
  "set": step("set", {"type":"object","additionalProperties":{"type":["string","number","boolean"]}}, "Sets variables."),
  "run": step("run", {"type":"string"}, "Runs a program and keeps its exit code and output (with as: ${name.code}, ${name.output}, ${name.first}).", args={"type":"array","items":{"type":"string"}}, env={"type":"object","additionalProperties":{"type":"string"}}),
  "powershell": step("powershell", {"type":["string","array"],"items":{"type":"string"}}, "Runs a PowerShell script, which gets args as $args. ${...} in the script is PowerShell's, not the runner's.", args={"type":"array","items":{"type":"string"}}),
- "script": step("script", {"type":"string"}, "Runs a .ps1 file in the suite, relative to its folder, which gets args as $args. It fails when the script exits with a code other than 0; with as, it keeps the code and output.", args={"type":"array","items":{"type":"string"}}),
+ "script": step("script", {"type":"string"}, "Runs a .ps1 or .cs file in the suite, relative to its folder. A .ps1 runs with Windows PowerShell and gets args as $args; a .cs runs with dotnet run, which needs the .NET 10 SDK, and gets them as args. It fails when the script exits with a code other than 0; with as, it keeps the code and output.", args={"type":"array","items":{"type":"string"}}),
  "wait": step("wait", {"type":["number","string"]}, "Waits this many seconds, for an app that shows nothing to wait for."),
  "copy": step("copy", {"type":"string"}, "Copies a file, or a folder and everything in it, replacing what is there.", ["to"], to=text("Where to: a file, a folder to copy a file into, or the folder to copy a folder as.")),
  "delete": step("delete", {"type":"string"}, "Deletes a file, or a folder and everything in it. Nothing being there is fine."),
@@ -59,6 +59,10 @@ steps = {
  "stopService": step("stopService", {"type":"string"}, "Stops a Windows service and waits until it has stopped."),
  "setJsonValue": step("setJsonValue", {"type":"string"}, "Sets a setting in a JSON file, such as appsettings.json. Comments in the file are dropped.", ["path","to"], path=text("The setting's path, such as Orders:Region."), to=text("The value. A number or true and false stays one when the old value was.")),
  "setAppSetting": step("setAppSetting", {"type":"string"}, "Sets an appSettings value in a .config file, adding it when it isn't there.", ["key","to"], key=text("The appSettings key."), to=text("The value.")),
+ "query": step("query", {"type":"string"}, "Runs SQL on a database named in suite.json's databases. With as, keeps the first value it reads, its rows as ${name.rows} and all it read as ${name.output}.", ["sql"], sql=text("The SQL. Values go in params and are written in it by name, such as @id, or :id for Oracle."), params={"type":"object","additionalProperties":{"type":["string","number","boolean"]},"description":"Values for the SQL's parameters, by name."}),
+ "send": step("send", {"type":"string"}, "Puts a message on a queue named in suite.json's queues.", message=text("The message's text."), file=text("A file in the suite whose text is the message.")),
+ "receive": step("receive", {"type":"string"}, "Takes the next message off a queue named in suite.json's queues, waiting within seconds (10 when left out) for one. With as, keeps its text.", equals=text("The text the message should be."), contains=text("Text the message should have."), matches=text("A regex the message should match.")),
+ "purge": step("purge", {"type":"string"}, "Takes every message off a queue named in suite.json's queues."),
  "checkpoint": step("checkpoint", {"type":"string"}, "Ends a case: checks the runner makes, things to look at, and buttons that open them.", checks={"type":"array","items":{"$ref":"#/definitions/check"}}, look={"type":"array","items":{"type":"string"}}, tools={"type":"array","items":{"$ref":"#/definitions/tool"}}),
 }
 def check(kind, desc, required_extra=(), **extra):
@@ -101,6 +105,8 @@ checks.update({
  "clipboard": check("clipboard","Text the clipboard should have."),
  "atMost": check("atMost","A number, usually ${kept}, such as ${deploy.seconds}.", ["to"], to=text("The most it may be.")),
  "atLeast": check("atLeast","A number, usually ${kept}.", ["to"], to=text("The least it may be.")),
+ "dbValue": check("dbValue","A database named in suite.json's databases. With none of equals, contains, matches or rows, the query should read a row.", ["sql"], sql=text("The SQL that reads the value: the first column of the first row."), params={"type":"object","additionalProperties":{"type":["string","number","boolean"]},"description":"Values for the SQL's parameters, by name."}, equals=text("What the value should be. <null> for a database null."), contains=text("Text the value should have."), matches=text("A regex the value should match."), rows={"type":["integer","string"],"description":"How many rows it should read, or change."}),
+ "queue": check("queue","A queue named in suite.json's queues. Looks without taking messages off it.", count={"type":["integer","string"],"description":"How many messages should be waiting."}, has=text("Text one of the waiting messages should have.")),
 })
 def tool(kind, desc, **extra):
     return {"type":"object","required":[kind],"properties":{kind: text(desc), "label": text("The button's text."), **extra},"additionalProperties":False}
@@ -144,7 +150,9 @@ case = {"$schema":S,"$id":"case.schema.json","title":"AutoTestRunner case","desc
  "needsNote":text("What it needs, in words, for the launcher's Run after column, such as Any time."),
  "covers":text("What it tries, for the launcher."),
  "tags":{"type":"array","items":{"type":"string"},"description":"Words to pick cases by, such as smoke: the launcher filters by them, and autotest run --tags runs only those cases."},
- "review":text("Why the case needs looking at again, such as a change to a case it carries on from. The launcher shows a warning on it until it is changed, or the warning is cleared."),"steps":{"$ref":"#/definitions/steps"}},"additionalProperties":False,"definitions":defs}
+ "review":text("Why the case needs looking at again, such as a change to a case it carries on from. The launcher shows a warning on it until it is changed, or the warning is cleared."),"steps":{"$ref":"#/definitions/steps"},
+ "reset":{"$ref":"#/definitions/steps","description":"Steps that take the app back to where this case leaves it, such as going to the home screen after signing in. They play after its checkpoint, and again before each case that starts after its reset, instead of starting the app again. No checkpoint."},
+ "afterReset":text("The id of the case this one starts after the reset of, such as log-in: once that case has run, its reset steps take the app back there. When it hasn't run, the run plays it first. Not with needs.")},"additionalProperties":False,"definitions":defs}
 macro = {"$schema":S,"$id":"macro.schema.json","title":"AutoTestRunner macro","description":"Reusable steps with parameters, run with { \"call\": name }.",
  "type":"object","required":["steps"],"properties":{"$schema":{"type":"string"},"name":text("Its name, if not the file's."),"description":text("What it does."),
  "params":{"type":"object","additionalProperties":{"type":"object","properties":{"description":{"type":"string"},"default":{"type":["string","number","boolean"]}},"additionalProperties":False}},
@@ -159,7 +167,28 @@ suite = {"$schema":S,"$id":"suite.schema.json","title":"AutoTestRunner suite","d
  "variables":{"type":"object","additionalProperties":{"anyOf":[{"type":["string","number","boolean"]},{"type":"object","required":["firstExisting"],"properties":{"firstExisting":{"type":"array","items":{"type":"string"},"description":"The first path that exists, relative to the suite folder; the last when none does."}},"additionalProperties":False}]}},
  "helpers":{"type":"object","additionalProperties":{"type":"object","required":["regex"],"properties":{"regex":text("${name(value)} gives the regex's first group in value.")},"additionalProperties":False}},
  "requires":{"type":"array","items":{"type":"string"},"description":"Paths that must exist before a run starts. If one doesn't, autotest exits with code 2."},
- "reset":{"type":"object","properties":{"powershell":text("A script that removes what the suite leaves on the machine."),"leftovers":text("A script that prints one line for each thing an earlier run left; nothing on a clean machine.")},"additionalProperties":False},
+ "reset":{"type":"object","properties":{"script":text("A .ps1 or .cs file that removes what the suite leaves on the machine. A .cs runs with dotnet run, which needs the .NET 10 SDK."),"powershell":text("The older name for script."),"leftovers":text("A .ps1 or .cs file that prints one line for each thing an earlier run left; nothing on a clean machine.")},"additionalProperties":False},
+ "databases":{"type":"object","description":"Databases that query steps and dbValue checks use, by a name of your own.","additionalProperties":{"type":"object","required":["kind","connection"],"properties":{
+   "kind":{"enum":["sqlServer","postgres","oracle","mySql","sqlite"],"description":"sqlServer for SQL Server, Express and LocalDB; mySql for MySQL and MariaDB."},
+   "connection":text("Its connection string, as its .NET driver takes it; ${variables} allowed, so a password can come from --var.")},"additionalProperties":False}},
+ "queues":{"type":"object","description":"Message queues that send, receive and purge steps and queue checks use, by a name of your own.","additionalProperties":{"type":"object","required":["kind","queue"],"properties":{
+   "kind":{"enum":["rabbitMq","ibmMq","msmq"]},
+   "queue":text("The queue's name, or for MSMQ its path, such as .\\private$\\orders."),
+   "connection":text("The broker: amqp://user:password@host:5672/ for RabbitMQ, host(port) for IBM MQ."),
+   "channel":text("IBM MQ's server connection channel, such as DEV.APP.SVRCONN."),
+   "queueManager":text("IBM MQ's queue manager, such as QM1."),
+   "user":text("IBM MQ's user, when the channel asks for one."),
+   "password":text("IBM MQ's password; ${variables} allowed."),
+   "format":{"enum":["xml","text"],"description":"How an MSMQ message's text is written: xml, as .NET's XmlMessageFormatter does (the default), or plain text."}},"additionalProperties":False}},
+ "software":{"type":"object","description":"Software the suite needs on the computer, by a name of your own. The launcher looks for it when the suite is picked and offers to install what is missing; autotest setup does the same from the command line. Each has one of winget, windowsFeature or script.","additionalProperties":{"type":"object","properties":{
+   "title":text("What a person calls it, such as SQL Server Express."),
+   "winget":text("The winget package id, such as Microsoft.SQLServer.2022.Express."),
+   "version":{"type":["string","number"],"description":"The version wanted: one that starts with it will do, such as 3.13 for 3.13.7. Left out, any version, and the latest is installed."},
+   "windowsFeature":text("A Windows feature, as Enable-WindowsOptionalFeature names it, such as MSMQ-Server. Installing it needs administrator."),
+   "script":text("A .ps1 or .cs file that installs it, relative to the suite folder."),
+   "args":{"type":"array","items":{"type":"string"},"description":"What the script is given; ${version} is the version."},
+   "present":{"$ref":"case.schema.json#/definitions/check","description":"A check that passes when it is installed, such as { \"service\": \"RabbitMQ\", \"state\": \"Running\" }. A script needs one."},
+   "administrator":{"type":"boolean","description":"The script needs administrator, which is asked for before it runs."}},"additionalProperties":False}},
  "screen":{"type":"object","properties":{"width":{"type":"integer"},"height":{"type":"integer"}},"description":"The smallest screen the suite is written for."},
  "builder":{"type":"object","description":"What the builder does while recording a case.","properties":{
    "watch":{"type":"array","description":"Controls whose text the builder watches: when it changes after a step, it adds a wait for the new text. The app's status, and any element with a macro named waitFor and its name, are watched anyway.","items":{"type":"object","required":["element"],"properties":{

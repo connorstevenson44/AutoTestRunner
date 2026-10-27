@@ -540,7 +540,7 @@ internal sealed class ActivityFeed : Grid
         {
             var cell = new StackPanel();
             var name = new TextBlock { FontSize = 12, Foreground = Ui.Ink, TextWrapping = TextWrapping.Wrap };
-            name.Inlines.Add(new Run(Icons.Of(check.Subject.Kind)) { FontFamily = Icons.Font, Foreground = Ui.Muted, FontSize = 11.5, BaselineAlignment = BaselineAlignment.Center });
+            name.Inlines.Add(Ui.GlyphInline(Icons.Of(check.Subject.Kind), 11.5, Ui.Muted));
             name.Inlines.Add(new Run("  " + (Labelled(check) ? check.Label : check.Subject.Name)) { FontWeight = FontWeights.SemiBold });
             cell.Children.Add(name);
             if (!Labelled(check) && check.Subject.Detail is { } detail)

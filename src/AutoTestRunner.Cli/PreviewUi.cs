@@ -37,6 +37,14 @@ internal static class PreviewUi
                 if (shots is null)
                     return;
                 Save(launcher, Path.Combine(shots, "01-launcher.png"));
+                // What the suite needs installed, as it is offered when the suite is picked and something is missing.
+                var software = SoftwareWindow.Make(launcher, suite, new Options(), MadeUpSoftware(), out _);
+                software.Loaded += (_, _) =>
+                {
+                    Save(software, Path.Combine(shots, "15-software.png"));
+                    software.Close();
+                };
+                software.ShowDialog();
                 launcher.Close();
             };
             launcher.Closed += (_, _) => Play(app, suite, shots);
@@ -144,6 +152,35 @@ internal static class PreviewUi
         view.CaseFinished(Ended(cases[1], CaseStatus.Failed, 41.7));
 
         view.CaseStarted(3, cases.Count, cases[2]);
+        // It starts after case 1's reset, which takes the app back to where case 1 left it.
+        view.ShowStep(Activity.Of(ActivityKind.Reset, Part.Verb("Reset"), Part.Word("to after"), Part.Value($"1. {cases[0].Name}")));
+        // What the app wrote to its database and sent on its queues: a query's rows, a message sent and one received.
+        var orders = new Part(PartKind.Database, "orders", "SQL Server\nServer=.\\SQLEXPRESS;Database=Orders;User Id=qa;Password=•••");
+        var invoices = new Part(PartKind.Queue, "invoices", "RabbitMQ\namqp://qa:•••@localhost:5672/\ninvoices.out");
+        const string Sql = "select Status, Total from Orders where Id = @id";
+        view.ShowStep(Activity.Of(ActivityKind.Database, Part.Verb("Query"), orders, Part.Value(Sql)) with { Command = Sql });
+        view.CommandStarted("orders (SQL Server)", Sql + "\n-- @id = 1001");
+        view.CommandOutput("Status\tTotal", false);
+        view.CommandOutput("Shipped\t26.00", false);
+        view.CommandFinished(0, TimeSpan.FromSeconds(0.2));
+        view.ShowStep(Activity.Of(ActivityKind.Queue, Part.Verb("Send"), Part.Value("{\"order\":1001,\"action\":\"invoice\"}"), Part.Word("to"),
+            new Part(PartKind.Queue, "billing", "RabbitMQ\namqp://qa:•••@localhost:5672/\nbilling.in")));
+        view.ShowStep(Activity.Of(ActivityKind.Queue, Part.Verb("Receive"), Part.Word("from"), invoices) with { Command = "invoices (RabbitMQ invoices.out)" });
+        view.CommandStarted("invoices (RabbitMQ invoices.out)", null);
+        view.CommandOutput("{\"invoice\":\"INV-1001\",\"order\":1001,\"total\":26.00}", false);
+        view.CommandFinished(0, TimeSpan.FromSeconds(1.3));
+        view.ShowStep(Activity.Of(ActivityKind.Check, Part.Verb("Check"), Part.Word("Order 1001 is billed")));
+        view.ShowCheckpoint("Order 1001 is billed",
+        [
+            Checked(SubjectKind.Database, "orders", "select Status from Orders where Id = 1001", "=", "Billed", "Billed", true),
+            Checked(SubjectKind.Database, "orders", "rows", "=", "1", "1", true),
+            Checked(SubjectKind.Queue, "invoices", "messages", "=", "0", "0", true),
+            Checked(SubjectKind.Queue, "billing", "a message", "contains", "1001", "2 messages, none with it", false),
+        ],
+        [], []);
+        control.Hold(HoldReason.Checkpoint);
+        Shot("13-databases-and-queues");
+        control.CarryOn();
         view.ShowStep(Activity.Of(ActivityKind.Point, Part.Verb("Point at"), Badge("main", "Button \"main\"\nelements.json  installRow main\nFound by  Button tooltip \"C:\\Apps\\Contoso.Orders\\main\"")));
         view.ShowStep(Activity.Of(ActivityKind.Click, Part.Verb("Click"), Badge("Remove", "Button \"Remove\"\nFound by  Button \"Remove\" beside Button \"main\"")));
         view.ShowStep(Activity.Of(ActivityKind.Dialog, Part.Verb("Answer"), Part.Window("Remove main?"), Part.Word("with"), Part.Key("Yes")) with { Detail = "Remove main? Its service, scheduled task and folder are removed." });
@@ -258,12 +295,30 @@ internal static class PreviewUi
         // A step's details folded out, and two steps picked to make a macro of or repeat.
         panel.Dispatcher.Invoke(() => panel.Show(steps[3], [steps[4], steps[5]]));
         Shot("12-builder-details-and-picked");
+
+        // The last steps marked as the case's reset, which the cases after it play instead of starting the app again.
+        DraftStep[] reset = [StepMaker.Key("Escape"), StepMaker.Tab("Packages")];
+        foreach (var each in steps.Concat(reset))
+            each.State = DraftStepState.Played;
+        draft.Steps.AddRange(reset);
+        panel.Add(reset);
+        panel.Dispatcher.Invoke(() => panel.ShowReset(reset[0]));
+        Shot("14-builder-reset");
         if (shots is null)
             return;
         // The made-up steps aren't kept, so closing asks nothing.
         draft.Steps.Clear();
         panel.Dispatcher.Invoke(panel.Close);
     }
+
+    // The software a suite needs, found in each state: there, missing, at another version, and a feature to turn on.
+    private static List<SoftwareState> MadeUpSoftware() =>
+    [
+        new(new SoftwareSettings("sqlExpress", "SQL Server Express") { Winget = "Microsoft.SQLServer.2022.Express", Version = "16.0" }, SoftwareStatus.Installed, "16.0.1000.6"),
+        new(new SoftwareSettings("rabbitMq", "RabbitMQ") { Winget = "RabbitMQ.RabbitMQServer", Version = "3.13" }, SoftwareStatus.OtherVersion, "3.12.1"),
+        new(new SoftwareSettings("erlang", "Erlang/OTP") { Winget = "Erlang.ErlangOTP" }, SoftwareStatus.Missing),
+        new(new SoftwareSettings("msmq", "MSMQ") { WindowsFeature = "MSMQ-Server" }, SoftwareStatus.Missing),
+    ];
 
     // Three suites, as a kit puts them beside the runner: two that load, one with mistakes in its scripts.
     private static List<FoundSuite> MadeUpSuites()

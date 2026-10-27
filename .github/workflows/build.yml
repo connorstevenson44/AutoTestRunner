@@ -27,6 +27,71 @@ jobs:
       - name: Test
         run: dotnet test --configuration Release --no-build
 
+  # The database and queue steps against real servers, each the vendor's own image, as service containers. The Linux
+  # job above runs the same tests with SQLite alone; the Windows job below adds MSMQ, which only Windows has.
+  databases-and-queues:
+    runs-on: ubuntu-latest
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env: { ACCEPT_EULA: Y, MSSQL_SA_PASSWORD: Test_pass1, MSSQL_PID: Express }
+        ports: ['1433:1433']
+      postgres:
+        image: postgres:16-alpine
+        env: { POSTGRES_PASSWORD: Test_pass1, POSTGRES_DB: shop }
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-retries 20
+      mysql:
+        image: mysql:8.4
+        env: { MYSQL_ROOT_PASSWORD: Test_pass1, MYSQL_DATABASE: shop }
+        ports: ['3306:3306']
+        options: --health-cmd "mysqladmin ping -pTest_pass1" --health-interval 5s --health-retries 30
+      oracle:
+        image: gvenzl/oracle-free:23-slim-faststart
+        env: { ORACLE_PASSWORD: Test_pass1, APP_USER: shop, APP_USER_PASSWORD: Test_pass1 }
+        ports: ['1521:1521']
+        options: --health-cmd healthcheck.sh --health-interval 10s --health-retries 30
+      rabbitmq:
+        image: rabbitmq:3-alpine
+        ports: ['5672:5672']
+        options: --health-cmd "rabbitmq-diagnostics -q ping" --health-interval 5s --health-retries 30
+      ibmmq:
+        image: icr.io/ibm-messaging/mq:latest
+        env: { LICENSE: accept, MQ_QMGR_NAME: QM1, MQ_APP_PASSWORD: Test_pass1, MQ_ADMIN_PASSWORD: Test_pass1 }
+        ports: ['1414:1414']
+        options: --health-cmd "chkmqready" --health-interval 5s --health-retries 30
+    env:
+      ATR_SQLSERVER: Server=localhost,1433;User Id=sa;Password=Test_pass1;TrustServerCertificate=true
+      ATR_POSTGRES: Host=localhost;Username=postgres;Password=Test_pass1;Database=shop
+      ATR_MYSQL: Server=localhost;User ID=root;Password=Test_pass1;Database=shop
+      ATR_ORACLE: User Id=shop;Password=Test_pass1;Data Source=localhost:1521/FREEPDB1
+      ATR_RABBITMQ: amqp://guest:guest@localhost:5672/
+      ATR_IBMMQ: localhost(1414)
+      ATR_IBMMQ_PASSWORD: Test_pass1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # SQL Server has no health check of its own in its image: it is ready once it takes a login.
+      - name: Wait for SQL Server
+        run: |
+          for i in $(seq 60); do
+            docker exec ${{ job.services.sqlserver.id }} /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P Test_pass1 -Q "select 1" >/dev/null 2>&1 && exit 0
+            sleep 2
+          done
+          exit 1
+
+      # Every test runs: one that skips means a server's setting is missing here, which would hide a broken driver.
+      - name: Test against each database and queue
+        run: |
+          set -o pipefail
+          dotnet test tests/AutoTestRunner.Data.Tests --configuration Release | tee test-output.txt
+          skipped=$(grep -oE "skipped: [0-9]+" test-output.txt | tail -1 | grep -oE "[0-9]+")
+          if [ "${skipped:-0}" -gt 1 ]; then echo "$skipped tests skipped: only MSMQ, which is Windows', should."; exit 1; fi
+
   windows:
     runs-on: windows-latest
     steps:
@@ -42,6 +107,39 @@ jobs:
       - name: Validate the sample suite
         run: artifacts/autotest/autotest.exe validate samples/demo
 
+      # MSMQ is a Windows feature, off until it is turned on; the MSMQ queue test runs once it is.
+      - name: Test MSMQ
+        run: |
+          Install-WindowsFeature MSMQ-Server | Out-Null
+          $env:ATR_MSMQ = '.\private$\autotest'
+          $output = dotnet test tests/AutoTestRunner.Data.Tests --configuration Release --filter-class AutoTestRunner.Data.Tests.QueueTests
+          $output
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not ($output -match 'succeeded: 1')) { throw 'The MSMQ test didn''t run.' }
+
+      # The software a suite needs: MSMQ, turned on above, is found, and a script's software is missing until autotest
+      # setup is told yes, then installed.
+      - name: Test autotest setup
+        run: |
+          $suite = Join-Path $env:RUNNER_TEMP 'setup-suite'
+          New-Item -ItemType Directory -Force "$suite/cases" | Out-Null
+          $marker = (Join-Path $env:RUNNER_TEMP 'marker.txt') -replace '\\', '/'
+          @{ name = 'Setup'; app = @{ exe = 'App.exe'; window = 'App' }; software = [ordered]@{
+              msmq = @{ title = 'MSMQ'; windowsFeature = 'MSMQ-Server' }
+              marker = @{ title = 'Marker'; script = 'install-marker.ps1'; args = @($marker); present = @{ fileExists = $marker } } } } |
+            ConvertTo-Json -Depth 5 | Set-Content "$suite/suite.json"
+          'param($path) Set-Content $path "installed"; "Wrote $path"' | Set-Content "$suite/install-marker.ps1"
+          '{ "name": "Start", "steps": [ { "startApp": {} } ] }' | Set-Content "$suite/cases/01-start.json"
+          $asked = 'n' | artifacts/autotest/autotest.exe setup $suite
+          $asked
+          if ($LASTEXITCODE -ne 2) { throw "autotest setup said no, and ended with $LASTEXITCODE, not 2." }
+          if (-not ($asked -match 'MSMQ: installed') -or -not ($asked -match 'Marker: not installed')) { throw 'autotest setup didn''t find what is there.' }
+          if (Test-Path $marker) { throw 'autotest setup installed without a yes.' }
+          $installed = artifacts/autotest/autotest.exe setup $suite --yes
+          $installed
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not ($installed -match 'Wrote ') -or -not ($installed -match 'Marker: installed')) { throw 'autotest setup didn''t install the marker.' }
+
       # Plays a made-up run in the launcher and the panel, and saves a picture of each state: it shows the windows
       # open and draw without an error, and what they look like, in the screenshots artifact.
       - name: Take pictures of the windows
@@ -51,7 +149,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $shots = @(Get-ChildItem artifacts/shots -Filter *.png)
           "$($shots.Count) pictures: $($shots.Name -join ', ')"
-          if ($shots.Count -lt 12) { throw "autotest preview-ui saved $($shots.Count) of 12 pictures." }
+          if ($shots.Count -lt 15) { throw "autotest preview-ui saved $($shots.Count) of 15 pictures." }
 
       - uses: actions/upload-artifact@v4
         if: always()

@@ -51,6 +51,8 @@ public static class Forms
         new("matches", "A value matches", "Values"),
         new("atMost", "A number is at most", "Values"),
         new("atLeast", "A number is at least", "Values"),
+        new("dbValue", "A database value", "Data"),
+        new("queue", "A queue", "Data"),
     ];
 
     private static readonly Dictionary<string, FormField[]> CheckFields = new(StringComparer.Ordinal)
@@ -90,6 +92,9 @@ public static class Forms
         ["matches"] = [new("matches", "Value", FieldType.Text), new("regex", "Regex", FieldType.Text)],
         ["atMost"] = [new("atMost", "Number", FieldType.Text), new("to", "At most", FieldType.Number)],
         ["atLeast"] = [new("atLeast", "Number", FieldType.Text), new("to", "At least", FieldType.Number)],
+        ["dbValue"] = [new("dbValue", "Database", FieldType.Choice), new("sql", "SQL that reads the value", FieldType.LongText), new("params", "Parameters", FieldType.Json),
+            new("equals", "Is", FieldType.Text), new("contains", "Has in it", FieldType.Text), new("matches", "Matches the regex", FieldType.Text), new("rows", "Rows", FieldType.Number)],
+        ["queue"] = [new("queue", "Queue", FieldType.Choice), new("count", "Messages waiting", FieldType.Number), new("has", "A message has", FieldType.Text)],
     };
 
     private static readonly FormField[] CommonCheck = [new("label", "Say instead", FieldType.Text), new("within", "Seconds to come true", FieldType.Number)];
@@ -135,6 +140,10 @@ public static class Forms
         ["stopService"] = [new("stopService", "Service name", FieldType.Text)],
         ["setJsonValue"] = [new("setJsonValue", "JSON file", FieldType.File), new("path", "Setting, such as Orders:Region", FieldType.Text), new("to", "Value", FieldType.Text)],
         ["setAppSetting"] = [new("setAppSetting", ".config file", FieldType.File), new("key", "Key", FieldType.Text), new("to", "Value", FieldType.Text)],
+        ["query"] = [new("query", "Database", FieldType.Choice), new("sql", "SQL", FieldType.LongText), new("params", "Parameters, such as { \"id\": \"${order}\" }", FieldType.Json)],
+        ["send"] = [new("send", "Queue", FieldType.Choice), new("message", "Message", FieldType.LongText), new("file", "Or a file with it in", FieldType.File)],
+        ["receive"] = [new("receive", "Queue", FieldType.Choice), new("contains", "Message has", FieldType.Text), new("equals", "Message is", FieldType.Text), new("matches", "Matches the regex", FieldType.Text)],
+        ["purge"] = [new("purge", "Queue", FieldType.Choice)],
         ["checkpoint"] = [new("checkpoint", "Title", FieldType.Text), new("checks", "Checks", FieldType.Json), new("look", "To look at, one to a line", FieldType.Lines)],
         ["say"] = [],
     };
@@ -145,13 +154,24 @@ public static class Forms
         new("what", "Call the control", FieldType.Text), new("note", "Note", FieldType.Text),
     ];
 
-    /// <summary>The fields of a check of this kind: its own key first, then the rest, then label and within.</summary>
-    public static IReadOnlyList<FormField> ForCheck(string kind) =>
-        CheckFields.TryGetValue(kind, out var fields) ? [.. fields.Select(field => field.Key.Length == 0 ? field with { Key = kind } : field), .. CommonCheck] : throw new ArgumentException($"There is no check called {kind}.", nameof(kind));
+    /// <summary>
+    /// The fields of a check of this kind: its own key first, then the rest, then label and within. A database or queue
+    /// is picked from the suite's.
+    /// </summary>
+    public static IReadOnlyList<FormField> ForCheck(string kind, Scripting.Suite? suite = null) =>
+        CheckFields.TryGetValue(kind, out var fields) ? [.. fields.Select(field => Named(field.Key.Length == 0 ? field with { Key = kind } : field, kind, suite)), .. CommonCheck] : throw new ArgumentException($"There is no check called {kind}.", nameof(kind));
 
     /// <summary>The fields of a step of this kind: its own key first, then the rest, then what any step can have.</summary>
-    public static IReadOnlyList<FormField> ForStep(string kind) =>
-        StepFields.TryGetValue(kind, out var fields) ? [.. fields, .. CommonStep] : throw new ArgumentException($"There is no step called {kind}.", nameof(kind));
+    public static IReadOnlyList<FormField> ForStep(string kind, Scripting.Suite? suite = null) =>
+        StepFields.TryGetValue(kind, out var fields) ? [.. fields.Select(field => Named(field, kind, suite)), .. CommonStep] : throw new ArgumentException($"There is no step called {kind}.", nameof(kind));
+
+    // The database or queue a step or check names, to choose from those in suite.json.
+    private static FormField Named(FormField field, string kind, Scripting.Suite? suite) => field.Key != kind || suite is null ? field : kind switch
+    {
+        "query" or "dbValue" => field with { Choices = [.. suite.Databases.Keys] },
+        "send" or "receive" or "purge" or "queue" => field with { Choices = [.. suite.Queues.Keys] },
+        _ => field,
+    };
 
     /// <summary>A new check of this kind, with its key there, empty, so it reads as that kind.</summary>
     public static JsonObject NewCheck(string kind) => new() { [kind] = kind == "nothingLeft" ? true : "" };
