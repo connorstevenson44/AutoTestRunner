@@ -35,7 +35,6 @@ internal sealed class GlobalKeyHook : IDisposable
 
     public static bool IsSpace(int key) => key == Space;
     public static bool IsEnter(int key) => key == Enter;
-    public static bool IsEscape(int key) => key == Escape;
 
     private nint OnKeyboard(int code, nint message, nint data)
     {

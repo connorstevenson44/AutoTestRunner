@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using AutoTestRunner.Building;
 using AutoTestRunner.Scripting;
 
@@ -52,26 +51,13 @@ internal static class EditFromWindow
             }
         }
 
-        // Cancel and Confirm side by side, the same size.
-        var buttons = new UniformGrid { Columns = 2, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 18, 0, 0) };
         var cancel = Ui.LabelledButton(Icons.Cross, "Cancel", window.Close);
-        cancel.IsCancel = true;
-        cancel.Margin = new Thickness(0, 0, 4, 0);
         var confirm = Ui.LabelledButton(Icons.Tick, "Confirm", () =>
         {
             ticked = [.. boxes.Where(pair => pair.Box.IsChecked == true).Select(pair => pair.Case)];
             window.Close();
         }, "MainButton");
-        confirm.IsDefault = true;
-        confirm.Margin = new Thickness(4, 0, 0, 0);
-        foreach (var button in new[] { cancel, confirm })
-        {
-            button.MinWidth = 110;
-            button.Padding = new Thickness(14, 8, 14, 8);
-        }
-        buttons.Children.Add(cancel);
-        buttons.Children.Add(confirm);
-        stack.Children.Add(buttons);
+        stack.Children.Add(Ui.Answers(cancel, confirm));
         window.Content = stack;
         window.ShowDialog();
         return ticked;

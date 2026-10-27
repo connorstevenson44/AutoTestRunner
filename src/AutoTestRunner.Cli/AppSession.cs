@@ -89,22 +89,7 @@ internal sealed class AppSession : IDisposable
                     return inspector.Pick(hit.Facts, elements, globals, point.Exact);
                 }, found => then(found.Item1, found.Item2), failed);
             }
-            hook = new RecordingHook(
-                (x, y, _) =>
-                {
-                    if (!app.Contains(Native.ProcessOf(Native.WindowAt(x, y))))
-                        return false;
-                    var exact = RecordingHook.ShiftHeld;
-                    _ui.BeginInvoke(() => Done((x, y, exact)));
-                    return true;
-                },
-                keys =>
-                {
-                    if (keys == "Esc")
-                        _ui.BeginInvoke(() => Done(null));
-                    return false;
-                },
-                () => false);
+            hook = RecordingHook.PickOnce(app, at => _ui.BeginInvoke(() => Done(at)));
         }, failed);
     }
 

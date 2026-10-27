@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Security.Principal;
+using AutoTestRunner.Scripting;
 
 namespace AutoTestRunner.Cli;
 
@@ -12,6 +13,9 @@ internal static class Elevation
 {
     public static bool IsAdministrator =>
         new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
+
+    /// <summary>Whether autotest has to restart as administrator to drive the suite's app.</summary>
+    public static bool Needed(Suite? suite) => suite?.App.RunAsAdmin == true && !IsAdministrator;
 
     /// <summary>Starts autotest again as administrator with these arguments. False when that was declined.</summary>
     public static bool Restart(IEnumerable<string> args)

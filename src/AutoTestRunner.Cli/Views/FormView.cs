@@ -99,8 +99,7 @@ internal sealed class FormView : StackPanel
         var row = new DockPanel();
         void Button(string glyph, string tip, Action click)
         {
-            var button = Ui.IconButton(glyph, tip, click, 13);
-            button.Padding = new Thickness(6, 3, 6, 3);
+            var button = Ui.IconButton(glyph, tip, click, 13, new Thickness(6, 3, 6, 3));
             button.VerticalAlignment = VerticalAlignment.Top;
             DockPanel.SetDock(button, Dock.Right);
             row.Children.Add(button);
@@ -112,7 +111,7 @@ internal sealed class FormView : StackPanel
         if (field.Type == FieldType.Folder)
             Button(Icons.Folder, "Browse for a folder", () => Browse(box, folder: true));
         if (field.Type is not (FieldType.Target or FieldType.Json or FieldType.Number))
-            Button(Icons.Values, "Put in a kept value or a suite variable", () => Values(box));
+            Button(Icons.Values, "Put in a kept value or a suite variable", () => Ui.ValuesMenu(box, _values(), text => Ui.InsertAtCaret(box, text)));
         // Last, so it sits right beside the box.
         if (field.Type == FieldType.Keys)
         {
@@ -123,34 +122,6 @@ internal sealed class FormView : StackPanel
         row.Children.Add(box);
         Children.Add(row);
         _fields.Add((field, () => box.Text, was));
-    }
-
-    // A menu of the kept values and suite variables, each with what it holds now; the one clicked goes in at the caret.
-    private void Values(TextBox box)
-    {
-        var menu = new ContextMenu { PlacementTarget = box, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
-        var values = _values();
-        foreach (var (name, now) in values)
-        {
-            var header = new DockPanel { MinWidth = 260 };
-            var shown = Ui.Words(now.Length > 40 ? now[..40] + "…" : now, 11.5, Ui.Faint, wrap: false);
-            shown.Margin = new Thickness(16, 0, 0, 0);
-            DockPanel.SetDock(shown, Dock.Right);
-            header.Children.Add(shown);
-            header.Children.Add(new TextBlock { Text = "${" + name + "}", FontFamily = Ui.Mono, FontSize = 12 });
-            var item = new MenuItem { Header = header, ToolTip = now };
-            item.Click += (_, _) =>
-            {
-                var at = box.CaretIndex;
-                box.Text = box.Text.Insert(at, "${" + name + "}");
-                box.CaretIndex = at + name.Length + 3;
-                box.Focus();
-            };
-            menu.Items.Add(item);
-        }
-        if (values.Count == 0)
-            menu.Items.Add(new MenuItem { Header = "Nothing kept yet", IsEnabled = false });
-        menu.IsOpen = true;
     }
 
     // A button that puts the next keys pressed in the box, such as Ctrl+S, then stops. The keys are kept from the

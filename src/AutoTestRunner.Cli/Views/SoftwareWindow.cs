@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Threading;
 using AutoTestRunner.Running;
@@ -49,16 +48,13 @@ internal static class SoftwareWindow
         // What autotest setup prints, as the panel shows commands.
         var log = new TextBox
         {
-            IsReadOnly = true, FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 11.5, Background = Ui.Terminal, Foreground = Ui.TerminalText,
+            IsReadOnly = true, FontFamily = Ui.Mono, FontSize = 11.5, Background = Ui.Terminal, Foreground = Ui.TerminalText,
             BorderThickness = new Thickness(0), Padding = new Thickness(10, 8, 10, 8), Height = 180, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 12, 0, 0),
         };
         stack.Children.Add(log);
 
-        var buttons = new UniformGrid { Columns = 2, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 18, 0, 0) };
         var later = Ui.LabelledButton(Icons.Cross, "Not now", window.Close);
-        later.IsCancel = true;
-        later.Margin = new Thickness(0, 0, 4, 0);
         Button? install = null;
         install = Ui.LabelledButton(Icons.Download, "Install", () =>
         {
@@ -77,8 +73,6 @@ internal static class SoftwareWindow
                 log.ScrollToEnd();
             });
         }, "MainButton");
-        install.IsDefault = true;
-        install.Margin = new Thickness(4, 0, 0, 0);
         void Shield()
         {
             var admin = !Elevation.IsAdministrator && boxes.Any(pair => pair.Box.IsChecked == true && NeedsAdministrator(pair.State.Item));
@@ -92,14 +86,7 @@ internal static class SoftwareWindow
             box.Unchecked += (_, _) => Shield();
         }
         Shield();
-        foreach (var button in new[] { later, install })
-        {
-            button.MinWidth = 110;
-            button.Padding = new Thickness(14, 8, 14, 8);
-        }
-        buttons.Children.Add(later);
-        buttons.Children.Add(install);
-        stack.Children.Add(buttons);
+        stack.Children.Add(Ui.Answers(later, install));
         window.Content = stack;
         return window;
     }

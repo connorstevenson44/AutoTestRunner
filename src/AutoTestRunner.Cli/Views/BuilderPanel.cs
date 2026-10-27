@@ -1,12 +1,10 @@
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
-using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using AutoTestRunner.Building;
@@ -21,10 +19,8 @@ namespace AutoTestRunner.Cli.Views;
 /// builder is doing, the steps so far (BuilderPanel.Steps.cs), and the checkpoint the case ends at.
 /// </summary>
 [SuppressMessage("Design", "CA1001", Justification = "The outline and the timer go when the window closes.")]
-internal sealed partial class BuilderPanel : Window
+internal sealed partial class BuilderPanel : SidePanel
 {
-    private const double PanelWidth = 460;
-
     private readonly Suite _suite;
     private readonly CaseDraft _draft;
     private readonly TextBox? _name;
@@ -48,7 +44,6 @@ internal sealed partial class BuilderPanel : Window
     private readonly ContentControl _selection = new();
 
     private volatile int _mode = (int)BuildMode.Paused;
-    private volatile nint _hwnd;
     private bool _ready, _saved, _recordOn;
     private int _changes;
 
@@ -61,18 +56,9 @@ internal sealed partial class BuilderPanel : Window
     private volatile IReadOnlyList<(string Name, string Text)> _values = [];
 
     public BuilderPanel(BuildRequest request, CaseDraft draft)
+        : base(request.Edit is { } editing ? $"Edit {editing.Number}. {editing.Name}" : $"New case: {request.Name}")
     {
         (_suite, _draft) = (request.Suite, draft);
-        Resources.MergedDictionaries.Add(Ui.Theme);
-        Title = request.Edit is { } editing ? $"Edit {editing.Number}. {editing.Name}" : $"New case: {request.Name}";
-        Width = PanelWidth;
-        Topmost = true;
-        WindowStyle = WindowStyle.ToolWindow;
-        ResizeMode = ResizeMode.NoResize;
-        ShowActivated = false;
-        Background = Brushes.White;
-        FontFamily = Ui.Text;
-        Foreground = Ui.Ink;
 
         var root = new Grid { Margin = new Thickness(14, 12, 10, 10) };
         for (var row = 0; row < 7; row++)
@@ -148,8 +134,7 @@ internal sealed partial class BuilderPanel : Window
         _count.VerticalAlignment = VerticalAlignment.Center;
         DockPanel.SetDock(_count, Dock.Right);
         stepsHeading.Children.Add(_count);
-        var values = Ui.IconButton(Icons.Values, "Kept values and suite variables, with what each holds now. Click one to put it in the box you were typing in.", ShowValues, 12);
-        values.Padding = new Thickness(5, 2, 5, 2);
+        var values = Ui.IconButton(Icons.Values, "Kept values and suite variables, with what each holds now. Click one to put it in the box you were typing in.", ShowValues, 12, new Thickness(5, 2, 5, 2));
         values.Margin = new Thickness(0, 0, 6, 2);
         DockPanel.SetDock(values, Dock.Right);
         stepsHeading.Children.Add(values);
@@ -169,8 +154,7 @@ internal sealed partial class BuilderPanel : Window
         var existingCheckpoint = request.Edit?.Steps.LastOrDefault()?["checkpoint"]?.GetValue<string>();
         var checkpointHeading = new DockPanel();
         Button? addCheck = null;
-        addCheck = Ui.IconButton(Icons.Add, "Add a check: a file, a setting, a service, a value, or a control in the app", () => CheckMenu.Open(addCheck!, kind => NewCheck(kind)), 12);
-        addCheck.Padding = new Thickness(5, 2, 5, 2);
+        addCheck = Ui.IconButton(Icons.Add, "Add a check: a file, a setting, a service, a value, or a control in the app", () => CheckMenu.Open(addCheck!, kind => NewCheck(kind)), 12, new Thickness(5, 2, 5, 2));
         addCheck.Margin = new Thickness(0, 0, 0, 2);
         DockPanel.SetDock(addCheck, Dock.Right);
         checkpointHeading.Children.Add(addCheck);
@@ -199,14 +183,6 @@ internal sealed partial class BuilderPanel : Window
         root.Children.Add(_footer);
         Content = root;
 
-        SourceInitialized += (_, _) =>
-        {
-            _hwnd = new WindowInteropHelper(this).Handle;
-            var area = SystemParameters.WorkArea;
-            Left = area.Right - PanelWidth;
-            Top = area.Top;
-            Height = area.Height;
-        };
         Closing += (_, e) =>
         {
             // A new case with nothing recorded, or a case opened and left as it was, has nothing to lose.
@@ -231,12 +207,6 @@ internal sealed partial class BuilderPanel : Window
 
     /// <summary>What the builder makes of clicks in the app now. Read from any thread.</summary>
     public BuildMode Mode => (BuildMode)_mode;
-
-    /// <summary>The panel's window, once it has one, so a key pressed in it can be told from one pressed elsewhere. Read from any thread.</summary>
-    public nint Handle => _hwnd;
-
-    /// <summary>Where the panel is on the screen, in pixels.</summary>
-    public ScreenRect? Bounds => _hwnd == 0 ? null : WindowBounds(_hwnd);
 
     /// <summary>The case file it was saved in, once it was.</summary>
     public string? SavedAs { get; private set; }
@@ -646,19 +616,4 @@ internal sealed partial class BuilderPanel : Window
         else
             Dispatcher.BeginInvoke(action, DispatcherPriority.Normal);
     }
-
-    private static ScreenRect WindowBounds(nint hwnd)
-    {
-        GetWindowRect(hwnd, out var rect);
-        return new ScreenRect(rect.Left, rect.Top, rect.Right, rect.Bottom);
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct Rect
-    {
-        public int Left, Top, Right, Bottom;
-    }
-
-    [DllImport("user32.dll")]
-    private static extern bool GetWindowRect(nint hwnd, out Rect rect);
 }

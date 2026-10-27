@@ -1,6 +1,9 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using System.Xml.Linq;
@@ -45,18 +48,14 @@ internal sealed class SuitePane : Grid
     public SuitePane(Suite suite, Options options, Action<BuildRequest> build, Action? reload = null, Action? newSuite = null)
     {
         (_suite, _options, _build, _reload) = (suite, options, build, reload ?? (() => { }));
-        _last = LastResults(ResultsFolder(suite, options));
+        _last = LastResults(options.ResultsFolder(suite));
         for (var row = 0; row < 3; row++)
             RowDefinitions.Add(new RowDefinition { Height = row == 2 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
 
         // ===== The suite, and whether it can run =====
-        var title = Ui.Words(suite.Name, 20, Ui.Ink, FontWeights.Bold);
-        title.ToolTip = suite.Folder;
         var state = new WrapPanel { Margin = new Thickness(0, 10, 0, 0) };
-        _files = Ui.Pill(new TextBlock(), Ui.Surface, 12, new Thickness(10, 4, 12, 4));
-        _files.Margin = new Thickness(0, 0, 8, 6);
-        _machine = Ui.Pill(new TextBlock(), Ui.Surface, 12, new Thickness(10, 4, 12, 4));
-        _machine.Margin = new Thickness(0, 0, 8, 6);
+        _files = Pill(new TextBlock(), Ui.Surface);
+        _machine = Pill(new TextBlock(), Ui.Surface);
         _clean = Ui.LabelledButton(Icons.Clean, "Clean up", CleanUp);
         _clean.Visibility = Visibility.Collapsed;
         _clean.ToolTip = "Close the app and run the suite's reset script, so the machine is ready for case 1";
@@ -65,8 +64,7 @@ internal sealed class SuitePane : Grid
             state.Children.Add(_machine);
         if (suite.App.RunAsAdmin && !Elevation.IsAdministrator)
         {
-            var admin = Ui.Pill(Ui.IconText(Icons.Admin, "Asks for administrator when it starts", Ui.Muted), Ui.Surface, 12, new Thickness(10, 4, 12, 4));
-            admin.Margin = new Thickness(0, 0, 8, 6);
+            var admin = Pill(Ui.IconText(Icons.Admin, "Asks for administrator when it starts", Ui.Muted), Ui.Surface);
             admin.ToolTip = "The app runs as administrator, so AutoTestRunner restarts as administrator to control it";
             state.Children.Add(admin);
         }
@@ -76,35 +74,23 @@ internal sealed class SuitePane : Grid
         // At most so tall, so that folding the log away gives the space back to the cases.
         var cleaningLog = new Grid();
         cleaningLog.Children.Add(_cleaning);
-        var hide = Ui.IconButton(Icons.Cross, "Hide the clean up log", () => _cleaningBox!.Visibility = Visibility.Collapsed, 11);
-        hide.Padding = new Thickness(5, 3, 5, 3);
+        var hide = Ui.IconButton(Icons.Cross, "Hide the clean up log", () => _cleaningBox!.Visibility = Visibility.Collapsed, 11, new Thickness(5, 3, 5, 3));
         hide.HorizontalAlignment = HorizontalAlignment.Right;
         hide.VerticalAlignment = VerticalAlignment.Top;
         hide.Margin = new Thickness(0, 2, 22, 0);
         cleaningLog.Children.Add(hide);
         _cleaningBox = new Border { MaxHeight = 170, Margin = new Thickness(0, 4, 0, 6), Child = cleaningLog, Visibility = Visibility.Collapsed };
-        // The suite's tools, as icons beside its name.
-        var titleRow = new DockPanel();
-        var tools = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        void Tool(string glyph, string tip, Action click)
+        var tools = new List<Button>
         {
-            var button = Ui.IconButton(glyph, tip, click, 15);
-            button.Padding = new Thickness(7, 4, 7, 4);
-            tools.Children.Add(button);
-        }
-        Tool(Icons.Controls, "Named controls: where each is used, point it out in the app, rename it everywhere",
-            () => ControlsWindow.Open(Window.GetWindow(this), _suite, _options, _reload, ids: false));
-        Tool(Icons.Ids, "Controls without ids: the controls in the app a test would use that have no AutomationId, with the XAML to add",
-            () => ControlsWindow.Open(Window.GetWindow(this), _suite, _options, _reload, ids: true));
+            TitleTool(Icons.Controls, "Named controls: where each is used, point it out in the app, rename it everywhere",
+                () => ControlsWindow.Open(Window.GetWindow(this), _suite, _options, _reload, ids: false)),
+            TitleTool(Icons.Ids, "Controls without ids: the controls in the app a test would use that have no AutomationId, with the XAML to add",
+                () => ControlsWindow.Open(Window.GetWindow(this), _suite, _options, _reload, ids: true)),
+        };
         if (newSuite is not null)
-            Tool(Icons.NewFolder, "New suite: pick an app, read its window and point at its status bar", newSuite);
-        foreach (var button in FileTools(suite.Folder))
-            tools.Children.Add(button);
-        DockPanel.SetDock(tools, Dock.Right);
-        titleRow.Children.Add(tools);
-        titleRow.Children.Add(title);
+            tools.Add(TitleTool(Icons.NewFolder, "New suite: pick an app, read its window and point at its status bar", newSuite));
         var top = new StackPanel();
-        top.Children.Add(titleRow);
+        top.Children.Add(TitleRow(suite.Name, suite.Folder, tools));
         top.Children.Add(state);
         top.Children.Add(_cleaningBox);
         Children.Add(top);
@@ -154,27 +140,42 @@ internal sealed class SuitePane : Grid
     public bool Busy => _busy;
 
     /// <summary>
-    /// Icons that open the suite's own files to change by hand: suite.json in Notepad++, or Notepad when there is none,
-    /// and the suite's folder in Explorer. The launcher loads the suite again once they are changed.
+    /// A suite's name, with icons beside it: its own tools, then those that open its files to change by hand, suite.json
+    /// in Notepad++, or Notepad when there is none, and its folder in Explorer. The launcher loads the suite again once
+    /// they are changed.
     /// </summary>
-    public static IEnumerable<Button> FileTools(string folder)
+    public static DockPanel TitleRow(string name, string folder, IEnumerable<Button> tools)
+    {
+        var bar = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        foreach (var button in tools.Concat(FileTools(folder)))
+            bar.Children.Add(button);
+        var title = Ui.Words(name, 20, Ui.Ink, FontWeights.Bold);
+        title.ToolTip = folder;
+        var row = new DockPanel();
+        DockPanel.SetDock(bar, Dock.Right);
+        row.Children.Add(bar);
+        row.Children.Add(title);
+        return row;
+    }
+
+    private static IEnumerable<Button> FileTools(string folder)
     {
         var config = Path.Combine(folder, "suite.json");
         var editor = ScriptEditor.NotepadPlusPlus() is null ? "Notepad" : "Notepad++";
-        yield return FileTool(Icons.Setting, $"Edit suite.json in {editor}\n{config}", () =>
+        yield return TitleTool(Icons.Setting, $"Edit suite.json in {editor}\n{config}", () =>
         {
             if (!ScriptEditor.Open(config))
                 MessageBox.Show($"Couldn't start Notepad++ or Notepad to open {config}.", "AutoTestRunner", MessageBoxButton.OK, MessageBoxImage.Warning);
         });
-        yield return FileTool(Icons.Folder, $"Open the suite's folder\n{folder}", () => ScriptEditor.ShowFolder(folder));
+        yield return TitleTool(Icons.Folder, $"Open the suite's folder\n{folder}", () => ScriptEditor.ShowFolder(folder));
     }
 
-    private static Button FileTool(string glyph, string tip, Action click)
+    // An icon beside the suite's name.
+    private static Button TitleTool(string glyph, string tip, Action click)
     {
-        var button = Ui.IconButton(glyph, tip, click, 15);
-        button.Padding = new Thickness(7, 4, 7, 4);
+        var button = Ui.IconButton(glyph, tip, click, 15, new Thickness(7, 4, 7, 4));
         // The tip's second line is a path, which a screen reader or a test needn't hear.
-        System.Windows.Automation.AutomationProperties.SetName(button, tip.Split('\n')[0]);
+        AutomationProperties.SetName(button, tip.Split('\n')[0]);
         return button;
     }
 
@@ -188,7 +189,6 @@ internal sealed class SuitePane : Grid
     public event Action? Changed;
 
     /// <summary>Where a suite's results go, as autotest run puts them.</summary>
-    public static string ResultsFolder(Suite suite, Options options) => options.Results ?? Path.Combine(suite.Folder, "results");
 
     /// <summary>How each case went in the newest results folder, from its junit.xml.</summary>
     public static Dictionary<int, CaseStatus> LastResults(string parent)
@@ -226,7 +226,7 @@ internal sealed class SuitePane : Grid
 
     private Grid CaseRow(Case item)
     {
-        var row = new Grid { Background = Brushes.Transparent, Cursor = System.Windows.Input.Cursors.Hand, Margin = new Thickness(0, 1, 0, 1), ToolTip = item.Covers };
+        var row = new Grid { Background = Brushes.Transparent, Cursor = Cursors.Hand, Margin = new Thickness(0, 1, 0, 1), ToolTip = item.Covers };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(38) });
         row.ColumnDefinitions.Add(new ColumnDefinition());
@@ -260,13 +260,11 @@ internal sealed class SuitePane : Grid
         };
         needs.MouseEnter += (_, _) => needs.BorderBrush = Ui.Accent;
         needs.MouseLeave += (_, _) => needs.BorderBrush = Brushes.Transparent;
-        (needs.BorderBrush, needs.BorderThickness, needs.Cursor) = (Brushes.Transparent, new Thickness(1), System.Windows.Input.Cursors.Hand);
+        (needs.BorderBrush, needs.BorderThickness, needs.Cursor) = (Brushes.Transparent, new Thickness(1), Cursors.Hand);
         // The pencil shows while the mouse is over the row, as the app's own row buttons do.
-        var pencil = Ui.IconButton(Icons.Edit, "Edit this case in the builder", () => _build(new BuildRequest(_suite, item.Name, Edit: item)), 14);
-        pencil.Padding = new Thickness(6, 3, 6, 3);
+        var pencil = Ui.IconButton(Icons.Edit, "Edit this case in the builder", () => _build(new BuildRequest(_suite, item.Name, Edit: item)), 14, new Thickness(6, 3, 6, 3));
         Button? more = null;
-        more = Ui.IconButton(Icons.More, "Copy, rename, move or delete this case", () => CaseMenu(item, more!).IsOpen = true, 14);
-        more.Padding = new Thickness(6, 3, 6, 3);
+        more = Ui.IconButton(Icons.More, "Copy, rename, move or delete this case", () => CaseMenu(item, more!).IsOpen = true, 14, new Thickness(6, 3, 6, 3));
         var edit = new StackPanel { Orientation = Orientation.Horizontal, Visibility = Visibility.Hidden, Children = { pencil, more } };
         row.ContextMenu = CaseMenu(item, row);
         var last = _last.TryGetValue(item.Number, out var status) ? Ui.Glyph(Icons.Of(status), 14, Ui.Of(status)) : new TextBlock();
@@ -308,7 +306,7 @@ internal sealed class SuitePane : Grid
     // What can be done to a case's file: a copy, a new name, a place up or down, or deleting it.
     private ContextMenu CaseMenu(Case item, UIElement under)
     {
-        var menu = new ContextMenu { PlacementTarget = under, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
+        var menu = new ContextMenu { PlacementTarget = under, Placement = PlacementMode.Bottom };
         void Item(string glyph, string text, string? cant, Action act)
         {
             var entry = new MenuItem { Header = text, Icon = Ui.Glyph(glyph, 13, Ui.Accent), IsEnabled = cant is null, ToolTip = cant };
@@ -430,7 +428,7 @@ internal sealed class SuitePane : Grid
 
     private void CheckFiles()
     {
-        var globals = Runner.Variables(_suite, Path.GetTempPath(), _options.Variables);
+        var globals = Globals();
         var missing = Runner.Missing(_suite, globals);
         _missing = missing.Count > 0;
         _files.Background = _missing ? Ui.FailSoft : Ui.PassSoft;
@@ -447,10 +445,7 @@ internal sealed class SuitePane : Grid
         if (_suite.Reset.Leftovers is null)
             return;
         _machine.Background = Ui.Surface;
-        var checking = new StackPanel { Orientation = Orientation.Horizontal };
-        checking.Children.Add(Ui.Spinner(12, Ui.Muted));
-        checking.Children.Add(new TextBlock { Text = "Checking for leftovers from earlier runs", Foreground = Ui.Muted, FontSize = 12, Margin = new Thickness(6, 0, 0, 0) });
-        _machine.Child = checking;
+        _machine.Child = Looking("Checking for leftovers from earlier runs");
         _clean.Visibility = Visibility.Collapsed;
         Task.Run<(IReadOnlyList<string> Leftovers, string? Problem)>(() =>
         {
@@ -485,11 +480,8 @@ internal sealed class SuitePane : Grid
             return;
         _software.Visibility = Visibility.Visible;
         _software.Children.Clear();
-        var checking = new StackPanel { Orientation = Orientation.Horizontal };
-        checking.Children.Add(Ui.Spinner(12, Ui.Muted));
-        checking.Children.Add(new TextBlock { Text = "Looking for the software it needs", Foreground = Ui.Muted, FontSize = 12, Margin = new Thickness(6, 0, 0, 0) });
-        _software.Children.Add(Pill(checking, Ui.Surface));
-        var globals = Runner.Variables(_suite, Path.GetTempPath(), _options.Variables);
+        _software.Children.Add(Pill(Looking("Looking for the software it needs"), Ui.Surface));
+        var globals = Globals();
         Task.Run(() => Software.Detect(_suite, new WindowsMachine(), globals)).ContinueWith(task => Dispatcher.BeginInvoke(() =>
         {
             _software.Children.Clear();
@@ -510,7 +502,7 @@ internal sealed class SuitePane : Grid
                 };
                 var pill = Pill(Ui.IconText(glyph, state.Item.Title, color), background);
                 pill.ToolTip = state.Line + (state.Wanted ? "\nClick to install it." : "");
-                pill.Cursor = System.Windows.Input.Cursors.Hand;
+                pill.Cursor = Cursors.Hand;
                 pill.MouseLeftButtonUp += (_, _) => OfferSoftware(states);
                 _software.Children.Add(pill);
             }
@@ -523,6 +515,17 @@ internal sealed class SuitePane : Grid
     {
         if (SoftwareWindow.Ask(Window.GetWindow(this), _suite, _options, states))
             CheckSoftware();
+    }
+
+    private VariableScope Globals() => Runner.Variables(_suite, Path.GetTempPath(), _options.Variables);
+
+    // A spinner and what is being looked at, for a pill while it takes a few seconds.
+    private static StackPanel Looking(string text)
+    {
+        var looking = new StackPanel { Orientation = Orientation.Horizontal };
+        looking.Children.Add(Ui.Spinner(12, Ui.Muted));
+        looking.Children.Add(new TextBlock { Text = text, Foreground = Ui.Muted, FontSize = 12, Margin = new Thickness(6, 0, 0, 0) });
+        return looking;
     }
 
     private static Border Pill(UIElement child, Brush background)

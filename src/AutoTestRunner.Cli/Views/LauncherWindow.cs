@@ -1,7 +1,9 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using AutoTestRunner.Driving;
 using AutoTestRunner.Running;
@@ -110,8 +112,7 @@ internal sealed class LauncherWindow : Window
         _start.IsDefault = true;
         _start.FontSize = 14;
         // The logs folder, where anything that goes wrong in autotest itself is written: small, as it is seldom needed.
-        var logs = Ui.IconButton(Icons.Folder, $"Open the logs folder, where errors.log has anything that went wrong in AutoTestRunner itself\n{Crashes.Folder}", Crashes.OpenFolder, 12);
-        logs.Padding = new Thickness(4, 2, 4, 2);
+        var logs = Ui.IconButton(Icons.Folder, $"Open the logs folder, where errors.log has anything that went wrong in AutoTestRunner itself\n{Crashes.Folder}", Crashes.OpenFolder, 12, new Thickness(4, 2, 4, 2));
         logs.Margin = new Thickness(0, 0, 8, 0);
         logs.VerticalAlignment = VerticalAlignment.Center;
         AutomationProperties.SetName(logs, "Open the logs folder");
@@ -192,7 +193,7 @@ internal sealed class LauncherWindow : Window
         var row = new Border
         {
             Child = grid, CornerRadius = new CornerRadius(6), Padding = new Thickness(8, 7, 8, 7), Margin = new Thickness(0, 0, 0, 2),
-            Background = Brushes.Transparent, Cursor = System.Windows.Input.Cursors.Hand, ToolTip = found.Folder,
+            Background = Brushes.Transparent, Cursor = Cursors.Hand, ToolTip = found.Folder,
         };
         row.MouseEnter += (_, _) =>
         {
@@ -211,7 +212,7 @@ internal sealed class LauncherWindow : Window
         if (found.Suite is not { } suite)
             return ($"{found.Problems.Count} {(found.Problems.Count == 1 ? "mistake" : "mistakes")} in its scripts", Ui.Fail);
         var cases = $"{suite.Cases.Count} {(suite.Cases.Count == 1 ? "case" : "cases")}";
-        var last = SuitePane.LastResults(SuitePane.ResultsFolder(suite, _options));
+        var last = SuitePane.LastResults(_options.ResultsFolder(suite));
         if (last.Count == 0)
             return (cases, Ui.Muted);
         var passed = last.Values.Count(status => status == CaseStatus.Passed);
@@ -235,7 +236,7 @@ internal sealed class LauncherWindow : Window
     // Asks for a new suite, and opens the launcher on it.
     private void NewSuite()
     {
-        var near = _pane.Tag is FoundSuite open ? System.IO.Path.GetDirectoryName(open.Folder) ?? open.Folder : Environment.CurrentDirectory;
+        var near = _pane.Tag is FoundSuite open ? Path.GetDirectoryName(open.Folder) ?? open.Folder : Environment.CurrentDirectory;
         if (NewSuiteWindow.Ask(this, near) is { } folder)
         {
             Opened = folder;
@@ -276,14 +277,14 @@ internal sealed class LauncherWindow : Window
     {
         try
         {
-            return new[] { folder, System.IO.Path.Combine(folder, "cases"), System.IO.Path.Combine(folder, "macros") }
-                .Where(System.IO.Directory.Exists)
-                .SelectMany(each => System.IO.Directory.EnumerateFiles(each, "*.json"))
-                .Select(System.IO.File.GetLastWriteTimeUtc)
+            return new[] { folder, Path.Combine(folder, "cases"), Path.Combine(folder, "macros") }
+                .Where(Directory.Exists)
+                .SelectMany(each => Directory.EnumerateFiles(each, "*.json"))
+                .Select(File.GetLastWriteTimeUtc)
                 .DefaultIfEmpty()
                 .Max();
         }
-        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return default;
         }
@@ -293,14 +294,7 @@ internal sealed class LauncherWindow : Window
     private static StackPanel Problems(FoundSuite found)
     {
         var panel = new StackPanel();
-        var titleRow = new DockPanel();
-        var tools = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        foreach (var button in SuitePane.FileTools(found.Folder))
-            tools.Children.Add(button);
-        DockPanel.SetDock(tools, Dock.Right);
-        titleRow.Children.Add(tools);
-        titleRow.Children.Add(Ui.Words(found.Name, 20, Ui.Ink, FontWeights.Bold));
-        panel.Children.Add(titleRow);
+        panel.Children.Add(SuitePane.TitleRow(found.Name, found.Folder, []));
         var pill = Ui.Pill(Ui.IconText(Icons.Failed, $"Can't run: {found.Problems.Count} {(found.Problems.Count == 1 ? "mistake" : "mistakes")} in its scripts", Ui.Fail),
             Ui.FailSoft, 12, new Thickness(10, 4, 12, 4));
         pill.HorizontalAlignment = HorizontalAlignment.Left;
@@ -353,13 +347,12 @@ internal sealed class LauncherWindow : Window
         var count = _suite?.Ticked.Count ?? 0;
         var all = _suite is not null && count == _suite.Suite.Cases.Count;
         var content = (StackPanel)_start.Content;
-        ((TextBlock)content.Children[0]).Text = NeedsElevating(_suite?.Suite) ? Icons.Admin : Icons.Play;
+        ((TextBlock)content.Children[0]).Text = Elevation.Needed(_suite?.Suite) ? Icons.Admin : Icons.Play;
         ((TextBlock)content.Children[1]).Text = all ? "Start all" : $"Start {count}";
-        _start.ToolTip = NeedsElevating(_suite?.Suite) ? "This suite needs administrator rights: AutoTestRunner restarts as administrator, then runs" : null;
+        _start.ToolTip = Elevation.Needed(_suite?.Suite) ? "This suite needs administrator rights: AutoTestRunner restarts as administrator, then runs" : null;
         _start.IsEnabled = count > 0 && _suite?.Ready == true;
     }
 
-    private static bool NeedsElevating(Suite? suite) => suite?.App.RunAsAdmin == true && !Elevation.IsAdministrator;
 
     private Options HowItRuns(IReadOnlyList<Case> cases) => _options with
     {
@@ -373,7 +366,7 @@ internal sealed class LauncherWindow : Window
         if (_suite is not { Ready: true } pane || pane.Ticked is not [_, ..] cases)
             return;
         var options = HowItRuns(cases);
-        if (NeedsElevating(pane.Suite))
+        if (Elevation.Needed(pane.Suite))
         {
             Elevate(["launch", pane.Suite.Folder, .. (options with { Start = true }).Arguments()]);
             return;
@@ -384,7 +377,7 @@ internal sealed class LauncherWindow : Window
 
     private void Building(BuildRequest request)
     {
-        if (NeedsElevating(request.Suite))
+        if (Elevation.Needed(request.Suite))
         {
             string[] which = request.Edit is { } editing ? ["--edit", editing.Id]
                 : request.After is { } after ? ["--name", request.Name, request.Reset ? "--after-reset" : "--after", after.Id]

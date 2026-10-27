@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.IO;
 using System.Windows;
 using AutoTestRunner.Cli.Views;
 using AutoTestRunner.Driving;
@@ -44,8 +43,8 @@ internal static class WatchedRun
         void ShowLauncher(string folder, Options last, string? tick = null)
         {
             found = LauncherWindow.Reload(found, folder);
-            var open = found.FirstOrDefault(each => SamePath(each.Folder, folder)) ?? found[0];
-            if (tick is not null && open.Suite?.Cases.FirstOrDefault(item => SamePath(item.File, tick)) is { } built)
+            var open = found.FirstOrDefault(each => SuiteFinder.SamePath(each.Folder, folder)) ?? found[0];
+            if (tick is not null && open.Suite?.Cases.FirstOrDefault(item => SuiteFinder.SamePath(item.File, tick)) is { } built)
                 last = last with { Cases = built.Number.ToString(CultureInfo.InvariantCulture) };
             var launcher = new LauncherWindow(found, open, last);
             launcher.Closed += (_, _) =>
@@ -111,9 +110,6 @@ internal static class WatchedRun
     private static void AfterEnded(Window panel, Task ended, Action then) =>
         Task.WhenAny(ended, Task.Delay(TimeSpan.FromSeconds(30))).ContinueWith(_ => panel.Dispatcher.BeginInvoke(then), TaskScheduler.Default);
 
-    private static bool SamePath(string one, string other) =>
-        string.Equals(Path.GetFullPath(one).TrimEnd('\\', '/'), Path.GetFullPath(other).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
-
     // Shows the panel, and starts the run once it is on the screen.
     private static RunPanel Start(Suite suite, IReadOnlyList<Case> cases, Options options, bool canRunAgain, Action<ExitCode> ended)
     {
@@ -122,7 +118,7 @@ internal static class WatchedRun
             StopAtCheckpoints = options.Mode == "pause-at-checkpoints",
             StepByStep = options.Mode == "step-by-step",
         };
-        var folder = Results.NewFolder(options.Results ?? Path.Combine(suite.Folder, "results"));
+        var folder = Results.NewFolder(options.ResultsFolder(suite));
         var results = new Results(folder, Console.Out);
         var panel = new RunPanel(suite, cases, control, folder, canRunAgain);
         panel.Closed += (_, _) => control.RequestStop();
@@ -134,33 +130,8 @@ internal static class WatchedRun
                 using var driver = Runs.Driver(control, results, () => panel.Bounds, panel.KeepClear);
                 var runner = Runs.Runner(suite, driver, panel, control, results, options);
                 panel.Attach(runner, driver);
-                results.Log("START", $"{suite.Name}: {runner.Exe}");
-                var code = ExitCode.Passed;
-                try
-                {
-                    if (runner.Missing() is [_, ..] missing)
-                    {
-                        results.Log("ERROR", "Missing: " + string.Join(", ", missing));
-                        panel.Tell($"These can't be found, so the tests can't start:\n\n{string.Join("\n", missing)}");
-                        code = ExitCode.Missing;
-                        return;
-                    }
-                    runner.Prepare(cases);
-                    code = runner.Run(cases) > 0 ? ExitCode.Failed : ExitCode.Passed;
-                }
-                catch (Exception ex)
-                {
-                    results.Log("ERROR", ex.ToString());
-                    Crashes.Log(ex, $"Running {suite.Name}. Its run.log is in {folder}.");
-                    runner.Capture("unhandled");
-                    panel.Tell($"Something went wrong in the runner itself. It's in errors.log in {Crashes.Folder}:\n\n" + ex.Message);
-                    code = ExitCode.ScriptError;
-                }
-                finally
-                {
-                    ended(code);
-                    panel.RunEnded();
-                }
+                ended(Runs.Play(suite, runner, cases, results, panel.Tell));
+                panel.RunEnded();
             });
             worker.SetApartmentState(ApartmentState.MTA);
             worker.IsBackground = true;

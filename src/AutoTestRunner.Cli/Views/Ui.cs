@@ -89,9 +89,11 @@ internal static class Ui
         new() { Text = text.ToUpperInvariant(), FontSize = 10.5, FontWeight = FontWeights.SemiBold, Foreground = Muted, Margin = new Thickness(0, top, 0, 4) };
 
     /// <summary>A button that is just an icon, with what it does and its key in the tooltip.</summary>
-    public static Button IconButton(string glyph, string tip, Action click, double size = 18)
+    public static Button IconButton(string glyph, string tip, Action click, double size = 18, Thickness? padding = null)
     {
         var button = new Button { Content = Glyph(glyph, size), ToolTip = tip, Style = (Style)Theme["IconButton"] };
+        if (padding is { } around)
+            button.Padding = around;
         // An icon says nothing to a screen reader, or to a test that drives the window: the tip names it.
         AutomationProperties.SetName(button, tip);
         button.Click += (_, _) => click();
@@ -129,6 +131,22 @@ internal static class Ui
         AutomationProperties.SetName(button, text);
         button.Click += (_, _) => click();
         return button;
+    }
+
+    /// <summary>A dialog's two answers at its foot, side by side and the same size: back, which Esc presses, and go, which Enter does.</summary>
+    public static UniformGrid Answers(Button back, Button go)
+    {
+        (back.IsCancel, go.IsDefault) = (true, true);
+        back.Margin = new Thickness(0, 0, 4, 0);
+        go.Margin = new Thickness(4, 0, 0, 0);
+        var answers = new UniformGrid { Columns = 2, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 18, 0, 0) };
+        foreach (var button in new[] { back, go })
+        {
+            button.MinWidth = 110;
+            button.Padding = new Thickness(14, 8, 14, 8);
+            answers.Children.Add(button);
+        }
+        return answers;
     }
 
     /// <summary>A rounded patch of colour around something, such as a state or a count.</summary>
@@ -186,6 +204,40 @@ internal static class Ui
         };
         window.ShowDialog();
         return text;
+    }
+
+    /// <summary>
+    /// A menu under a control of the kept values and suite variables, each as ${name} with what it holds now. The one
+    /// clicked is given to put, written as ${name}.
+    /// </summary>
+    public static void ValuesMenu(FrameworkElement under, IReadOnlyList<(string Name, string Text)> values, Action<string> put)
+    {
+        var menu = new ContextMenu { PlacementTarget = under, Placement = PlacementMode.Bottom };
+        foreach (var (name, now) in values)
+        {
+            var written = "${" + name + "}";
+            var header = new DockPanel { MinWidth = 300 };
+            var shown = Words(now.Length > 46 ? now[..46] + "…" : now, 11.5, Faint, wrap: false);
+            shown.Margin = new Thickness(16, 0, 0, 0);
+            DockPanel.SetDock(shown, Dock.Right);
+            header.Children.Add(shown);
+            header.Children.Add(new TextBlock { Text = written, FontFamily = Mono, FontSize = 12 });
+            var item = new MenuItem { Header = header, ToolTip = now };
+            item.Click += (_, _) => put(written);
+            menu.Items.Add(item);
+        }
+        if (values.Count == 0)
+            menu.Items.Add(new MenuItem { Header = "Nothing kept yet", IsEnabled = false });
+        menu.IsOpen = true;
+    }
+
+    /// <summary>Puts text in a box where its caret is, and leaves the caret after it.</summary>
+    public static void InsertAtCaret(TextBox box, string text)
+    {
+        var at = box.CaretIndex;
+        box.Text = box.Text.Insert(at, text);
+        box.CaretIndex = at + text.Length;
+        box.Focus();
     }
 
     /// <summary>How long something took, as people say it: 0.4 s, 12 s, 2 min 5 s.</summary>

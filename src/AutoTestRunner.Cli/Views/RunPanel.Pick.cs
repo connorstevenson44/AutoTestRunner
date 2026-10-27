@@ -25,21 +25,7 @@ internal sealed partial class RunPanel
             var back = OnUi(() => Ask(Ui.Accent, Icons.Pick, "Pick the control",
                 $"Click the control in {_suite.App.Window} that the step should use. The click doesn't reach the app. Hold Shift to pick exactly what is under the mouse. Esc goes back.",
                 [(Icons.Back, "Back")]));
-            var hook = OnUi(() => new RecordingHook(
-                (x, y, _) =>
-                {
-                    if (!app.Contains(Native.ProcessOf(Native.WindowAt(x, y))))
-                        return false;
-                    clicked.TrySetResult((x, y, RecordingHook.ShiftHeld));
-                    return true;
-                },
-                keys =>
-                {
-                    if (keys == "Esc")
-                        clicked.TrySetResult(null);
-                    return false;
-                },
-                () => false));
+            var hook = OnUi(() => RecordingHook.PickOnce(app, at => clicked.TrySetResult(at)));
             Task.WaitAny(clicked.Task, back);
             OnUi(hook.Dispose);
             if (back.IsCompleted || clicked.Task.Result is not { } at)

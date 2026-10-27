@@ -1,3 +1,4 @@
+using System.IO;
 using AutoTestRunner.Driving;
 using AutoTestRunner.Scripting;
 
@@ -66,4 +67,7 @@ public sealed record Options
 
     /// <summary>The suite's cases that --cases and --tags pick, in order.</summary>
     public IReadOnlyList<Case> Pick(Suite suite) => Suite.Tagged(suite.Select(Cases), Tags);
+
+    /// <summary>The folder each run's results go in a folder of their own in: --results, or the suite's results folder.</summary>
+    public string ResultsFolder(Suite suite) => Results ?? Path.Combine(suite.Folder, "results");
 }

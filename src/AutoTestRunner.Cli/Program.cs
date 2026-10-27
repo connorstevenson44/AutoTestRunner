@@ -79,15 +79,15 @@ public static class Program
             return (int)ExitCode.ScriptError;
         }
 
-        if (NeedsAdministrator(suite) && options.Unattended)
+        if (Elevation.Needed(suite) && options.Unattended)
         {
             Console.Error.WriteLine($"{suite.Name} needs to run as administrator.");
             return (int)ExitCode.NotAdministrator;
         }
-        if (NeedsAdministrator(suite))
+        if (Elevation.Needed(suite))
             return Elevate(args);
         return options.Unattended
-            ? RunUnattended(suite, cases, options, Results.NewFolder(options.Results ?? Path.Combine(suite.Folder, "results")))
+            ? RunUnattended(suite, cases, options, Results.NewFolder(options.ResultsFolder(suite)))
             : WatchedRun.Run(suite, cases, options);
     }
 
@@ -104,14 +104,11 @@ public static class Program
         var asked = folder is not null && SuiteFinder.IsSuite(folder) ? Path.GetFullPath(folder) : null;
         var places = folder is null || asked is not null ? SuiteFinder.Places(AppContext.BaseDirectory, Environment.CurrentDirectory, asked) : [folder];
         var found = SuiteFinder.Find(places).Select(FoundSuite.Load).ToList();
-        if (asked is not null && !found.Any(each => SamePath(each.Folder, asked)))
-            found.Insert(0, FoundSuite.Load(asked));
-        if (found.Count == 0)
+        if ((asked is null ? found.FirstOrDefault() : Among(found, asked)) is not { } chosen)
         {
             Console.Error.WriteLine($"There are no suites in {(folder is null ? string.Join(", ", places.Distinct()) : folder)}, or the folders below. A suite is a folder with a suite.json.");
             return (int)ExitCode.ScriptError;
         }
-        var chosen = asked is null ? found[0] : found.First(each => SamePath(each.Folder, asked));
 
         if (options.Cases is not null && chosen.Suite is { } suite)
         {
@@ -125,7 +122,7 @@ public static class Program
                 return (int)ExitCode.ScriptError;
             }
         }
-        if ((asked is not null || found.Count == 1 || options.Start) && NeedsAdministrator(chosen.Suite))
+        if ((asked is not null || found.Count == 1 || options.Start) && Elevation.Needed(chosen.Suite))
             return Elevate(args);
         return WatchedRun.Launch(found, chosen, options);
     }
@@ -148,12 +145,19 @@ public static class Program
             Console.Error.WriteLine(ex.Message);
             return (int)ExitCode.ScriptError;
         }
-        if (NeedsAdministrator(suite))
+        if (Elevation.Needed(suite))
             return Elevate(args);
         var found = SuiteFinder.Find(SuiteFinder.Places(AppContext.BaseDirectory, Environment.CurrentDirectory, suite.Folder)).Select(FoundSuite.Load).ToList();
-        if (!found.Any(each => SamePath(each.Folder, suite.Folder)))
-            found.Insert(0, FoundSuite.Load(suite.Folder));
-        return WatchedRun.Launch(found, found.First(each => SamePath(each.Folder, suite.Folder)), options with { Edit = null, After = null, AfterReset = null, Name = null }, request);
+        return WatchedRun.Launch(found, Among(found, suite.Folder), options with { Edit = null, After = null, AfterReset = null, Name = null }, request);
+    }
+
+    // The suite in this folder among those found, put first when it wasn't found, as when it is further away.
+    private static FoundSuite Among(List<FoundSuite> found, string folder)
+    {
+        if (found.FirstOrDefault(each => SuiteFinder.SamePath(each.Folder, folder)) is { } there)
+            return there;
+        found.Insert(0, FoundSuite.Load(folder));
+        return found[0];
     }
 
     // Says what of the suite's software is there, then installs what was asked for, or what is missing once the person
@@ -217,7 +221,6 @@ public static class Program
     }
 
     // A suite that installs services needs administrator, and so does driving an app that runs as administrator.
-    private static bool NeedsAdministrator(Suite? suite) => suite?.App.RunAsAdmin == true && !Elevation.IsAdministrator;
 
     private static int Elevate(string[] args)
     {
@@ -226,9 +229,6 @@ public static class Program
         Console.Error.WriteLine("The tests need to run as administrator, and that was declined.");
         return (int)ExitCode.NotAdministrator;
     }
-
-    private static bool SamePath(string one, string other) =>
-        string.Equals(Path.GetFullPath(one).TrimEnd('\\', '/'), Path.GetFullPath(other).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
 
     private static int RunUnattended(Suite suite, IReadOnlyList<Case> cases, Options options, string resultsFolder)
     {
@@ -240,30 +240,10 @@ public static class Program
         {
             using var driver = Runs.Driver(control, results);
             var runner = Runs.Runner(suite, driver, new ConsoleRunView(), control, results, options);
-            results.Log("START", $"{suite.Name}: {runner.Exe}");
-            if (runner.Missing() is [_, ..] missing)
-            {
-                results.Log("ERROR", "Missing: " + string.Join(", ", missing));
-                code = ExitCode.Missing;
-                return;
-            }
-            try
-            {
-                runner.Prepare(cases);
-                var failed = runner.Run(cases);
-                code = failed > 0 ? ExitCode.Failed : ExitCode.Passed;
-            }
-            catch (Exception ex)
-            {
-                results.Log("ERROR", ex.ToString());
-                Crashes.Log(ex, $"Running {suite.Name} unattended. Its run.log is in {resultsFolder}.");
-                runner.Capture("unhandled");
-                code = ExitCode.ScriptError;
-            }
-            finally
-            {
+            code = Runs.Play(suite, runner, cases, results, tell: _ => { });
+            // The app is closed for the next job on the machine, unless it was never started.
+            if (code != ExitCode.Missing)
                 driver.CloseAll(runner.Exe);
-            }
         });
         worker.SetApartmentState(ApartmentState.MTA);
         worker.Start();

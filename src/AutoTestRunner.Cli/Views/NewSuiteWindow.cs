@@ -37,8 +37,7 @@ internal static partial class NewSuiteWindow
         {
             stack.Children.Remove(box);
             var row = new DockPanel();
-            var button = Ui.IconButton(glyph, tip, click, 14);
-            button.Padding = new Thickness(7, 4, 7, 4);
+            var button = Ui.IconButton(glyph, tip, click, 14, new Thickness(7, 4, 7, 4));
             DockPanel.SetDock(button, Dock.Right);
             row.Children.Add(button);
             row.Children.Add(box);
