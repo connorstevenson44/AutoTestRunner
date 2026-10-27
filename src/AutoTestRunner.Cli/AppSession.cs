@@ -81,7 +81,7 @@ internal sealed class AppSession : IDisposable
                     then(null, null);
                     return;
                 }
-                var window = Desktop.WindowAt(point.X, point.Y);
+                var window = Native.WindowAt(point.X, point.Y);
                 Do((driver, inspector) =>
                 {
                     // The app's first window may have closed since it started, as a sign-in window does.
