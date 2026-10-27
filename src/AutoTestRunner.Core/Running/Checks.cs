@@ -73,11 +73,72 @@ public static class Checks
             "clipboard" => new Shape(new Subject(SubjectKind.Clipboard, "Clipboard"), "contains", subject, () => Has(machine.Clipboard(), subject)),
             "atMost" => Compare(Kept(), subject, Text("to"), atMost: true),
             "atLeast" => Compare(Kept(), subject, Text("to"), atMost: false),
+            "dbValue" => DbValue((context.Database ?? throw new ScriptException("The dbValue check needs the suite's databases."))(subject), Text("sql"),
+                Parameters(node["params"], scope), Optional("equals"), Optional("contains"), Optional("matches"), Optional("rows"), Connections(context)),
+            "queue" => Queue((context.Queue ?? throw new ScriptException("The queue check needs the suite's queues."))(subject), Optional("count"), Optional("has"), Connections(context)),
             _ => throw new ScriptException($"There is no {kind} check."),
         };
 
         var within = node["within"] is { } seconds ? TimeSpan.FromSeconds(double.Parse(scope.Expand(seconds.ToString()), CultureInfo.InvariantCulture)) : TimeSpan.FromSeconds(check.Seconds);
         return new Check(Optional("label") ?? Label(check.Subject, check.How, check.Expected), check.Subject, check.How, check.Expected, within, check.Test);
+    }
+
+    /// <summary>A query's or check's params, such as { "id": "${order}" }, with their variables filled in.</summary>
+    public static IReadOnlyDictionary<string, string> Parameters(JsonNode? node, VariableScope scope) =>
+        (node as JsonObject ?? []).ToDictionary(pair => pair.Key.TrimStart('@', ':'), pair => scope.Expand(pair.Value?.ToString() ?? ""), StringComparer.Ordinal);
+
+    private static IConnections Connections(CheckContext context) =>
+        context.Connections ?? throw new ScriptException("autotest can't reach databases or queues here.");
+
+    // The first value a query reads, against what is wanted; with none of them, that it reads a row at all.
+    private static Shape DbValue(DatabaseSettings database, string sql, IReadOnlyDictionary<string, string> parameters, string? equals, string? contains, string? matches, string? rows,
+        IConnections connections)
+    {
+        var subject = Sources.Subject(database) with { Detail = Short(sql.Trim()) };
+        QueryResult Read() => connections.Query(database, sql, parameters, TimeSpan.FromSeconds(30));
+        if (rows is not null)
+        {
+            return new(subject with { Detail = "rows" }, "=", rows, () =>
+            {
+                var found = Read().Count.ToString(CultureInfo.InvariantCulture);
+                return new Seen(found == rows, found);
+            });
+        }
+        Seen Value(Func<string, bool> test)
+        {
+            var result = Read();
+            var full = result.Rows.Count > 1 ? result.Table() : null;
+            return new Seen(result.Rows.Count > 0 && test(result.First), result.Rows.Count == 0 ? "no rows" : Short(result.First), full);
+        }
+        if (equals is not null)
+            return new(subject, "=", equals, () => Value(found => found == equals));
+        if (contains is not null)
+            return new(subject, "contains", contains, () => Value(found => found.Contains(contains, StringComparison.Ordinal)));
+        if (matches is not null)
+            return new(subject, "matches", matches, () => Value(found => Regex.IsMatch(found, matches)));
+        return new(subject, Is, "there", () => Value(_ => true));
+    }
+
+    // How many messages are waiting, or that one of them has the text, without taking them off the queue.
+    private static Shape Queue(QueueSettings queue, string? count, string? has, IConnections connections)
+    {
+        if (count is not null)
+        {
+            return new(Sources.Subject(queue, "messages"), "=", count, () =>
+            {
+                var found = connections.Count(queue).ToString(CultureInfo.InvariantCulture);
+                return new Seen(found == count, found);
+            });
+        }
+        var wanted = has ?? "";
+        return new(Sources.Subject(queue, "a message"), "contains", wanted, () =>
+        {
+            var waiting = connections.Peek(queue, 500);
+            if (waiting.FirstOrDefault(body => body.Contains(wanted, StringComparison.Ordinal)) is { } found)
+                return new Seen(true, Short(found), Long(found));
+            return new Seen(false, waiting.Count == 0 ? "no messages" : $"{waiting.Count} message{(waiting.Count == 1 ? "" : "s")}, none with it",
+                waiting.Count == 0 ? null : string.Join("\n\n", waiting.Take(20)));
+        });
     }
 
     /// <summary>A check in words, for the log when the script gives it no label: orders.json orders:1001:total = 26.00.</summary>

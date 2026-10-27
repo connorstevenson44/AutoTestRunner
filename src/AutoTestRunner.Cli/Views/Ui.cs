@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using AutoTestRunner.Running;
@@ -18,6 +19,8 @@ internal static class Ui
     // A pick tool's colour, as the outline round the control it is used on: the outline, its ink, and its band.
     public static readonly Brush Amber = Brush("#FF8C00"), AmberInk = Brush("#B35C00"), AmberSoft = Brush("#FFF4E5");
     public static readonly Brush Pending = Brush("#D5DCE4"), Skip = Brush("#A0AAB4");
+    // Databases and queues: what the app keeps and sends, as against its controls.
+    public static readonly Brush Data = Brush("#0B6A6A"), DataSoft = Brush("#E3F3F2"), DataEdge = Brush("#B5DCD9");
     public static readonly Brush Terminal = Brush("#1E1E1E"), TerminalText = Brush("#D4D4D4"), TerminalError = Brush("#F48771");
     public static readonly Brush TerminalCommand = Brush("#9CDCFE"), TerminalScript = Brush("#8A8A8A");
     public static readonly FontFamily Text = new("Segoe UI"), Mono = new("Cascadia Mono, Consolas, Courier New");
@@ -41,11 +44,21 @@ internal static class Ui
 
     public static TextBlock Glyph(string glyph, double size = 16, Brush? color = null)
     {
-        var text = new TextBlock { Text = glyph, FontFamily = Icons.Font, FontSize = size, VerticalAlignment = VerticalAlignment.Center };
+        var text = new TextBlock { FontFamily = Icons.Font, FontSize = size, VerticalAlignment = VerticalAlignment.Center };
+        if (Icons.Drawn(glyph, size) is { } drawn)
+            text.Inlines.Add(new InlineUIContainer(drawn) { BaselineAlignment = BaselineAlignment.Center });
+        else
+            text.Text = glyph;
         if (color is not null)
             text.Foreground = color;
         return text;
     }
+
+    /// <summary>A glyph inside a line of text, such as a check's subject: a run of the icon font, or a drawn icon.</summary>
+    public static Inline GlyphInline(string glyph, double size, Brush color) =>
+        Icons.Drawn(glyph, size, color) is { } drawn
+            ? new InlineUIContainer(drawn) { BaselineAlignment = BaselineAlignment.Center }
+            : new Run(glyph) { FontFamily = Icons.Font, Foreground = color, FontSize = size, BaselineAlignment = BaselineAlignment.Center };
 
     /// <summary>A glyph that turns, for something that is going on.</summary>
     public static TextBlock Spinner(double size = 12, Brush? color = null)

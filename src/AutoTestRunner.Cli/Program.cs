@@ -1,5 +1,6 @@
 using System.IO;
 using AutoTestRunner.Cli.Views;
+using AutoTestRunner.Data;
 using AutoTestRunner.Driving;
 using AutoTestRunner.FlaUI;
 using AutoTestRunner.Running;
@@ -185,7 +186,7 @@ public static class Program
         var worker = new Thread(() =>
         {
             using var driver = new FlaUiDriver(control, () => null, _ => { }, note => results.Log("NOTE", note));
-            var runner = new Runner(suite, driver, new WindowsMachine(), new ConsoleRunView(), control, results, options.Variables);
+            var runner = new Runner(suite, driver, new WindowsMachine(), new ConsoleRunView(), control, results, options.Variables) { Connections = new Connections(new WindowsMachine()) };
             results.Log("START", $"{suite.Name}: {runner.Exe}");
             if (runner.Missing() is [_, ..] missing)
             {

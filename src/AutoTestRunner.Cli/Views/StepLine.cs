@@ -57,6 +57,8 @@ internal static class StepLine
             PartKind.Control => (null, Ui.Accent, Ui.AccentSoft, Ui.AccentEdge),
             PartKind.Window => (Icons.App, Ui.Accent, Ui.AccentSoft, Ui.AccentEdge),
             PartKind.Service => (Icons.Service, Ui.Accent, Ui.AccentSoft, Ui.AccentEdge),
+            PartKind.Database => (Icons.Database, Ui.Data, Ui.DataSoft, Ui.DataEdge),
+            PartKind.Queue => (Icons.Mail, Ui.Data, Ui.DataSoft, Ui.DataEdge),
             PartKind.File => (Icons.Document, Ui.Ink, Ui.Surface, Ui.Line),
             PartKind.Key => (null, Ui.Ink, Brushes.White, Ui.Pending),
             _ => ((string?)null, Ui.Ink, Ui.Surface, Ui.Line),
@@ -72,7 +74,7 @@ internal static class StepLine
         content.Children.Add(new TextBlock
         {
             Text = part.Text, FontSize = data ? size - 0.5 : size, Foreground = color, FontFamily = data ? Ui.Mono : Ui.Text,
-            FontWeight = part.Kind is PartKind.Control or PartKind.Window or PartKind.Service ? FontWeights.SemiBold : FontWeights.Normal,
+            FontWeight = part.Kind is PartKind.Control or PartKind.Window or PartKind.Service or PartKind.Database or PartKind.Queue ? FontWeights.SemiBold : FontWeights.Normal,
             TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center,
         });
         var badge = new Border

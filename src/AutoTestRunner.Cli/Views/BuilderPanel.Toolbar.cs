@@ -49,6 +49,14 @@ internal sealed partial class BuilderPanel
         ("run", "Run a program", "Run a program with arguments"),
     ];
 
+    private static readonly (string Kind, string Title, string Tip)[] DataSteps =
+    [
+        ("query", "Query a database", "Run SQL on one of suite.json's databases, and keep the first value it reads"),
+        ("send", "Send a message", "Put a message on one of suite.json's queues"),
+        ("receive", "Receive a message", "Take the next message off a queue, waiting for one, and check what it says"),
+        ("purge", "Empty a queue", "Take every message off a queue"),
+    ];
+
     // Every button of both toolbars, to turn off while the builder is busy; and each pick tool's button, with the tools
     // it offers, to show which is waiting for a control.
     private readonly List<ButtonBase> _tools = [];
@@ -81,6 +89,8 @@ internal sealed partial class BuilderPanel
         steps.Children.Add(MenuTool(Icons.App, "In the app", "Open tree items, drag and drop, open a tab, or use another window.", menu => ListSteps(menu, AppSteps, Icons.App)));
         steps.Children.Add(MenuTool(Icons.Computer, "On this computer", "Copy, delete or write files, change settings, start and stop services, or run a program.",
             menu => ListSteps(menu, ComputerSteps, Icons.Computer)));
+        steps.Children.Add(MenuTool(Icons.Database, "Databases and queues", "Query a database, or send, receive or empty a message queue, as named in suite.json.",
+            menu => ListSteps(menu, DataSteps, Icons.Database)));
 
         var picks = new WrapPanel();
         picks.Children.Add(PickButton(Icons.Pointer, "Click", PickTools.Click));

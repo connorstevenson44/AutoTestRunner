@@ -121,6 +121,86 @@
       },
       "additionalProperties": false
     },
+    "databases": {
+      "type": "object",
+      "description": "Databases that query steps and dbValue checks use, by a name of your own.",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "kind",
+          "connection"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "sqlServer",
+              "postgres",
+              "oracle",
+              "mySql",
+              "sqlite"
+            ],
+            "description": "sqlServer for SQL Server, Express and LocalDB; mySql for MySQL and MariaDB."
+          },
+          "connection": {
+            "type": "string",
+            "description": "Its connection string, as its .NET driver takes it; ${variables} allowed, so a password can come from --var."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "queues": {
+      "type": "object",
+      "description": "Message queues that send, receive and purge steps and queue checks use, by a name of your own.",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "kind",
+          "queue"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "rabbitMq",
+              "ibmMq",
+              "msmq"
+            ]
+          },
+          "queue": {
+            "type": "string",
+            "description": "The queue's name, or for MSMQ its path, such as .\\private$\\orders."
+          },
+          "connection": {
+            "type": "string",
+            "description": "The broker: amqp://user:password@host:5672/ for RabbitMQ, host(port) for IBM MQ."
+          },
+          "channel": {
+            "type": "string",
+            "description": "IBM MQ's server connection channel, such as DEV.APP.SVRCONN."
+          },
+          "queueManager": {
+            "type": "string",
+            "description": "IBM MQ's queue manager, such as QM1."
+          },
+          "user": {
+            "type": "string",
+            "description": "IBM MQ's user, when the channel asks for one."
+          },
+          "password": {
+            "type": "string",
+            "description": "IBM MQ's password; ${variables} allowed."
+          },
+          "format": {
+            "enum": [
+              "xml",
+              "text"
+            ],
+            "description": "How an MSMQ message's text is written: xml, as .NET's XmlMessageFormatter does (the default), or plain text."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
     "screen": {
       "type": "object",
       "properties": {

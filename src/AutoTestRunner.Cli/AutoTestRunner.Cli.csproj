@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AutoTestRunner.Core\AutoTestRunner.Core.csproj" />
+    <ProjectReference Include="..\AutoTestRunner.Data\AutoTestRunner.Data.csproj" />
     <ProjectReference Include="..\AutoTestRunner.FlaUI\AutoTestRunner.FlaUI.csproj" />
   </ItemGroup>
 

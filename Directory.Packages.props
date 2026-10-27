@@ -8,8 +8,18 @@
 
   <ItemGroup>
     <PackageVersion Include="FlaUI.UIA3" Version="5.0.0" />
+    <PackageVersion Include="IBMMQDotnetClient" Version="10.0.0.5" />
+    <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.1.1" />
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.13" />
+    <PackageVersion Include="MySqlConnector" Version="2.6.1" />
+    <PackageVersion Include="Npgsql" Version="10.0.2" />
+    <PackageVersion Include="Oracle.ManagedDataAccess.Core" Version="23.26.301" />
+    <PackageVersion Include="RabbitMQ.Client" Version="7.2.1" />
     <PackageVersion Include="System.CommandLine" Version="2.0.13" />
     <PackageVersion Include="System.ServiceProcess.ServiceController" Version="10.0.13" />
+    <!-- Not used directly: SqlClient and Oracle's driver bring in versions with known vulnerabilities, and this is the
+         patched one. -->
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
     <PackageVersion Include="xunit.v3" Version="4.0.2" />
   </ItemGroup>
 

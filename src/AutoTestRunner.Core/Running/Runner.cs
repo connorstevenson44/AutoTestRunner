@@ -57,6 +57,15 @@ public sealed partial class Runner
 
     public RunControl Control { get; }
 
+    /// <summary>The suite's databases and queues, through their drivers; without them, a step that uses one is a script error.</summary>
+    public IConnections? Connections { get; init; }
+
+    // The same, with every query and message shown as a command is.
+    private IConnections Reported => _reported ??= new ReportingConnections(
+        Connections ?? throw new ScriptException("autotest can't reach databases or queues here."), _view, _results);
+
+    private IConnections? _reported;
+
     public VariableScope Globals => _globals;
 
     /// <summary>The exe to start, with its variables filled in and relative to the suite folder.</summary>
@@ -770,10 +779,92 @@ public sealed partial class Runner
                 break;
             }
 
+            case "query":
+            {
+                var database = Database(Required("query"), scope);
+                var sql = Required("sql");
+                ShowStep(Line(ActivityKind.Database, Part.Verb("Query"), Sources.Part(database), Part.Value(OneLine(sql))) with { Command = sql });
+                QueryResult result;
+                try
+                {
+                    result = Reported.Query(database, sql, Checks.Parameters(step["params"], scope), Within(TimeSpan.FromSeconds(30)));
+                }
+                catch (Exception ex) when (ex is not (StopRunException or ScriptException))
+                {
+                    FailStep(new StepFailure($"The query on {database.Name} failed: {ex.Message}", "rows", ex.Message));
+                    break;
+                }
+                if (step["as"]?.GetValue<string>() is { } keep)
+                {
+                    scope.Set(keep, Value.Of(result.First, new Dictionary<string, string>
+                    {
+                        ["rows"] = result.Count.ToString(CultureInfo.InvariantCulture),
+                        ["output"] = result.Table(int.MaxValue),
+                    }));
+                }
+                break;
+            }
+
+            case "send":
+            {
+                var queue = Queue(Required("send"), scope);
+                var body = step["file"] is { } file ? File.ReadAllText(SuitePath(scope.Expand(file.ToString()))) : Text("message")!;
+                ShowStep(Line(ActivityKind.Queue, Part.Verb("Send"), Part.Value(OneLine(body)), Part.Word("to"), Sources.Part(queue)) with { Command = body });
+                Queued(queue, "send", () => Reported.Send(queue, body));
+                break;
+            }
+
+            case "receive":
+            {
+                var queue = Queue(Required("receive"), scope);
+                var wanted = WantedText(step, scope, first: null);
+                var line = Line(ActivityKind.Queue, Part.Verb("Receive"), Part.Word("from"), Sources.Part(queue));
+                ShowStep(line with { Command = Sources.Line(queue) });
+                _view.ShowWait(line);
+                var within = Control.Scale(Within(TimeSpan.FromSeconds(10)));
+                string? body = null;
+                Queued(queue, "receive from", () => body = Reported.Receive(queue, within));
+                if (body is null)
+                    throw new StuckException($"receive a message from {queue.Name}", $"Nothing came in {within.TotalSeconds:0} s.");
+                if (wanted.Expected.Length > 0 && !wanted.Test(body))
+                    FailStep(new StepFailure($"The message from {queue.Name} isn't the one expected: wanted {wanted.Expected}, got {OneLine(body)}", wanted.Expected, OneLine(body)));
+                if (step["as"]?.GetValue<string>() is { } keep)
+                    scope.Set(keep, Value.Of(body));
+                break;
+            }
+
+            case "purge":
+            {
+                var queue = Queue(Required("purge"), scope);
+                ShowStep(Line(ActivityKind.Queue, Part.Verb("Empty"), Sources.Part(queue)));
+                Queued(queue, "empty", () => Reported.Purge(queue));
+                break;
+            }
+
             case "checkpoint":
                 Checkpoint(step, scope);
                 break;
         }
+    }
+
+    // A message step: when the broker can't be reached or refuses, the step fails and the case carries on.
+    private void Queued(QueueSettings queue, string what, Action work)
+    {
+        try
+        {
+            work();
+        }
+        catch (Exception ex) when (ex is not (StopRunException or ScriptException))
+        {
+            FailStep(new StepFailure($"Couldn't {what} {queue.Name}: {ex.Message}", "done", ex.Message));
+        }
+    }
+
+    // SQL or a message on one line, short enough for a step's row: the whole of it shows with the command.
+    private static string OneLine(string text)
+    {
+        var line = Regex.Replace(text.Trim(), @"\s+", " ");
+        return line.Length <= 60 ? line : line[..59] + "…";
     }
 
     private void Call(JsonObject step, VariableScope scope)
@@ -1025,7 +1116,35 @@ public sealed partial class Runner
     {
         var target = Targets.Resolve(node, scope, _suite.Elements);
         return new ControlProbe(target, () => _driver.TryFind(target), _driver.Rows);
-    }, _since);
+    }, _since)
+    {
+        Connections = Connections,
+        Database = name => Database(name, scope),
+        Queue = name => Queue(name, scope),
+    };
+
+    /// <summary>A database by its name in suite.json, with its variables filled in.</summary>
+    private DatabaseSettings Database(string name, VariableScope scope) =>
+        _suite.Databases.TryGetValue(name, out var database)
+            ? database with { Connection = scope.Expand(database.Connection) }
+            : throw new ScriptException($"There is no database called {name} in suite.json.");
+
+    /// <summary>A queue by its name in suite.json, with its variables filled in.</summary>
+    private QueueSettings Queue(string name, VariableScope scope)
+    {
+        if (!_suite.Queues.TryGetValue(name, out var queue))
+            throw new ScriptException($"There is no queue called {name} in suite.json.");
+        string? Filled(string? text) => text is null ? null : scope.Expand(text);
+        return queue with
+        {
+            Queue = scope.Expand(queue.Queue),
+            Connection = Filled(queue.Connection),
+            Channel = Filled(queue.Channel),
+            QueueManager = Filled(queue.QueueManager),
+            User = Filled(queue.User),
+            Password = Filled(queue.Password),
+        };
+    }
 
     /// <summary>
     /// Makes a check now, as the builder does to try one before it is added: whether it passes and what it found. Its

@@ -53,6 +53,10 @@ public static class ScriptVocabulary
         ["stopService"] = new(Takes.Text),
         ["setJsonValue"] = new(Takes.Text, "path", "to"),
         ["setAppSetting"] = new(Takes.Text, "key", "to"),
+        ["query"] = new(Takes.Text, "sql", "params"),
+        ["send"] = new(Takes.Text, "message", "file"),
+        ["receive"] = new(Takes.Text, "equals", "contains", "matches"),
+        ["purge"] = new(Takes.Text),
         ["checkpoint"] = new(Takes.Text, "checks", "look", "tools"),
     };
 
@@ -109,6 +113,8 @@ public static class ScriptVocabulary
         ["clipboard"] = [],
         ["atMost"] = ["to"],
         ["atLeast"] = ["to"],
+        ["dbValue"] = ["sql", "params", "equals", "contains", "matches", "rows"],
+        ["queue"] = ["count", "has"],
     };
 
     /// <summary>The checks whose subject is a control in the app, written as a target.</summary>

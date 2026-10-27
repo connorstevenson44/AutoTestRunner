@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using AutoTestRunner.Building;
 using AutoTestRunner.Cli.Views;
+using AutoTestRunner.Data;
 using AutoTestRunner.Driving;
 using AutoTestRunner.FlaUI;
 using AutoTestRunner.Running;
@@ -105,7 +106,7 @@ internal sealed class BuildSession
         try
         {
             using var driver = new FlaUiDriver(_control, () => _panel.Bounds, _ => { }, note => results.Log("NOTE", note));
-            var runner = new Runner(suite, driver, new WindowsMachine(), view, _control, results, _options.Variables);
+            var runner = new Runner(suite, driver, new WindowsMachine(), view, _control, results, _options.Variables) { Connections = new Connections(new WindowsMachine()) };
             results.Log("START", $"Building in {suite.Name}: {runner.Exe}");
             try
             {

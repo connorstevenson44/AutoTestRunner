@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The database and queue drivers against real servers: SQLite always, and the others when CI, or a person, starts
+       them and sets ATR_SQLSERVER, ATR_POSTGRES, ATR_ORACLE, ATR_MYSQL, ATR_RABBITMQ, ATR_IBMMQ or ATR_MSMQ. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\AutoTestRunner.Data\AutoTestRunner.Data.csproj" />
+  </ItemGroup>
+
+  <!-- The engine tests' stand-ins for the app and the machine, for cases played through the runner. -->
+  <ItemGroup>
+    <Compile Include="..\AutoTestRunner.Core.Tests\FakeDriver.cs" Link="Fakes\FakeDriver.cs" />
+    <Compile Include="..\AutoTestRunner.Core.Tests\FakeControl.cs" Link="Fakes\FakeControl.cs" />
+    <Compile Include="..\AutoTestRunner.Core.Tests\FakeRunView.cs" Link="Fakes\FakeRunView.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

@@ -14,6 +14,7 @@ internal static class CheckMenu
         "In the app" => Icons.Look,
         "Files" => Icons.Document,
         "Windows" => Icons.App,
+        "Data" => Icons.Database,
         _ => Icons.Values,
     };
 
