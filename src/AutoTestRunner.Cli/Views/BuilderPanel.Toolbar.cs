@@ -331,7 +331,7 @@ internal sealed partial class BuilderPanel
     {
         var fields = parameters.Select(pair => new FormField(pair.Key, pair.Value is { } fallback ? $"{pair.Key} (left empty: {fallback})" : pair.Key, FieldType.Text))
             .Append(new FormField("as", "Keep what it hands back as", FieldType.Text)).ToList();
-        if (FormWindow.Ask(this, $"Use {name}", Icons.Macro, fields, "", new JsonObject(), _suite.Folder, ValuesNow, null, add: "Do it") is not { } given)
+        if (FormWindow.Ask(this, $"Use {name}", Icons.Macro, fields, "", new JsonObject(), _suite, ValuesNow, null, add: "Do it") is not { } given)
             return;
         var call = new JsonObject { ["call"] = name };
         var with = new JsonObject();

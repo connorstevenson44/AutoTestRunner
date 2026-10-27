@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using AutoTestRunner.Building;
 using AutoTestRunner.Running;
+using AutoTestRunner.Scripting;
 
 namespace AutoTestRunner.Cli.Views;
 
@@ -97,7 +98,7 @@ internal sealed class FormWindow : Window
     /// Shows a step's or check's form and returns what was added, or null when it was closed. The JSON given is
     /// left as it was.
     /// </summary>
-    public static JsonObject? Ask(Window owner, string title, string glyph, IReadOnlyList<FormField> fields, string key, JsonObject start, string folder,
+    public static JsonObject? Ask(Window owner, string title, string glyph, IReadOnlyList<FormField> fields, string key, JsonObject start, Suite suite,
         Func<IReadOnlyList<(string Name, string Text)>> values, Action<Action<TargetChoice>>? pick, Func<JsonObject, Task<CheckResult>>? tryIt = null, string add = "Add")
     {
         FormWindow? window = null;
@@ -114,7 +115,7 @@ internal sealed class FormWindow : Window
                 window.Activate();
             });
         };
-        window = new FormWindow(owner, title, glyph, new FormView(fields, start, key, folder, values, fading), start, tryIt, add);
+        window = new FormWindow(owner, title, glyph, new FormView(fields, start, key, suite, values, fading), start, tryIt, add);
         window.ShowDialog();
         return window._answer;
     }

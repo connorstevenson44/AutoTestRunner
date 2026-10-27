@@ -5,13 +5,15 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using AutoTestRunner.Building;
 using AutoTestRunner.Driving;
+using AutoTestRunner.Scripting;
 
 namespace AutoTestRunner.Cli.Views;
 
 /// <summary>
 /// A step's or check's fields, one under another, each with its name over it: a box for words, with a button that
-/// puts in a kept value; a box for a control, with Pick; a box for a path, with Browse; a box for keys, with Record; a
-/// tick for yes or no; and a drop-down for one of a few words. What is typed is written back as the JSON the scripts take.
+/// puts in a kept value and a list that drops down as ${ is typed; a box for a control, with Pick; a box for a path,
+/// with Browse; a box for keys, with Record; a tick for yes or no; and a drop-down for one of a few words. What is typed
+/// is written back as the JSON the scripts take.
 /// </summary>
 internal sealed class FormView : StackPanel
 {
@@ -21,18 +23,19 @@ internal sealed class FormView : StackPanel
     private readonly List<(FormField Field, Func<string> Read, bool Was)> _fields = [];
     private readonly string _key;
     private readonly string _folder;
+    private readonly IReadOnlyList<Suggestion> _calls;
     private readonly Func<IReadOnlyList<(string Name, string Text)>> _values;
     private readonly Action<Action<TargetChoice>>? _pick;
 
     /// <param name="fields">The fields, as Forms gives them.</param>
     /// <param name="json">The step or check as it is now, which the fields start from.</param>
     /// <param name="key">The step's or check's own key, which is written even when its field is empty.</param>
-    /// <param name="folder">The suite folder, which paths browsed to inside it are written from.</param>
+    /// <param name="suite">The suite: paths browsed to in its folder are written from it, and ${ offers its helpers.</param>
     /// <param name="values">The kept values and suite variables, with what each holds now, to put in a box.</param>
     /// <param name="pick">Picks a control in the app, then calls back with how to find it; null where nothing can be picked.</param>
-    public FormView(IReadOnlyList<FormField> fields, JsonObject json, string key, string folder, Func<IReadOnlyList<(string Name, string Text)>> values, Action<Action<TargetChoice>>? pick)
+    public FormView(IReadOnlyList<FormField> fields, JsonObject json, string key, Suite suite, Func<IReadOnlyList<(string Name, string Text)>> values, Action<Action<TargetChoice>>? pick)
     {
-        (_key, _folder, _values, _pick) = (key, folder, values, pick);
+        (_key, _folder, _calls, _values, _pick) = (key, suite.Folder, TypeAhead.Calls(suite.Helpers), values, pick);
         foreach (var field in fields)
             Add(field, json);
     }
@@ -111,7 +114,10 @@ internal sealed class FormView : StackPanel
         if (field.Type == FieldType.Folder)
             Button(Icons.Folder, "Browse for a folder", () => Browse(box, folder: true));
         if (field.Type is not (FieldType.Target or FieldType.Json or FieldType.Number))
-            Button(Icons.Values, "Put in a kept value or a suite variable", () => Ui.ValuesMenu(box, _values(), text => Ui.InsertAtCaret(box, text)));
+        {
+            Button(Icons.Values, "Put in a kept value or a suite variable, or type ${", () => Ui.ValuesMenu(box, _values(), text => Ui.InsertAtCaret(box, text)));
+            TypeAheadList.Attach(box, () => [.. _values().Select(value => new Suggestion(value.Name, value.Text)), .. _calls]);
+        }
         // Last, so it sits right beside the box.
         if (field.Type == FieldType.Keys)
         {

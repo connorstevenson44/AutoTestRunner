@@ -64,6 +64,9 @@ internal static class Ui
     public static TextBlock Spinner(double size = 12, Brush? color = null)
     {
         var glyph = Glyph(Icons.Spinner, size, color);
+        // It turns about its own middle, so it is only as wide as the glyph: left to stretch, as across the rest of a
+        // row, its middle is far to the right of the glyph and it swings round that instead.
+        glyph.HorizontalAlignment = HorizontalAlignment.Left;
         var turn = new RotateTransform();
         glyph.RenderTransformOrigin = new Point(0.5, 0.5);
         glyph.RenderTransform = turn;

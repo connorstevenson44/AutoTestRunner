@@ -150,6 +150,8 @@ buttons still pause, step and stop. Changing the speed from Manual while a step 
 - The chevron on a step folds out its details, as a form; the circle switches it off, so the case skips it and keeps
   it. **+** by the checkpoint adds any check, from a form whose **Try now** runs it against the app as it is. The `{x}`
   by a box, and over the steps, lists the kept values and suite variables with what each holds now, to put one in.
+  Typing `${` in a box drops down the same names as you type, with `readFile` and the suite's helpers in purple, as
+  they do something with what they are given; Enter or Tab puts the one picked in.
 - Shift+click picks a run of steps, Ctrl+click one more. **Make a macro** writes them to `macros/` when you save, with
   the values you tick, such as what is typed, as its parameters, and puts a call to it in their place. **Repeat** runs
   them for each of a list of values or the rows of a data file; **Only if…** runs them when a check passes. The
