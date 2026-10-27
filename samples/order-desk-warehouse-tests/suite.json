@@ -1,0 +1,36 @@
+{
+  "$schema": "../../schema/suite.schema.json",
+  "name": "Order Desk warehouse tests",
+  "app": { "exe": "${exe}", "window": "Order Desk", "startWindow": "Sign in to Order Desk", "status": "statusText" },
+  "variables": {
+    "exe": { "firstExisting": [
+      "../OrderDesk/OrderDesk.exe",
+      "../OrderDesk/bin/Release/net10.0-windows/OrderDesk.exe",
+      "../OrderDesk/bin/Debug/net10.0-windows/OrderDesk.exe"
+    ] },
+    "appConfig": "${folderOf(exe)}\\OrderDesk.dll.config",
+    "dataDir": "${env:LOCALAPPDATA}\\OrderDesk",
+    "database": "${dataDir}\\orderdesk.db",
+    "activityLog": "${dataDir}\\activity.log",
+    "broker": "amqp://guest:guest@localhost:5672/",
+    "shopBroker": "amqp://orderdesk:orderdesk@warehouse.contoso.local:5672/",
+    "user": "clerk",
+    "password": "clerk-demo"
+  },
+  "helpers": {
+    "folderOf": { "regex": "^(.*)\\\\[^\\\\]+$" }
+  },
+  "databases": {
+    "orders": { "kind": "sqlite", "connection": "Data Source=${database};Mode=ReadWrite;Pooling=False" }
+  },
+  "queues": {
+    "warehouseOrders": { "kind": "rabbitMq", "connection": "${broker}", "queue": "warehouse.orders" },
+    "picks": { "kind": "rabbitMq", "connection": "${broker}", "queue": "orderdesk.picks" }
+  },
+  "software": {
+    "erlang": { "title": "Erlang/OTP, which RabbitMQ runs on", "winget": "Erlang.ErlangOTP" },
+    "rabbitMq": { "title": "RabbitMQ", "winget": "RabbitMQ.RabbitMQServer", "present": { "service": "RabbitMQ", "state": "Running" } }
+  },
+  "requires": ["${exe}"],
+  "reset": { "script": "tools/Reset-Warehouse.ps1", "leftovers": "tools/Find-Leftovers.ps1" }
+}

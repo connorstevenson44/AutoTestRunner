@@ -1,0 +1,22 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "OD-WH-05 Leave the warehouse as it was",
+  "needsNote": "Any time",
+  "covers": "Order Desk closed, pointed back at the shop's broker, its data deleted, and both queues empty",
+  "tags": ["smoke", "warehouse"],
+  "steps": [
+    { "closeApp": {} },
+    { "setAppSetting": "${appConfig}", "key": "WarehouseBroker", "to": "${shopBroker}" },
+    { "purge": "warehouseOrders" },
+    { "purge": "picks" },
+    { "delete": "${dataDir}" },
+    { "checkpoint": "Nothing is left behind",
+      "checks": [
+        { "appSetting": "${appConfig}", "key": "WarehouseBroker", "equals": "${shopBroker}" },
+        { "queue": "warehouseOrders", "count": 0 },
+        { "queue": "picks", "count": 0 },
+        { "process": "OrderDesk", "running": false, "within": 10 },
+        { "nothingLeft": {} }
+      ] }
+  ]
+}

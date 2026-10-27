@@ -10,6 +10,6 @@
     { "choose": "product", "option": "Teapot" },
     { "click": { "button": "Submit order" }, "within": 5 },
     { "checkpoint": "Order 1001 is added",
-      "checks": [ { "jsonValue": "${ordersFile}", "path": "orders:1001:customer", "equals": "Katherine Johnson" } ] }
+      "checks": [ { "dbValue": "orders", "sql": "select Customer from Orders where Number = 1001", "equals": "Katherine Johnson" } ] }
   ]
 }

@@ -1,48 +1,38 @@
 using System.Collections.ObjectModel;
-using System.Globalization;
-using System.IO;
 using System.Windows;
-using System.Windows.Threading;
-using Microsoft.Win32;
+using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace OrderDesk;
 
 /// <summary>
-/// The order form on the left, the orders and the catalogue on the right, and the bar at the bottom saying what the
-/// app is doing, which is what the tests wait on.
+/// The order form on the left; the orders, customers, catalogue and activity on the right; and the bar at the bottom
+/// saying what the app is doing, which is what the tests wait on. Each part is in a file of its own: MainWindow.Form,
+/// .Orders, .Files, .Catalogue, .Activity and .Warehouse.
 /// </summary>
 public partial class MainWindow : Window
 {
     private readonly OrderStore _store;
+    private readonly Connections _connections;
     private readonly ObservableCollection<OrderRow> _rows = [];
-    private DispatcherTimer? _connecting;
 
-    public MainWindow()
+    public MainWindow(OrderStore store, Connections connections, string signedIn)
     {
         InitializeComponent();
-        _store = new OrderStore(DataFolder(Environment.GetCommandLineArgs()));
-        foreach (var product in Product.All)
+        (_store, _connections) = (store, connections);
+        SignedInText.Text = $"{connections.ShopName} · {signedIn}";
+        foreach (var product in Product.OnSale)
             ProductBox.Items.Add(product.Name);
-        foreach (var order in _store.Orders)
-            _rows.Add(new OrderRow(order));
+        GiftWrapBox.Content = $"Gift wrap (+{Pricing.Money(Pricing.Settings.GiftWrapFee)})";
+        ExpressBox.Content = $"Express (+{Pricing.Money(Pricing.Settings.ExpressFee)})";
+        NextDayBox.Content = $"Next day (+{Pricing.Money(Pricing.Settings.NextDayFee)})";
         OrdersList.ItemsSource = _rows;
         _rows.CollectionChanged += (_, _) => ShowEmpty();
-        ShowEmpty();
-        CatalogueList.ItemsSource = CatalogueItem.All();
+        Reload();
+        ShowCategories();
         OnFormChanged(this, new RoutedEventArgs());
-        Status($"Ready. {Count(_rows.Count)} in {_store.Folder}.");
-    }
-
-    // --data <folder>, or Order Desk in the local app data folder, which the demo suites look in.
-    private static string DataFolder(string[] args)
-    {
-        var index = Array.IndexOf(args, "--data");
-        if (index >= 0 && index + 1 < args.Length)
-            return Path.GetFullPath(args[index + 1]);
-        var local = Environment.GetEnvironmentVariable("LOCALAPPDATA") is { Length: > 0 } given
-            ? given
-            : Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return Path.Combine(local, "OrderDesk");
+        Closed += async (_, _) => await Disconnect();
+        Status($"Ready. Signed in as {signedIn}. {Count(_rows.Count)} in {_store.Folder}.");
     }
 
     private void Status(string text) => StatusText.Text = text;
@@ -51,162 +41,47 @@ public partial class MainWindow : Window
 
     private static string Count(int orders) => orders == 1 ? "1 order" : $"{orders} orders";
 
-    // ===== The order form =====
-
-    // What is wrong with the form, or null when it can be added.
-    private string? Problem(out Product? product, out int quantity)
+    // Reads the orders and customers again, for a change made by someone else, such as a restore or the database itself.
+    private void Reload()
     {
-        product = Product.Named(ProductBox.SelectedItem as string);
-        quantity = 0;
-        if (CustomerBox.Text.Trim().Length == 0)
-            return "Type the customer's name.";
-        if (product is null)
-            return "Pick a product.";
-        if (!int.TryParse(QuantityBox.Text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out quantity) || quantity is < 1 or > 99)
-            return "The quantity must be a whole number from 1 to 99.";
-        return null;
+        _rows.Clear();
+        foreach (var order in _store.Orders())
+            _rows.Add(new OrderRow(order));
+        CustomersGrid.ItemsSource = _store.Customers();
     }
 
-    private void OnFormChanged(object sender, RoutedEventArgs e)
+    // Ctrl+N starts a new order, and F5 reads everything again.
+    private void OnKey(object sender, KeyEventArgs e)
     {
-        if (!IsInitialized || AddButton is null)
-            return;
-        var problem = Problem(out var product, out var quantity);
-        PriceText.Text = product is null ? "" : $"{Pricing.Money(product.Price)} each";
-        ProblemText.Text = problem ?? "";
-        TotalText.Text = problem is null
-            ? $"Total: {Pricing.Money(Pricing.Total(product!, quantity, GiftWrapBox.IsChecked == true, ExpressBox.IsChecked == true))}"
-            : "";
-        AddButton.IsEnabled = problem is null;
-    }
-
-    private void OnAdd(object sender, RoutedEventArgs e)
-    {
-        if (Problem(out var product, out var quantity) is { } problem)
+        if (e.Key == Key.N && Keyboard.Modifiers == ModifierKeys.Control)
         {
-            Status(problem);
-            return;
+            ClearForm(newOrder: true);
+            Status("New order.");
+            e.Handled = true;
         }
-        var giftWrap = GiftWrapBox.IsChecked == true;
-        var express = ExpressBox.IsChecked == true;
-        var order = _store.Add(CustomerBox.Text.Trim(), product!, quantity, giftWrap, express, NotesBox.Text);
-        _rows.Add(new OrderRow(order));
-        Status($"Added order {order.Number} for {order.Customer}: {Pricing.Money(Pricing.Total(product!, quantity, giftWrap, express))}.");
-        ClearForm();
-    }
-
-    private void OnClear(object sender, RoutedEventArgs e)
-    {
-        ClearForm();
-        Status("Cleared the form.");
-    }
-
-    private void ClearForm()
-    {
-        CustomerBox.Text = "";
-        QuantityBox.Text = "1";
-        GiftWrapBox.IsChecked = false;
-        ExpressBox.IsChecked = false;
-        NotesBox.Text = "";
-        CustomerBox.Focus();
-    }
-
-    // ===== The buttons on an order's row =====
-
-    private void OnShip(object sender, RoutedEventArgs e)
-    {
-        if ((sender as FrameworkElement)?.DataContext is not OrderRow row)
-            return;
-        _store.Ship(row.Order);
-        row.Changed();
-        Status($"Order {row.Number} shipped.");
-    }
-
-    private void OnDelete(object sender, RoutedEventArgs e)
-    {
-        if ((sender as FrameworkElement)?.DataContext is not OrderRow row)
-            return;
-        var answer = MessageBox.Show(this, $"Delete order {row.Number} for {row.Customer}? This can't be undone.", "Delete order",
-            MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
-        if (answer != MessageBoxResult.Yes)
+        else if (e.Key == Key.F5)
         {
-            Status($"Kept order {row.Number}.");
-            return;
+            Reload();
+            ShowActivity();
+            Status($"Refreshed: {Count(_rows.Count)}, {CustomersGrid.Items.Count} customers.");
+            e.Handled = true;
         }
-        _store.Delete(row.Order);
-        _rows.Remove(row);
-        Status($"Deleted order {row.Number}.");
     }
 
-    // ===== The bar at the top =====
-
-    // Writes a line at a time, slowly, as a real export to a slow disk or server would, saying how far it has got.
-    private async void OnExport(object sender, RoutedEventArgs e)
+    private void OnTabChanged(object sender, SelectionChangedEventArgs e)
     {
-        var orders = _store.Orders.ToList();
-        if (orders.Count == 0)
-        {
-            Status("There are no orders to export.");
+        if (e.OriginalSource != Tabs)
             return;
-        }
-        ExportButton.IsEnabled = false;
-        try
+        if (Tabs.SelectedIndex == 1)
+            CustomersGrid.ItemsSource = _store.Customers();
+        else if (Tabs.SelectedIndex == 3)
         {
-            await using var writer = new StreamWriter(_store.ExportFile, append: false);
-            await writer.WriteLineAsync(OrderStore.CsvHeader);
-            for (var index = 0; index < orders.Count; index++)
-            {
-                Status($"Exporting order {index + 1} of {orders.Count}…");
-                await Task.Delay(600);
-                await writer.WriteLineAsync(OrderStore.CsvLine(orders[index]));
-            }
+            _page = 0;
+            ShowActivity();
         }
-        finally
-        {
-            ExportButton.IsEnabled = CheckedBox.IsChecked == true;
-        }
-        _store.Log($"Exported {Count(orders.Count)} to {_store.ExportFile}");
-        Status($"Exported {Count(orders.Count)}. File: {_store.ExportFile}");
     }
 
-    // Asks about each order in the file in a window of its own, as some imports do: Import or Skip, one at a time.
-    private async void OnImport(object sender, RoutedEventArgs e)
-    {
-        var picker = new OpenFileDialog { Title = "Import orders", Filter = "Order files (*.csv)|*.csv|All files (*.*)|*.*" };
-        if (picker.ShowDialog(this) != true)
-        {
-            Status("Import cancelled.");
-            return;
-        }
-        var lines = ImportLine.Read(picker.FileName);
-        int imported = 0, skipped = 0;
-        for (var index = 0; index < lines.Count; index++)
-        {
-            Status($"Importing order {index + 1} of {lines.Count}…");
-            // A moment between windows, as there is when an app does some work for each.
-            await Task.Delay(400);
-            var line = lines[index];
-            var window = new ImportWindow(line, index + 1, lines.Count) { Owner = this };
-            if (window.ShowDialog() == true && Product.Named(line.Product) is { } product && line.Quantity > 0)
-            {
-                _rows.Add(new OrderRow(_store.Add(line.Customer, product, line.Quantity, false, false, line.Note)));
-                imported++;
-            }
-            else
-                skipped++;
-        }
-        _store.Log($"Imported {imported}, skipped {skipped} from {picker.FileName}");
-        Status($"Import finished: {imported} imported, {skipped} skipped.");
-    }
+    private void OnAbout(object sender, RoutedEventArgs e) => new AboutWindow(_connections.ShopName) { Owner = this }.ShowDialog();
 
-    // The warehouse never answers: a demo of a test that waits for something that doesn't happen.
-    private void OnConnect(object sender, RoutedEventArgs e)
-    {
-        _connecting?.Stop();
-        var tries = 1;
-        Status("Connecting to the warehouse…");
-        _connecting = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
-        _connecting.Tick += (_, _) => Status($"Connecting to the warehouse… (try {++tries}) It isn't answering.");
-        _connecting.Start();
-    }
+    private void OnExit(object sender, RoutedEventArgs e) => Close();
 }

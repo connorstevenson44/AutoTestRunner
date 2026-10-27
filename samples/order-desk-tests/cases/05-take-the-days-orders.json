@@ -1,0 +1,31 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "OD-ORD-03 Take the day's orders from a sheet",
+  "needs": ["take-an-order"],
+  "covers": "Order numbers go up by one, and each order's product, quantity, gift wrap, note and total are saved",
+  "tags": ["orders"],
+  "steps": [
+    { "repeat": { "rows": "data/day-sheet.json" }, "item": "order",
+      "steps": [
+        { "call": "addOrder", "with": { "customer": "${order.customer}", "product": "${order.product}", "quantity": "${order.quantity}",
+                                         "giftWrap": "${order.giftWrap}", "notes": "${order.notes}" },
+          "as": "status" }
+      ] },
+    { "checkpoint": "Orders 1002 to 1005 are saved",
+      "checks": [
+        { "equals": "${status}", "to": "Added order 1005 for Dorothy Vaughan: £22.40.", "label": "Last status" },
+        { "dbValue": "orders", "sql": "select Number from Orders where Status = 'New'", "rows": 5, "label": "New orders" },
+        { "dbValue": "orders", "sql": "select Product from Orders where Number = 1002", "equals": "Green tea" },
+        { "dbValue": "orders", "sql": "select Quantity from Orders where Number = 1002", "equals": "3" },
+        { "dbValue": "orders", "sql": "select Total from Orders where Number = 1003", "equals": "8.00", "label": "Mug, gift wrapped" },
+        { "dbValue": "orders", "sql": "select Number from Orders where GiftWrap = 1 order by Number", "rows": 2, "label": "Orders gift wrapped" },
+        { "dbValue": "orders", "sql": "select Total from Orders where Number = 1005", "equals": "22.40", "label": "4 × £5.60" },
+        { "dbValue": "orders", "sql": "select Notes from Orders where Number = 1005", "equals": "Office kitchen, 2nd floor" },
+        { "fileContains": "${activityLog}", "text": "Added order 1005: Dorothy Vaughan" },
+        { "shows": { "element": "orderRow", "with": { "number": "1002" } } },
+        { "shows": { "element": "orderRow", "with": { "number": "1005" } } }
+      ],
+      "look": [ "The list shows 1001 to 1005, oldest first." ],
+      "tools": [ { "openFile": "${suiteDir}\\data\\day-sheet.json", "label": "Day sheet" } ] }
+  ]
+}

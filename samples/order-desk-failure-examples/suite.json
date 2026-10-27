@@ -1,7 +1,7 @@
 {
   "$schema": "../../schema/suite.schema.json",
   "name": "Order Desk failure examples",
-  "app": { "exe": "${exe}", "window": "Order Desk", "status": "statusText" },
+  "app": { "exe": "${exe}", "window": "Order Desk", "startWindow": "Sign in to Order Desk", "status": "statusText" },
   "variables": {
     "exe": { "firstExisting": [
       "../OrderDesk/OrderDesk.exe",
@@ -9,12 +9,17 @@
       "../OrderDesk/bin/Debug/net10.0-windows/OrderDesk.exe"
     ] },
     "dataDir": "${env:LOCALAPPDATA}\\OrderDesk",
-    "ordersFile": "${dataDir}\\orders.json",
-    "activityLog": "${dataDir}\\activity.log"
+    "database": "${dataDir}\\orderdesk.db",
+    "activityLog": "${dataDir}\\activity.log",
+    "user": "clerk",
+    "password": "clerk-demo"
   },
   "helpers": {
     "amount": { "regex": "£(\\d+\\.\\d\\d)" },
     "exportedFile": { "regex": "File: (.+)$" }
+  },
+  "databases": {
+    "orders": { "kind": "sqlite", "connection": "Data Source=${database};Mode=ReadWrite;Pooling=False" }
   },
   "requires": ["${exe}"],
   "reset": { "script": "tools/Reset-OrderDesk.ps1", "leftovers": "tools/Find-Leftovers.ps1" }

@@ -1,0 +1,30 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "OD-ORD-07 Ship, keep and delete orders",
+  "needs": ["duplicate-an-order"],
+  "covers": "Ship and Delete on an order's row, Delete asking first, No keeping the order and Yes deleting it",
+  "tags": ["orders"],
+  "steps": [
+    { "hover": { "element": "orderRow", "with": { "number": "1003" } } },
+    { "click": { "element": "orderRowButton", "with": { "number": "1003", "tip": "Mark as shipped" } }, "what": "Ship 1003" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Order 1003 shipped." } },
+    { "hover": { "element": "orderRow", "with": { "number": "1002" } } },
+    { "click": { "element": "orderRowButton", "with": { "number": "1002", "tip": "Delete this order" } }, "what": "Delete 1002" },
+    { "answerDialog": "Delete order", "button": "No", "expect": "Delete order 1002 for Grace Hopper?" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Kept order 1002." } },
+    { "hover": { "element": "orderRow", "with": { "number": "1008" } } },
+    { "click": { "element": "orderRowButton", "with": { "number": "1008", "tip": "Delete this order" } }, "what": "Delete 1008" },
+    { "answerDialog": "Delete order", "button": "Yes", "expect": "Delete order 1008 for Katherine Johnson?" },
+    { "waitGone": { "element": "orderRow", "with": { "number": "1008" } }, "what": "Order 1008" },
+    { "checkpoint": "1003 shipped, 1002 kept, the duplicate deleted",
+      "checks": [
+        { "dbValue": "orders", "sql": "select Status from Orders where Number = 1003", "equals": "Shipped" },
+        { "dbValue": "orders", "sql": "select Status from Orders where Number = 1002", "equals": "New" },
+        { "dbValue": "orders", "sql": "select Number from Orders where Number = 1008", "rows": 0, "label": "Order 1008 in the database" },
+        { "shows": { "element": "orderLabel", "with": { "number": "1003", "status": "shipped" } }, "label": "Shipped label on 1003" },
+        { "shows": { "element": "orderRow", "with": { "number": "1002" } } },
+        { "logged": "${activityLog}", "text": "Deleted order 1008" }
+      ],
+      "look": [ "Order 1003 has a green Shipped label." ] }
+  ]
+}

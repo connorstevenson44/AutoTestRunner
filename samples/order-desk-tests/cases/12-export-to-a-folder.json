@@ -1,0 +1,32 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "OD-EXP-01 Export orders to a chosen folder",
+  "needs": ["a-new-customer-shows-up"],
+  "covers": "Export is greyed out until the orders are checked; File > Export to folder writes orders.csv there, with progress, and remembers the folder",
+  "tags": ["export"],
+  "steps": [
+    { "tab": "Orders" },
+    { "checkpoint": "Export needs the orders checked",
+      "checks": [
+        { "notTicked": "checkedTheOrders" },
+        { "disabled": "exportOrders" }
+      ] },
+    { "writeFile": "${exportDir}\\README.txt", "text": "Exports and backups from the Order Desk tests. The suite's reset deletes this folder." },
+    { "tick": "checkedTheOrders" },
+    { "menu": ["File", "Export to folder"] },
+    { "pickFolder": "Export orders to", "path": "${exportDir}" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Exported 7 orders." }, "as": "status" },
+    { "checkpoint": "The orders are in orders.csv in the folder picked",
+      "checks": [
+        { "equals": "${fileIn(status)}", "to": "${exportDir}\\orders.csv", "label": "File in status" },
+        { "atMost": "${status.seconds}", "to": "20", "label": "Export time (s)" },
+        { "fileMatches": "${exportDir}\\orders.csv", "regex": "^number,customer,product,quantity,giftWrap,delivery,deliverBy,total,status\\r?$", "label": "Header" },
+        { "fileMatches": "${exportDir}\\orders.csv", "regex": "^1001,Ada Lovelace,Coffee beans,2,yes,Standard,\\d{4}-\\d\\d-\\d\\d,26\\.00,New\\r?$", "label": "Order 1001" },
+        { "fileContains": "${exportDir}\\orders.csv", "text": "1003,Alan Turing,Mug,2,yes,Standard,,14.00,Shipped" },
+        { "fileContains": "${exportDir}\\orders.csv", "text": "1007,Margaret Hamilton,Sencha 100g,2,no,Next day,,21.80,New" },
+        { "fileCount": "${exportDir}", "pattern": "*.csv", "equals": 1 },
+        { "registry": "HKCU\\Software\\OrderDesk", "value": "ExportFolder", "equals": "${exportDir}", "label": "Export folder remembered" }
+      ],
+      "tools": [ { "openFile": "${exportDir}\\orders.csv", "label": "orders.csv" } ] }
+  ]
+}

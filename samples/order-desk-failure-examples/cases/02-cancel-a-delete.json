@@ -13,7 +13,7 @@
     { "call": "waitForStatusBar", "with": { "startsWith": "Kept order 1001." } },
     { "checkpoint": "Order 1001 is kept",
       "checks": [
-        { "jsonValue": "${ordersFile}", "path": "orders:1001:status", "equals": "New" },
+        { "dbValue": "orders", "sql": "select Status from Orders where Number = 1001", "equals": "New" },
         { "shows": { "element": "orderRow", "with": { "number": "1001" } } }
       ] }
   ]

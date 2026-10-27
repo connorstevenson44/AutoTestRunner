@@ -1,0 +1,21 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "OD-ORD-06 Duplicate an order from its menu",
+  "needs": ["change-an-order"],
+  "covers": "An order's right-click menu: Duplicate order makes a new order the same, and Copy order number puts its number on the clipboard",
+  "tags": ["orders"],
+  "steps": [
+    { "menu": ["Duplicate order"], "on": { "element": "orderRow", "with": { "number": "1004" } }, "what": "Order 1004" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Duplicated order 1004" }, "as": "duplicated" },
+    { "menu": ["Copy order number"], "on": { "element": "orderRow", "with": { "number": "1008" } }, "what": "Order 1008" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Copied" } },
+    { "checkpoint": "Order 1008 is a copy of 1004",
+      "checks": [
+        { "equals": "${duplicated}", "to": "Duplicated order 1004 as 1008.", "label": "Status after Duplicate" },
+        { "dbValue": "orders", "sql": "select Customer || ', ' || Quantity || ' x ' || Product from Orders where Number = 1008", "equals": "Katherine Johnson, 1 x Teapot" },
+        { "dbValue": "orders", "sql": "select Number from Orders where Customer = 'Katherine Johnson'", "rows": 2, "label": "Katherine Johnson's orders" },
+        { "shows": { "element": "orderRow", "with": { "number": "1008" } } },
+        { "clipboard": "1008" }
+      ] }
+  ]
+}

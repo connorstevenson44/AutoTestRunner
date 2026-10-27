@@ -1,0 +1,20 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "OD-ABOUT-01 About shows the installed version",
+  "afterReset": "sign-in",
+  "covers": "Help > About Order Desk shows the version the exe was built as, the shop's name and a link to the release notes",
+  "tags": ["smoke"],
+  "steps": [
+    { "menu": ["Help", "About Order Desk"] },
+    { "find": "aboutVersion", "as": "version", "what": "version" },
+    { "find": "releaseNotes", "as": "notesLink" },
+    { "click": "closeAbout" },
+    { "waitGone": "aboutWindow", "what": "About Order Desk" },
+    { "checkpoint": "About matches the exe",
+      "checks": [
+        { "equals": "${version}", "to": "Version 2.4.1", "label": "Version in About" },
+        { "fileVersion": "${exe}", "startsWith": "2.4.1" },
+        { "equals": "${notesLink}", "to": "Release notes", "label": "Release notes link" }
+      ] }
+  ]
+}

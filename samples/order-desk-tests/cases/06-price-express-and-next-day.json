@@ -1,0 +1,35 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "OD-ORD-04 Price express and next-day delivery",
+  "needs": ["take-the-days-orders"],
+  "covers": "Express adds £5.00 and Next day £9.00 to the total, the delivery is saved with the order, and the form goes back to Standard. Known bug OD-118: an express order's saved total leaves out the express fee.",
+  "tags": ["regression", "pricing"],
+  "steps": [
+    { "type": "customer", "text": "Mary Jackson" },
+    { "choose": "product", "option": "Hand grinder" },
+    { "type": "quantity", "text": "1" },
+    { "click": { "element": "delivery", "with": { "option": "Express" } }, "what": "Express" },
+    { "find": "formTotal", "as": "expressTotal" },
+    { "click": { "element": "delivery", "with": { "option": "Next day" } }, "what": "Next day" },
+    { "find": "formTotal", "as": "nextDayTotal" },
+    { "click": { "element": "delivery", "with": { "option": "Express" } }, "what": "Express" },
+    { "click": "addOrder" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Added order 1006" }, "as": "expressAdded" },
+    { "note": "OD-118: Order Desk saves an express order's total without the express fee. Switch this checkpoint back on once the fix ships; failure example 1 shows it failing.",
+      "disabled": true,
+      "checkpoint": "Order 1006 is saved with its express fee",
+      "checks": [ { "dbValue": "orders", "sql": "select Total from Orders where Number = 1006", "equals": "40.00", "label": "Saved total" } ] },
+    { "call": "addOrder", "with": { "customer": "Margaret Hamilton", "product": "Sencha 100g", "quantity": "2", "delivery": "Next day" }, "as": "nextDayAdded" },
+    { "checkpoint": "Each delivery is priced and saved",
+      "checks": [
+        { "equals": "${expressTotal}", "to": "Total: £40.00", "label": "Hand grinder, express" },
+        { "equals": "${nextDayTotal}", "to": "Total: £44.00", "label": "Hand grinder, next day" },
+        { "equals": "${expressAdded}", "to": "Added order 1006 for Mary Jackson: £40.00.", "label": "Status after the express order" },
+        { "equals": "${nextDayAdded}", "to": "Added order 1007 for Margaret Hamilton: £21.80.", "label": "Status after the next-day order" },
+        { "dbValue": "orders", "sql": "select Delivery from Orders where Number = 1006", "equals": "Express" },
+        { "dbValue": "orders", "sql": "select Delivery from Orders where Number = 1007", "equals": "Next day" },
+        { "dbValue": "orders", "sql": "select Total from Orders where Number = 1007", "equals": "21.80", "label": "Saved total, next day" },
+        { "selected": { "element": "delivery", "with": { "option": "Standard" } }, "label": "Delivery after Add" }
+      ] }
+  ]
+}

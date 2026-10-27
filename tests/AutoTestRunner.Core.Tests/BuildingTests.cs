@@ -138,23 +138,23 @@ public sealed class BuildingTests : IDisposable
         var coffee = new ControlFacts("ListItem", "Coffee beans") { Ancestors = [new("ComboBox", "Product", Id: "ProductBox")] };
         recorder.Clicked(new ControlFacts("Text", "Coffee beans") { Ancestors = [coffee with { Ancestors = [] }, .. coffee.Ancestors] });
         recorder.Clicked(new ControlFacts("CheckBox", "Gift wrap", Id: "GiftWrapBox") { Checked = true });
-        recorder.Clicked(new ControlFacts("CheckBox", "Express delivery", Id: "ExpressBox") { Checked = false });
+        recorder.Clicked(new ControlFacts("CheckBox", "I have checked the orders", Id: "CheckedBox") { Checked = false });
         recorder.Clicked(new ControlFacts("Text", "Add order") { Ancestors = [new("Button", "Add order", Id: "AddButton")] });
-        recorder.StatusSaid("Added order 1001 for Ada Lovelace, £26.00.");
+        recorder.StatusSaid("Added order 1001 for Ada Lovelace: £26.00.");
         recorder.StatusSaid("Ready.");
         recorder.Clicked(new ControlFacts("TabItem", "Catalogue"));
-        recorder.Clicked(new ControlFacts("Button", "Yes", Id: "6") { Dialog = new DialogFacts("Delete order", "Delete 1 order? It can't be undone.") });
+        recorder.Clicked(new ControlFacts("Button", "Yes", Id: "6") { Dialog = new DialogFacts("Delete order", "Delete order 1001 for Ada Lovelace? This can't be undone.") });
 
         string[] expected =
         [
             """{ "type": "customer", "text": "Ada Lovelace", "say": "Type Ada Lovelace in Customer" }""",
             """{ "choose": "product", "option": "Coffee beans", "say": "Pick Coffee beans from Product" }""",
             """{ "tick": "giftWrap", "say": "Tick Gift wrap" }""",
-            """{ "tick": "express", "checked": false, "say": "Clear Express delivery" }""",
+            """{ "tick": "checkedTheOrders", "checked": false, "say": "Clear I have checked the orders" }""",
             """{ "click": "addOrder", "say": "Click Add order" }""",
             """{ "call": "waitForStatusBar", "with": { "startsWith": "Added order 1001 for Ada Lovelace" } }""",
             """{ "tab": "Catalogue", "say": "Open the Catalogue tab" }""",
-            """{ "answerDialog": "Delete order", "button": "Yes", "expect": "Delete 1 order?", "say": "Click Yes" }""",
+            """{ "answerDialog": "Delete order", "button": "Yes", "expect": "Delete order 1001 for Ada Lovelace?", "say": "Click Yes" }""",
         ];
         Assert.Equal(expected, draft.Steps.Select(step => JsonLine.Write(step.Json)));
         Assert.Equal(ActivityKind.Choose, draft.Steps[1].Kind);
@@ -187,7 +187,7 @@ public sealed class BuildingTests : IDisposable
 
         var path = CaseWriter.Save(suite, draft);
 
-        Assert.Equal("09-take-an-order-for-ada.json", Path.GetFileName(path));
+        Assert.Equal("21-take-an-order-for-ada.json", Path.GetFileName(path));
         var text = File.ReadAllText(path).ReplaceLineEndings("\n");
         Assert.Equal("""
             {
@@ -206,30 +206,30 @@ public sealed class BuildingTests : IDisposable
             }
 
             """, text);
-        Assert.Equal(9, Suite.Load(suite.Folder).Cases.Count);
+        Assert.Equal(21, Suite.Load(suite.Folder).Cases.Count);
     }
 
     [Fact]
     public void Steps_added_to_a_case_go_before_its_checkpoint_and_leave_the_rest_as_it_was()
     {
         var suite = CopyOfTour();
-        var existing = suite.Cases[0];
+        var existing = suite.Find("take-an-order")!;
         var before = File.ReadAllText(existing.File);
         var draft = CaseDraft.Load(existing);
-        var express = new ControlFacts("CheckBox", "Express delivery", Id: "ExpressBox") { Checked = true };
-        draft.Steps.Add(StepMaker.Tick(Name(suite, express), express, true));
+        var checkedBox = new ControlFacts("CheckBox", "I have checked the orders", Id: "CheckedBox") { Checked = true };
+        draft.Steps.Add(StepMaker.Tick(Name(suite, checkedBox), checkedBox, true));
         draft.Checks.Add(new JsonObject { ["shows"] = "addOrder" });
-        draft.Look.Add("Express delivery is ticked.");
+        draft.Look.Add("I have checked the orders is ticked.");
 
         CaseWriter.Save(suite, draft);
 
         var after = File.ReadAllText(existing.File);
-        var reloaded = Suite.Load(suite.Folder).Cases[0];
+        var reloaded = Suite.Load(suite.Folder).Find("take-an-order")!;
         Assert.Equal(existing.Steps.Count + 1, reloaded.Steps.Count);
-        Assert.Equal("Tick Express delivery", reloaded.Steps[^2]!["say"]!.GetValue<string>());
+        Assert.Equal("Tick I have checked the orders", reloaded.Steps[^2]!["say"]!.GetValue<string>());
         var checkpoint = reloaded.Steps[^1]!.AsObject();
         Assert.Equal("""{ "shows": "addOrder" }""", JsonLine.Write(checkpoint["checks"]!.AsArray()[^1]));
-        Assert.Equal("Express delivery is ticked.", checkpoint["look"]!.AsArray()[^1]!.GetValue<string>());
+        Assert.Equal("I have checked the orders is ticked.", checkpoint["look"]!.AsArray()[^1]!.GetValue<string>());
         // Only the new lines were added: the case's own text is all still there, in order.
         var kept = before.Split('\n').Where(line => line.Trim().Length > 0).ToList();
         var lines = after.Split('\n').ToList();
@@ -243,11 +243,13 @@ public sealed class BuildingTests : IDisposable
     public void A_case_opened_to_change_it_has_its_steps_but_not_its_checkpoint_none_of_them_played()
     {
         var suite = Suite.Load(Tour);
-        var draft = CaseDraft.Load(suite.Cases[0]);
+        var order = suite.Find("take-an-order")!;
+        var draft = CaseDraft.Load(order);
 
-        Assert.Equal(suite.Cases[0].Steps.Count - 1, draft.Steps.Count);
+        Assert.Equal(order.Steps.Count - 1, draft.Steps.Count);
         Assert.All(draft.Steps, step => Assert.Equal(DraftStepState.NotPlayed, step.State));
-        Assert.Equal(["take-an-order"], suite.Cases[1].Needs);
+        Assert.Equal("sign-in", draft.AfterReset);
+        Assert.Equal(["take-an-order"], suite.Find("take-the-days-orders")!.Needs);
         Assert.Equal("customer", draft.Steps[2].Target!.Shown);
         Assert.Equal(TargetQuality.Sturdy, draft.Steps[2].Target!.Quality);
         Assert.Equal("orderRow 1001", draft.Steps[^1].Target!.Shown);
@@ -257,7 +259,7 @@ public sealed class BuildingTests : IDisposable
     public void Changing_a_case_from_a_step_keeps_the_steps_before_it_as_written_and_its_checkpoint()
     {
         var suite = CopyOfTour();
-        var existing = suite.Cases[0];
+        var existing = suite.Find("take-an-order")!;
         var before = File.ReadAllText(existing.File);
         var draft = CaseDraft.Load(existing);
         // Edit from step 5: the steps after it go, and new ones are recorded.
@@ -265,18 +267,18 @@ public sealed class BuildingTests : IDisposable
             draft.Steps.RemoveRange(5, draft.Steps.Count - 5);
         var three = new ControlFacts("Edit", "Quantity", Id: "QuantityBox");
         draft.Steps.Add(StepMaker.Type(Name(suite, three), three, "3"));
-        draft.Steps[1].Text = "The bar at the bottom says what the app is doing: ${ready}";
+        draft.Steps[1].Text = "Next week's date, as the database keeps it";
 
         CaseWriter.Save(suite, draft);
 
         var text = File.ReadAllText(existing.File);
-        var reloaded = Suite.Load(suite.Folder).Cases[0];
+        var reloaded = Suite.Load(suite.Folder).Find("take-an-order")!;
         Assert.Equal(7, reloaded.Steps.Count);
-        Assert.Equal("""{ "find": "statusText", "as": "ready", "what": "status bar", "say": "The bar at the bottom says what the app is doing: ${ready}" }""", JsonLine.Write(reloaded.Steps[1]));
+        Assert.Equal("""{ "powershell": "(Get-Date).AddDays(7).ToString('yyyy-MM-dd')", "as": "nextWeekSaved", "say": "Next week's date, as the database keeps it" }""", JsonLine.Write(reloaded.Steps[1]));
         Assert.Equal("""{ "type": "quantity", "text": "3", "say": "Type 3 in Quantity" }""", JsonLine.Write(reloaded.Steps[5]));
         Assert.Equal("Order 1001 is added and saved", reloaded.Steps[^1]!["checkpoint"]!.GetValue<string>());
         // The first step is as it was written, and so is everything from the checkpoint on.
-        var first = before.Split('\n').First(line => line.Contains("startApp", StringComparison.Ordinal));
+        var first = before.Split('\n').First(line => line.Contains("\"nextWeek\"", StringComparison.Ordinal));
         Assert.Contains(first, text, StringComparison.Ordinal);
         Assert.EndsWith(before[before.IndexOf("{ \"checkpoint\"", StringComparison.Ordinal)..], text, StringComparison.Ordinal);
     }
@@ -299,23 +301,24 @@ public sealed class BuildingTests : IDisposable
     public void The_cases_that_carry_on_from_a_changed_case_can_be_marked_and_the_marks_cleared()
     {
         var suite = CopyOfTour();
-        var first = suite.Cases[0];
+        var first = suite.Find("take-an-order")!;
+        var next = suite.Find("take-the-days-orders")!;
         var after = suite.CarryingOn(first);
-        Assert.Contains(suite.Cases[1], after);
+        Assert.Contains(next, after);
         Assert.DoesNotContain(first, after);
         Assert.All(after, item => Assert.Contains(first, suite.Leading(item)));
 
         var draft = CaseDraft.Load(first);
-        draft.Review[suite.Cases[1].File] = "Case 1 changed from step 5.";
+        draft.Review[next.File] = "Case 4 changed from step 5.";
         File.WriteAllText(first.File, CaseWriter.Flag(File.ReadAllText(first.File), "Left from before."));
         CaseWriter.Save(suite, draft);
 
         var reloaded = Suite.Load(suite.Folder);
-        Assert.Null(reloaded.Cases[0].Review);
-        Assert.Equal("Case 1 changed from step 5.", reloaded.Cases[1].Review);
-        CaseWriter.ClearReview(reloaded.Cases[1]);
-        Assert.Null(Suite.Load(suite.Folder).Cases[1].Review);
-        Assert.Equal(File.ReadAllText(Path.Combine(Tour, "cases", Path.GetFileName(suite.Cases[1].File))), File.ReadAllText(suite.Cases[1].File));
+        Assert.Null(reloaded.Find(first.Id)!.Review);
+        Assert.Equal("Case 4 changed from step 5.", reloaded.Find(next.Id)!.Review);
+        CaseWriter.ClearReview(reloaded.Find(next.Id)!);
+        Assert.Null(Suite.Load(suite.Folder).Find(next.Id)!.Review);
+        Assert.Equal(File.ReadAllText(Path.Combine(Tour, "cases", Path.GetFileName(next.File))), File.ReadAllText(next.File));
     }
 
     [Fact]

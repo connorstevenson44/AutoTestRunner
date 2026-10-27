@@ -1,0 +1,30 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "OD-ORD-02 Reject quantities outside 1 to 99",
+  "afterReset": "sign-in",
+  "covers": "Quantity takes whole numbers from 1 to 99: 0, 100, -1, 1.5 and two are refused with the same message and Add order greyed out; 99 is taken",
+  "tags": ["negative", "orders"],
+  "steps": [
+    { "type": "customer", "text": "Grace Hopper" },
+    { "choose": "product", "option": "Green tea" },
+    { "repeat": ["0", "100", "-1", "1.5", "two"], "item": "quantity",
+      "steps": [
+        { "type": "quantity", "text": "${quantity}" },
+        { "note": "A quantity the form takes empties the message, so this wait gets stuck on it.",
+          "waitText": "formProblem", "equals": "The quantity must be a whole number from 1 to 99.", "within": 5, "what": "form message" }
+      ] },
+    { "checkpoint": "The last refused quantity leaves Add order greyed out",
+      "checks": [
+        { "disabled": "addOrder" },
+        { "says": "formTotal", "equals": "", "label": "No total shown" }
+      ] },
+    { "type": "quantity", "text": "99" },
+    { "find": "formTotal", "as": "total" },
+    { "checkpoint": "99 is taken",
+      "checks": [
+        { "equals": "${total}", "to": "Total: £792.00", "label": "Total for 99 × £8.00" },
+        { "enabled": "addOrder" },
+        { "dbValue": "orders", "sql": "select count(*) from Orders", "equals": "0", "label": "Nothing saved" }
+      ] }
+  ]
+}

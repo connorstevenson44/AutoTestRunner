@@ -2,23 +2,23 @@
   "$schema": "../../../schema/case.schema.json",
   "name": "Express order is saved with its full total",
   "needsNote": "Nothing",
-  "covers": "An express order's total on the form and in orders.json. Fails: Order Desk saves the total without express delivery.",
+  "covers": "An express order's total on the form and in the database. Fails: Order Desk saves the total without express delivery.",
   "tags": ["orders"],
   "steps": [
     { "call": "startWithNoOrders" },
     { "type": "customer", "text": "Ada Lovelace" },
     { "choose": "product", "option": "Coffee beans" },
     { "type": "quantity", "text": "2" },
-    { "tick": "express" },
+    { "click": { "element": "delivery", "with": { "option": "Express" } }, "what": "Express" },
     { "find": "formTotal", "as": "total" },
     { "click": "addOrder" },
     { "call": "waitForStatusBar", "with": { "startsWith": "Added order 1001" } },
     { "checkpoint": "Order 1001 is saved with £29.00",
       "checks": [
         { "equals": "${total}", "to": "Total: £29.00", "label": "Form total" },
-        { "jsonValue": "${ordersFile}", "path": "orders:1001:express", "equals": "true" },
-        { "jsonValue": "${ordersFile}", "path": "orders:1001:total", "equals": "29.00", "label": "Saved total" }
+        { "dbValue": "orders", "sql": "select Delivery from Orders where Number = 1001", "equals": "Express" },
+        { "dbValue": "orders", "sql": "select Total from Orders where Number = 1001", "equals": "29.00", "label": "Saved total" }
       ],
-      "tools": [ { "openFile": "${ordersFile}", "label": "orders.json" } ] }
+      "tools": [ { "openFolder": "${dataDir}", "label": "Data folder" } ] }
   ]
 }

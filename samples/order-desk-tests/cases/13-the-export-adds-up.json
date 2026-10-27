@@ -1,0 +1,23 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "OD-EXP-02 The export adds up",
+  "needs": ["export-to-a-folder"],
+  "covers": "orders.csv read back: the order count, the sum of the totals, and which orders are shipped",
+  "tags": ["export"],
+  "steps": [
+    { "script": "tools/Summarize-Export.ps1", "args": ["${exportDir}\\orders.csv"], "as": "summary" },
+    { "run": "cmd.exe", "args": ["/c", "findstr", "/c:,Shipped", "${exportDir}\\orders.csv"], "as": "shipped" },
+    { "checkpoint": "The export matches the database",
+      "checks": [
+        { "contains": "${summary.output}", "text": "7 orders, 167.20 in all" },
+        { "dbValue": "orders", "sql": "select printf('%.2f', sum(Total)) from Orders", "equals": "167.20", "label": "Sum of the totals in the database" },
+        { "equals": "${shipped.code}", "to": "0" },
+        { "contains": "${shipped.output}", "text": "Alan Turing" },
+        { "lacks": "${shipped.output}", "text": "Ada Lovelace" },
+        { "output": "cmd.exe", "args": ["/c", "type", "${exportDir}\\orders.csv"], "contains": "Grace Hopper" }
+      ],
+      "tools": [
+        { "console": "Import-Csv -LiteralPath $args[0] | Format-Table -AutoSize", "args": ["${exportDir}\\orders.csv"], "label": "Export as a table" }
+      ] }
+  ]
+}

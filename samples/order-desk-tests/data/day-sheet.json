@@ -1,0 +1,6 @@
+[
+  { "customer": "Grace Hopper", "product": "Green tea", "quantity": "3", "giftWrap": "no", "notes": "" },
+  { "customer": "Alan Turing", "product": "Mug", "quantity": "1", "giftWrap": "yes", "notes": "Gift note: Happy birthday, Joan" },
+  { "customer": "Katherine Johnson", "product": "Teapot", "quantity": "1", "giftWrap": "no", "notes": "" },
+  { "customer": "Dorothy Vaughan", "product": "Earl Grey loose 125g", "quantity": "4", "giftWrap": "no", "notes": "Office kitchen, 2nd floor" }
+]

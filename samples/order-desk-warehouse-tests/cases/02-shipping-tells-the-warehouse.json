@@ -1,0 +1,33 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "OD-WH-02 Shipping an order tells the warehouse",
+  "needs": ["connect-to-the-warehouse"],
+  "covers": "Ship puts one OrderShipped message on the orders queue, with the order's number, customer and stock code",
+  "tags": ["integration", "warehouse"],
+  "steps": [
+    { "type": "customer", "text": "Ada Lovelace" },
+    { "choose": "product", "option": "Coffee beans" },
+    { "type": "quantity", "text": "2" },
+    { "click": "addOrder" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Added order 1001" } },
+    { "hover": { "element": "orderRow", "with": { "number": "1001" } } },
+    { "click": { "element": "orderRowButton", "with": { "number": "1001", "tip": "Mark as shipped" } }, "what": "Ship 1001" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Order 1001 shipped" }, "as": "shipped" },
+    { "checkpoint": "One message waits for the warehouse",
+      "checks": [
+        { "equals": "${shipped}", "to": "Order 1001 shipped, and sent to the warehouse.", "label": "Status" },
+        { "queue": "warehouseOrders", "count": 1, "within": 5 },
+        { "queue": "warehouseOrders", "has": "\"number\":1001" }
+      ] },
+    { "receive": "warehouseOrders", "contains": "\"type\":\"OrderShipped\"", "as": "message", "say": "Take it off the queue, as the warehouse would" },
+    { "checkpoint": "The message says what to send",
+      "checks": [
+        { "contains": "${message}", "text": "\"customer\":\"Ada Lovelace\"" },
+        { "contains": "${message}", "text": "{\"sku\":\"CB-001\",\"product\":\"Coffee beans\",\"quantity\":2}", "label": "Its line" },
+        { "contains": "${message}", "text": "\"delivery\":\"Standard\"" },
+        { "queue": "warehouseOrders", "count": 0 },
+        { "dbValue": "orders", "sql": "select Status from Orders where Number = 1001", "equals": "Shipped" },
+        { "logged": "${activityLog}", "text": "Sent order 1001 to the warehouse" }
+      ] }
+  ]
+}

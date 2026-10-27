@@ -1,0 +1,25 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "OD-WH-01 Connect to the warehouse",
+  "needsNote": "RabbitMQ running on this computer, with its guest user",
+  "covers": "Pointed at a broker, Connect to warehouse connects and makes the orders and picks queues; the test empties them so it starts from nothing",
+  "tags": ["smoke", "integration", "warehouse"],
+  "steps": [
+    { "setAppSetting": "${appConfig}", "key": "WarehouseBroker", "to": "${broker}", "say": "Point Order Desk at this computer's RabbitMQ instead of the shop's" },
+    { "startApp": {} },
+    { "call": "signIn" },
+    { "click": "connectToWarehouse" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Connected to the warehouse", "within": "30" }, "as": "connected" },
+    { "purge": "warehouseOrders" },
+    { "purge": "picks" },
+    { "checkpoint": "Order Desk is connected, with both queues empty",
+      "checks": [
+        { "equals": "${connected}", "to": "Connected to the warehouse at localhost.", "label": "Status" },
+        { "appSetting": "${appConfig}", "key": "WarehouseBroker", "equals": "${broker}" },
+        { "queue": "warehouseOrders", "count": 0 },
+        { "queue": "picks", "count": 0 },
+        { "lastLine": "${activityLog}", "contains": "Connected to the warehouse at localhost" }
+      ],
+      "tools": [ { "app": "explorer.exe", "args": ["http://localhost:15672/#/queues"], "label": "RabbitMQ's queues, with its management plugin" } ] }
+  ]
+}

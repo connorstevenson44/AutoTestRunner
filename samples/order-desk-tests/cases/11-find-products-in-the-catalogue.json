@@ -1,0 +1,30 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "OD-CAT-01 Find products in the catalogue",
+  "afterReset": "sign-in",
+  "covers": "The catalogue's categories, dragging a product onto the order form to pick it, a spare part's price far down the parts list, and spare parts refused on the form",
+  "tags": ["catalogue"],
+  "steps": [
+    { "tab": "Catalogue" },
+    { "expand": ["Tea", "Green"], "in": "categories" },
+    { "drag": { "element": "catalogueProduct", "with": { "name": "Sencha 100g" } }, "to": "product", "what": "Sencha 100g",
+      "say": "Drag it onto the Product box of the order form" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Picked Sencha 100g" }, "as": "picked" },
+    { "expand": ["Spare parts", "Espresso machines"], "in": "categories" },
+    { "hover": { "element": "catalogueProduct", "with": { "name": "SP-0388 Pump seal" } }, "what": "SP-0388 Pump seal",
+      "say": "Far down a list of 300 parts, which only builds the rows on screen" },
+    { "find": { "type": "Text", "name": "£", "match": "startsWith", "sameRowAs": { "element": "catalogueProduct", "with": { "name": "SP-0388 Pump seal" } } },
+      "as": "partPrice", "what": "SP-0388's price" },
+    { "drag": { "element": "catalogueProduct", "with": { "name": "SP-0388 Pump seal" } }, "to": "product", "what": "SP-0388 Pump seal" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "SP-0388" }, "as": "refused" },
+    { "tab": "Orders" },
+    { "checkpoint": "Sencha is on the form, and the spare part isn't",
+      "checks": [
+        { "equals": "${picked}", "to": "Picked Sencha 100g from the catalogue.", "label": "Status after the drag" },
+        { "says": "price", "equals": "TG-002 · £6.40 each" },
+        { "equals": "${partPrice}", "to": "£21.88", "label": "SP-0388's price" },
+        { "equals": "${refused}", "to": "SP-0388 Pump seal is a spare part: the service desk orders those.", "label": "Status after dragging a part" },
+        { "selected": { "tabItem": "Orders" } }
+      ] }
+  ]
+}

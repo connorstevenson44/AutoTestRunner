@@ -1,0 +1,25 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "OD-ORD-05 Change an order's quantity and gift note",
+  "needs": ["price-express-and-next-day"],
+  "covers": "Double-clicking an order opens it; its total follows the quantity, part of its note can be put right, and Save keeps both",
+  "tags": ["orders"],
+  "steps": [
+    { "click": { "element": "orderRow", "with": { "number": "1003" } }, "how": "double", "what": "Order 1003" },
+    { "type": { "element": "orderQuantity", "with": { "number": "1003" } }, "text": "2" },
+    { "find": { "element": "orderTotal", "with": { "number": "1003" } }, "as": "newTotal" },
+    { "replaceText": { "element": "orderNote", "with": { "number": "1003" } }, "regex": "Joan$", "replacement": "Joan Clarke",
+      "say": "The customer rang to give the full name for the gift note" },
+    { "click": { "element": "saveOrder", "with": { "number": "1003" } } },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Saved order 1003" }, "as": "saved" },
+    { "checkpoint": "Order 1003 is 2 mugs, with the full name in its note",
+      "checks": [
+        { "equals": "${newTotal}", "to": "Total: £14.00", "label": "Total in the order window" },
+        { "equals": "${saved}", "to": "Saved order 1003: 2 × Mug, gift wrapped, £14.00.", "label": "Status after Save" },
+        { "dbValue": "orders", "sql": "select Quantity from Orders where Number = 1003", "equals": "2" },
+        { "dbValue": "orders", "sql": "select Total from Orders where Number = 1003", "equals": "14.00" },
+        { "dbValue": "orders", "sql": "select Notes from Orders where Number = 1003", "equals": "Gift note: Happy birthday, Joan Clarke" },
+        { "lastLine": "${activityLog}", "contains": "Changed order 1003: 2 x Mug, 14.00" }
+      ] }
+  ]
+}

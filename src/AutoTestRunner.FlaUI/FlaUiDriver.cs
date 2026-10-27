@@ -94,6 +94,16 @@ public sealed partial class FlaUiDriver : IDriver
         return _main != 0;
     }
 
+    /// <summary>
+    /// Drives another of the app's windows once the one driven has closed, as when a sign-in window opens the main
+    /// window. Nothing changes while the window driven is still open.
+    /// </summary>
+    public void Follow(nint window)
+    {
+        if (!Native.Exists(_main) && AppWindows().Contains(window))
+            (_main, _windowTitle) = (window, Native.Title(window));
+    }
+
     public void UseWindow(string title, TimeSpan timeout)
     {
         var end = Environment.TickCount64 + (long)timeout.TotalMilliseconds;
