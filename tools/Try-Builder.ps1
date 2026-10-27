@@ -193,10 +193,10 @@ if ($Parts -contains 'record') {
         Keys '{F9}'
         Saying $panel 'Recording.*' 'F9 to start recording again' 10
 
-        # A pick tool first, then the control: Wait for it › Wait for its text, then the bar at the bottom. The click
+        # A pick tool first, then the control: Wait › Wait for its text, then the bar at the bottom. The click
         # picks the bar without reaching Order Desk, and recording carries on after the wait is added.
         $count = (Named $panel '* steps').Current.Name
-        Click (Find $panel $ui::NameProperty 'Wait for it')
+        Click (Find $panel $ui::NameProperty 'Wait')
         $item = Wait-For { Find $root $ui::NameProperty 'Wait for its text' } 'the Wait for its text tool in its menu' 10
         Save-Screen 'builder-pick-menu.png'
         Click $item
