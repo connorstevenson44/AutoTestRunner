@@ -90,8 +90,8 @@ internal sealed partial class RunPanel
         _feed.CommandStarted(line, script);
     });
 
-    // From the threads reading what the program prints. The same priority as the other calls keeps them in order.
-    public void CommandOutput(string line, bool error) => Dispatcher.BeginInvoke(DispatcherPriority.Normal, () => _feed.CommandOutput(line, error));
+    // From the threads reading what the program prints, which the feed takes from any thread.
+    public void CommandOutput(string line, bool error) => _feed.CommandOutput(line, error);
 
     public void CommandFinished(int exitCode, TimeSpan took) => OnUi(() =>
     {

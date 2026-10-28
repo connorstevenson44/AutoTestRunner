@@ -70,9 +70,10 @@ internal static class Ui
         var turn = new RotateTransform();
         glyph.RenderTransformOrigin = new Point(0.5, 0.5);
         glyph.RenderTransform = turn;
-        // It turns only while it is in a window, so one that was taken out doesn't go on turning.
-        glyph.Loaded += (_, _) => turn.BeginAnimation(RotateTransform.AngleProperty, new DoubleAnimation(0, 360, TimeSpan.FromSeconds(1.2)) { RepeatBehavior = RepeatBehavior.Forever });
-        glyph.Unloaded += (_, _) => turn.BeginAnimation(RotateTransform.AngleProperty, null);
+        // It turns only while it shows. WPF keeps an animation going, sixty frames a second, on a control that is hidden
+        // or collapsed, so a spinner kept in a panel for when it is busy would keep the panel working all the time.
+        glyph.IsVisibleChanged += (_, e) => turn.BeginAnimation(RotateTransform.AngleProperty,
+            (bool)e.NewValue ? new DoubleAnimation(0, 360, TimeSpan.FromSeconds(1.2)) { RepeatBehavior = RepeatBehavior.Forever } : null);
         return glyph;
     }
 

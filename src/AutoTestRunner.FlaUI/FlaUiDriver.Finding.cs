@@ -1,14 +1,18 @@
 using System.Drawing;
 using AutoTestRunner.Driving;
 using AutoTestRunner.Scripting;
+using FlaUI.Core;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Conditions;
 using FlaUI.Core.Definitions;
+using FlaUI.Core.Identifiers;
 
 namespace AutoTestRunner.FlaUI;
 
 public sealed partial class FlaUiDriver
 {
+    private CacheRequest? _shownFacts;
+
     public IControl Find(Target target, TimeSpan timeout)
     {
         var retried = false;
@@ -100,18 +104,22 @@ public sealed partial class FlaUiDriver
             if (selector.Cell is { } cell)
                 return pick(Cells(root, cell));
 
-            var candidates = root.FindAllDescendants(Condition(selector)).Where(element => Fits(selector, element));
+            // A button on the same row as another control is looked for across the window, level with its middle.
+            int? middle = null;
             if (selector.SameRowAs is { } rowOf)
             {
                 if (TryFindElement(rowOf, scroll: false) is not { } anchor)
                     return default;
-                var row = anchor.BoundingRectangle;
-                var middle = (row.Top + row.Bottom) / 2;
-                candidates = MainWindow().FindAllDescendants(Condition(selector))
-                    .Where(element => Fits(selector, element))
-                    .Where(element => IsShown(element) && Math.Abs((element.BoundingRectangle.Top + element.BoundingRectangle.Bottom) / 2 - middle) <= 14);
+                middle = Middle(anchor);
+                root = MainWindow();
             }
-            return pick(candidates.Where(IsShown));
+
+            // Each control's name, help text and place come with it, in the one call that finds them all.
+            using var cached = ShownFacts.Activate();
+            var candidates = root.FindAllDescendants(Condition(selector)).Where(element => Fits(selector, element) && IsShown(element));
+            if (middle is { } level)
+                candidates = candidates.Where(element => Math.Abs(Middle(element) - level) <= 14);
+            return pick(candidates);
         }
         catch (StuckException)
         {
@@ -197,6 +205,29 @@ public sealed partial class FlaUiDriver
     private static string HelpText(AutomationElement element) => OrIfGone(() => element.Properties.HelpText.ValueOrDefault ?? "", "");
 
     private static bool IsShown(AutomationElement element) => OrIfGone(() => element.BoundingRectangle is { Width: > 0, Height: > 0 }, false);
+
+    private static int Middle(AutomationElement element)
+    {
+        var box = element.BoundingRectangle;
+        return (box.Top + box.Bottom) / 2;
+    }
+
+    /// <summary>
+    /// What finding reads of each control it looks at, asked for with the controls rather than one by one: each call is
+    /// answered on the app's UI thread, and a selector that matches names by contains reads every control of its type.
+    /// Only these can be read while it is active. https://learn.microsoft.com/windows/win32/winauto/uiauto-cachingforclients
+    /// </summary>
+    private CacheRequest ShownFacts => _shownFacts ??= Facts(_automation.PropertyLibrary.Element.Name, _automation.PropertyLibrary.Element.HelpText,
+        _automation.PropertyLibrary.Element.BoundingRectangle);
+
+    // A request for these properties of each control found, which stays usable once the request is no longer active.
+    private static CacheRequest Facts(params PropertyId[] properties)
+    {
+        var request = new CacheRequest { AutomationElementMode = AutomationElementMode.Full, TreeScope = TreeScope.Element };
+        foreach (var property in properties)
+            request.Add(property);
+        return request;
+    }
 
     // Scrolls each long list in the window, up to its top and then down to its end, until something that matches is
     // built. A list is at its end once a few steps build no new rows.

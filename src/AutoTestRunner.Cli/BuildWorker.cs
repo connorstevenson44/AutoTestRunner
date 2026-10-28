@@ -31,6 +31,10 @@ internal sealed partial class BuildWorker
     // How often the box with the keyboard and the watched controls' text are read, in milliseconds.
     private const int TypingEvery = 150, WatchedEvery = 250;
 
+    // How often a watched control that has gone is looked for again, in milliseconds: finding one walks the app's
+    // window on its UI thread, where reading the one found before only asks it for its text.
+    private const int WatchedFindEvery = 1000;
+
     private readonly BuildSession _session;
     private readonly BuildRequest _request;
     private readonly Suite _suite;
@@ -128,7 +132,7 @@ internal sealed partial class BuildWorker
                 Play(step, input.Add);
                 break;
             case BuildInputKind.Locate:
-                Locate(input.Step);
+                Locate(_session.Locating());
                 break;
             case BuildInputKind.Add when input.Step is { } step:
                 LeaveBox();
@@ -252,7 +256,7 @@ internal sealed partial class BuildWorker
         ReadProcesses();
         _watching.Clear();
         foreach (var hook in _recorder.Watched)
-            _watching[hook.Element] = new Watching(TextOf(hook.Element));
+            _watching[hook.Element] = Watch(hook.Element);
     }
 
     // ===== What the person did =====
@@ -458,23 +462,45 @@ internal sealed partial class BuildWorker
             ? named.DeepClone()
             : target.DeepClone();
 
-    // What a watched control says now, or null when it isn't there or can't be read.
-    private string? TextOf(string element)
+    // A watched control, found now, with what it says now as what it said last.
+    private Watching Watch(string element)
+    {
+        var watching = new Watching();
+        watching.Last = TextOf(element, watching);
+        return watching;
+    }
+
+    // What a watched control says now, or null when it isn't there or can't be read. The control found before is read
+    // again; one that has gone, or takes no room, is found again, at most every WatchedFindEvery.
+    private string? TextOf(string element, Watching watching)
     {
         try
         {
-            return _driver.TryFind(Targets.Resolve(element, _runner.Globals, Elements())) is { } control ? control.Value ?? control.Name : null;
+            if (watching.Control is not { Bounds: not null })
+            {
+                if (Environment.TickCount64 < watching.NextFind)
+                    return null;
+                watching.NextFind = Environment.TickCount64 + WatchedFindEvery;
+                watching.Control = _driver.TryFind(Targets.Resolve(element, _runner.Globals, Elements()));
+            }
+            return watching.Control is { } control ? control.Value ?? control.Name : null;
         }
         catch (Exception ex) when (ex is StuckException or ScriptException || FlaUiDriver.Gone(ex))
         {
+            watching.Control = null;
             return null;
         }
     }
 
-    // A watched control's text: what it said when it was last waited for, and a new text and since when.
-    private sealed class Watching(string? last)
+    // A watched control's text: what it said when it was last waited for, and a new text and since when; and the
+    // control, as last found, and when it may be looked for again.
+    private sealed class Watching
     {
-        public string? Last { get; set; } = last;
+        public string? Last { get; set; }
+
+        public IControl? Control { get; set; }
+
+        public long NextFind { get; set; }
 
         public string? Changing { get; set; }
 

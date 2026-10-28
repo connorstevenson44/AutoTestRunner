@@ -252,15 +252,15 @@ public sealed partial class FlaUiDriver
 
     public IReadOnlyList<IControl> MenuItems() => [.. MenuElements().Select(item => new FlaUiControl(item))];
 
-    // The menu items on screen: in the main window's menu bar, or in a menu open in a popup window of its own.
+    // The menu items on screen: in the main window's menu bar, or in a menu open in a popup window of its own. A manual
+    // run looks a few times a second, so the app's windows come from Windows, and each item's place with the item.
     private List<AutomationElement> MenuElements()
     {
-        var ids = ProcessIds();
         var condition = Conditions.ByControlType(ControlType.MenuItem);
         try
         {
-            return [.. _automation.GetDesktop().FindAllChildren()
-                .Where(top => ids.Contains(top.Properties.ProcessId.ValueOrDefault))
+            using var cached = Facts(_automation.PropertyLibrary.Element.BoundingRectangle).Activate();
+            return [.. AppWindows().Select(_automation.FromHandle)
                 .SelectMany(top => top.FindAllDescendants(condition))
                 .Where(IsShown)];
         }

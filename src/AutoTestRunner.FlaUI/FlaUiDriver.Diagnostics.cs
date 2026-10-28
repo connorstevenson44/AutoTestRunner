@@ -13,6 +13,11 @@ public sealed partial class FlaUiDriver
     {
         var text = new StringBuilder();
         var walker = _automation.TreeWalkerFactory.GetControlViewWalker();
+        // Each control's facts come with it as the walk goes, rather than a call for each: a dump of a big window would
+        // otherwise make tens of thousands of calls into the app, and the stuck card would wait for them.
+        var properties = _automation.PropertyLibrary.Element;
+        using var cached = Facts(properties.ControlType, properties.Name, properties.AutomationId, properties.HelpText, properties.ClassName,
+            properties.BoundingRectangle).Activate();
         foreach (var hwnd in AppWindows())
         {
             text.Append(CultureInfo.InvariantCulture, $"===== {Native.Title(hwnd)} ({Native.ClassName(hwnd)})\r\n");

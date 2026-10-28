@@ -11,7 +11,7 @@ namespace AutoTestRunner.Cli;
 /// <param name="Y">Where a click was, in pixels.</param>
 /// <param name="Keys">The key pressed, as a key step writes it.</param>
 /// <param name="PassOn">Whether the click or key was kept from the app until the builder had read it, and is passed on now.</param>
-/// <param name="Step">The step to play or outline.</param>
+/// <param name="Step">The step to play.</param>
 /// <param name="Add">Whether a step played goes in the case.</param>
 /// <param name="Rewind">For EditFrom: whether the app has to start again, as it went past the step.</param>
 /// <param name="Check">For Try: the check to run against the app as it is.</param>
