@@ -213,8 +213,8 @@ public sealed partial class FlaUiDriver
 
     // A request for these properties of each control found, which stays usable once the request is no longer active.
     // A find made while it is active searches the request's view rather than the control view, so it asks for the
-    // control view too: WPF keeps a collapsed control in the raw view with the size it last had, so it would still be
-    // found and look shown, and a wait for it to go would never end.
+    // control view too: WPF keeps a collapsed control in the raw view with the size it last had, so it would be found
+    // and look shown.
     private CacheRequest Facts(params PropertyId[] properties)
     {
         var request = new CacheRequest
