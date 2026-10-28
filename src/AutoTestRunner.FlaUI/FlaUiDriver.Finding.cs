@@ -221,9 +221,17 @@ public sealed partial class FlaUiDriver
         _automation.PropertyLibrary.Element.BoundingRectangle);
 
     // A request for these properties of each control found, which stays usable once the request is no longer active.
-    private static CacheRequest Facts(params PropertyId[] properties)
+    // A find made while it is active searches the request's view rather than the control view, so it asks for the
+    // control view too: WPF keeps a collapsed control in the raw view with the size it last had, so it would still be
+    // found and look shown, and a wait for it to go would never end.
+    private CacheRequest Facts(params PropertyId[] properties)
     {
-        var request = new CacheRequest { AutomationElementMode = AutomationElementMode.Full, TreeScope = TreeScope.Element };
+        var request = new CacheRequest
+        {
+            AutomationElementMode = AutomationElementMode.Full,
+            TreeScope = TreeScope.Element,
+            TreeFilter = new PropertyCondition(_automation.PropertyLibrary.Element.IsControlElement, true),
+        };
         foreach (var property in properties)
             request.Add(property);
         return request;
