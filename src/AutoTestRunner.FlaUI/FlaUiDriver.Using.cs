@@ -26,7 +26,12 @@ public sealed partial class FlaUiDriver
             // Not every row can scroll itself into view; BringIntoView does the rest.
         }
         BringIntoView(element);
-        var box = Rect(element.BoundingRectangle);
+        var place = element.BoundingRectangle;
+        var box = Rect(place);
+        // A control that left the screen as it was scrolled to, such as an item of a menu that closed, has nowhere to
+        // point at; what is done with it next finds that out.
+        if (box.IsEmpty)
+            return;
         _keepClear(box);
         // The person's mouse, in a manual run, and the run's view keeps the outline: FlaUI's outline is four windows
         // made and thrown away each time, which under a mouse that is moving makes it flicker.
@@ -36,9 +41,11 @@ public sealed partial class FlaUiDriver
         Mouse.MoveTo(Middle(box));
         if (_control.Unattended)
             return;
+        // Where the mouse went rather than where the control is now: FlaUI's own outline reads the place again, and
+        // throws when the control has left the screen meanwhile.
         try
         {
-            element.DrawHighlight(false, Color.DarkOrange, TimeSpan.FromMilliseconds(_control.Pace + 500));
+            _automation.OverlayManager.Show(place, Color.DarkOrange, _control.Pace + 500);
         }
         catch (Exception ex) when (ex is COMException or InvalidOperationException)
         {
@@ -223,8 +230,7 @@ public sealed partial class FlaUiDriver
     {
         for (var index = 0; index < path.Count; index++)
         {
-            var item = WaitMenuItem(path[index]);
-            Point(new FlaUiControl(item), path[index]);
+            var item = PointAtMenuItem(path[index]);
             if (index < path.Count - 1 && item.Patterns.ExpandCollapse.IsSupported)
                 item.Patterns.ExpandCollapse.Pattern.Expand();
             else if (item.Patterns.Invoke.IsSupported)
@@ -232,6 +238,22 @@ public sealed partial class FlaUiDriver
             else
                 Mouse.LeftClick(Middle(Rect(item.BoundingRectangle)));
             _control.Wait(250);
+        }
+    }
+
+    // A menu can close, or be built again, between finding an item and the mouse reaching it, which leaves the item
+    // found with no place on screen, so an item that went is looked for again.
+    private AutomationElement PointAtMenuItem(string name)
+    {
+        for (var tries = 1; ; tries++)
+        {
+            var item = WaitMenuItem(name);
+            Point(new FlaUiControl(item), name);
+            if (IsShown(item))
+                return item;
+            if (tries == 3)
+                throw new StuckException($"click {name} in the menu", "It went from the screen each time the mouse moved to it.");
+            Log($"{name} went from the menu as the mouse moved to it, so it is looked for again.");
         }
     }
 
