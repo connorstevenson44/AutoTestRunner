@@ -568,11 +568,14 @@ internal sealed class SuitePane : Grid
         worker.Start();
     }
 
-    /// <summary>A view that shows only the commands, in a feed, for running a script outside a run.</summary>
+    /// <summary>
+    /// A view that shows only the commands, in a feed, for running a script outside a run. A command's start and end
+    /// wait until they show, so what it prints, which the feed takes from any thread, goes on the right command.
+    /// </summary>
     private sealed class CommandsOnlyView(ActivityFeed feed, Dispatcher dispatcher) : IRunView
     {
-        public void CommandStarted(string line, string? script) => dispatcher.BeginInvoke(DispatcherPriority.Normal, () => feed.CommandStarted(line, script));
-        public void CommandOutput(string line, bool error) => dispatcher.BeginInvoke(DispatcherPriority.Normal, () => feed.CommandOutput(line, error));
-        public void CommandFinished(int exitCode, TimeSpan took) => dispatcher.BeginInvoke(DispatcherPriority.Normal, () => feed.CommandFinished(exitCode, took));
+        public void CommandStarted(string line, string? script) => dispatcher.Invoke(() => feed.CommandStarted(line, script));
+        public void CommandOutput(string line, bool error) => feed.CommandOutput(line, error);
+        public void CommandFinished(int exitCode, TimeSpan took) => dispatcher.Invoke(() => feed.CommandFinished(exitCode, took));
     }
 }

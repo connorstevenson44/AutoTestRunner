@@ -10,14 +10,24 @@ public sealed class WindowsMachine : IMachine
 {
     private static readonly string Temp = Path.Combine(Path.GetTempPath(), "AutoTestRunner");
 
+    // The service is opened by its name, rather than by listing all of them, as a check asks twice a second while it
+    // waits. A service's display name opens it too, but doesn't name it.
     public string? ServiceState(string name)
     {
-        var service = ServiceController.GetServices().FirstOrDefault(item => string.Equals(item.ServiceName, name, StringComparison.OrdinalIgnoreCase));
-        if (service is null)
+        try
+        {
+            using var service = new ServiceController(name);
+            if (!string.Equals(service.ServiceName, name, StringComparison.OrdinalIgnoreCase))
+                return null;
+            // As Windows' own tools word it: Running, Stopped, Start Pending.
+            var state = service.Status.ToString();
+            return string.Concat(state.Select((c, i) => i > 0 && char.IsUpper(c) ? " " + c : c.ToString()));
+        }
+        // There is no such service, or the name can't be one.
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
             return null;
-        // As Windows' own tools word it: Running, Stopped, Start Pending.
-        var state = service.Status.ToString();
-        return string.Concat(state.Select((c, i) => i > 0 && char.IsUpper(c) ? " " + c : c.ToString()));
+        }
     }
 
     public bool TaskExists(string path) => Run("schtasks.exe", ["/query", "/tn", path]).ExitCode == 0;

@@ -30,6 +30,9 @@ internal sealed class BuildSession
     private RecordingHook? _hook;
     private volatile IReadOnlySet<int> _app = new HashSet<int>();
     private volatile bool _playing;
+    // The step whose control the panel outlines, as the mouse goes over the steps, and whether a look for it is waiting.
+    private volatile DraftStep? _locating;
+    private int _locateWaiting;
 
     private BuildSession(BuildRequest request, Options options, Action ended)
     {
@@ -41,7 +44,14 @@ internal sealed class BuildSession
             _draft.Needs.Add(before.Id);
         _panel = new BuilderPanel(request, _draft);
         _panel.Play += (step, add) => Post(new BuildInput(BuildInputKind.Play, Step: step, Add: add));
-        _panel.Locate += step => Post(new BuildInput(BuildInputKind.Locate, Step: step));
+        // Only the step the mouse is on by the time the builder gets to it is looked for: each look searches the app,
+        // and one for each step the mouse passed over on the way would hold up what the person does next.
+        _panel.Locate += step =>
+        {
+            _locating = step;
+            if (Interlocked.Exchange(ref _locateWaiting, 1) == 0)
+                Post(new BuildInput(BuildInputKind.Locate));
+        };
         _panel.AddStep += step => Post(new BuildInput(BuildInputKind.Add, Step: step));
         _panel.RunTo += step => Post(new BuildInput(BuildInputKind.RunTo, Step: step));
         _panel.RollBack += step => Post(new BuildInput(BuildInputKind.RollBack, Step: step));
@@ -91,6 +101,13 @@ internal sealed class BuildSession
             return false;
         _inputs.TryTake(out input, Idle);
         return true;
+    }
+
+    /// <summary>The step whose control to outline now, or null when the outline goes. Taken on the builder's thread.</summary>
+    public DraftStep? Locating()
+    {
+        Interlocked.Exchange(ref _locateWaiting, 0);
+        return _locating;
     }
 
     /// <summary>The app's processes now, whose windows the hook watches.</summary>

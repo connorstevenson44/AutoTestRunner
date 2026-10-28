@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -19,6 +20,11 @@ internal sealed class ActivityFeed : Grid
     private const int MaxLines = 1500;
 
     private readonly ScrollViewer _scroll;
+    // What commands printed that isn't on show yet, from the threads reading it, and whether it is due to be shown. A
+    // program can print thousands of lines a second: each line laid out on its own would leave the panel no time to
+    // draw or answer the mouse, so what comes meanwhile is shown together, once the panel has drawn what it has.
+    private readonly ConcurrentQueue<(string Line, bool Error)> _printed = new();
+    private int _printedDue;
     private readonly StackPanel _items = new() { Margin = new Thickness(0, 0, 4, 8) };
     private readonly Button _latest;
     private readonly string _before;
@@ -114,10 +120,29 @@ internal sealed class ActivityFeed : Grid
         Body.Children.Add(_command);
     }
 
-    public void CommandOutput(string line, bool error) => _command?.Add(line, error);
+    /// <summary>A line the command printed. Called from any thread: it shows soon after, in the order printed.</summary>
+    public void CommandOutput(string line, bool error)
+    {
+        _printed.Enqueue((line, error));
+        if (Interlocked.Exchange(ref _printedDue, 1) == 0)
+            Dispatcher.BeginInvoke(DispatcherPriority.Background, ShowPrinted);
+    }
+
+    // Due is cleared before the lines are taken, so a line printed meanwhile is shown by the next call, never left.
+    private void ShowPrinted()
+    {
+        Volatile.Write(ref _printedDue, 0);
+        var lines = new List<(string Line, bool Error)>();
+        while (_printed.TryDequeue(out var printed))
+            lines.Add(printed);
+        if (lines.Count > 0)
+            _command?.Add(lines);
+    }
 
     public void CommandFinished(int exitCode, TimeSpan took)
     {
+        // Everything the command printed is in before its end.
+        ShowPrinted();
         _command?.Finish(exitCode, took);
         _command = null;
     }
@@ -383,15 +408,18 @@ internal sealed class ActivityFeed : Grid
 
         public string Text => _text.ToString();
 
-        public void Add(string line, bool error)
+        public void Add(IReadOnlyList<(string Line, bool Error)> lines)
         {
-            if (++_lines > MaxLines)
+            foreach (var (line, error) in lines)
             {
-                // The oldest line and the break after it.
-                _output.Inlines.Remove(_output.Inlines.FirstInline);
-                _output.Inlines.Remove(_output.Inlines.FirstInline);
+                if (++_lines > MaxLines)
+                {
+                    // The oldest line and the break after it.
+                    _output.Inlines.Remove(_output.Inlines.FirstInline);
+                    _output.Inlines.Remove(_output.Inlines.FirstInline);
+                }
+                Echo(_output, line, error ? Ui.TerminalError : Ui.TerminalText);
             }
-            Echo(_output, line, error ? Ui.TerminalError : Ui.TerminalText);
             _scroll.ScrollToEnd();
         }
 

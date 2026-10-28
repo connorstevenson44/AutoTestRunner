@@ -75,12 +75,12 @@ internal sealed partial class BuildWorker
     {
         foreach (var hook in _recorder.Watched)
         {
-            var now = TextOf(hook.Element);
             if (!_watching.TryGetValue(hook.Element, out var watching))
             {
-                _watching[hook.Element] = new Watching(now);
+                _watching[hook.Element] = Watch(hook.Element);
                 continue;
             }
+            var now = TextOf(hook.Element, watching);
             if (now is null || now == watching.Last)
             {
                 watching.Changing = null;

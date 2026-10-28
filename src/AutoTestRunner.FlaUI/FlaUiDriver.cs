@@ -19,6 +19,10 @@ namespace AutoTestRunner.FlaUI;
 /// </summary>
 public sealed partial class FlaUiDriver : IDriver
 {
+    // How long the app's process ids are kept before they are read again, in milliseconds: reading them asks Windows
+    // for every process there is, and waits and finds ask for the app's windows many times a second.
+    private const int ProcessesFor = 500;
+
     private readonly UIA3Automation _automation = new();
     private readonly RunControl _control;
     private readonly Func<ScreenRect?> _panel;
@@ -27,6 +31,10 @@ public sealed partial class FlaUiDriver : IDriver
     private string _windowTitle = "";
     private nint _main;
     private bool _wheelNoted;
+    // The app's process ids as last read, for the exe of that name, and when they are to be read again.
+    private IReadOnlySet<int> _processes = new HashSet<int>();
+    private string _processesOf = "";
+    private long _processesDue;
 
     /// <param name="control">The run's pause, step and stop controls, which every action waits on.</param>
     /// <param name="panel">Where the panel is, so the app is placed beside it; null when there is none.</param>
@@ -82,9 +90,12 @@ public sealed partial class FlaUiDriver : IDriver
         return _windowTitle;
     }
 
-    // From the exe's own folder, as when it is opened from Explorer.
-    private static void StartProcess(string exe, string? arguments) =>
+    // From the exe's own folder, as when it is opened from Explorer. The app's processes are read again next time.
+    private void StartProcess(string exe, string? arguments)
+    {
         Process.Start(new ProcessStartInfo(exe, arguments ?? "") { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(exe) })?.Dispose();
+        _processesDue = 0;
+    }
 
     /// <summary>
     /// Drives an app that is open already, by its exe: its main window, else its sign-in window, else any window it
@@ -151,6 +162,7 @@ public sealed partial class FlaUiDriver : IDriver
 
     public void CloseAll(string exe)
     {
+        _processesDue = 0;
         foreach (var process in Process.GetProcessesByName(Path.GetFileNameWithoutExtension(exe)))
         {
             try
@@ -172,10 +184,13 @@ public sealed partial class FlaUiDriver : IDriver
 
     internal IReadOnlySet<int> ProcessIds()
     {
+        if (_processesOf == _processName && Environment.TickCount64 < _processesDue)
+            return _processes;
         var processes = Process.GetProcessesByName(_processName);
         try
         {
-            return processes.Select(process => process.Id).ToHashSet();
+            (_processes, _processesOf, _processesDue) = (processes.Select(process => process.Id).ToHashSet(), _processName, Environment.TickCount64 + ProcessesFor);
+            return _processes;
         }
         finally
         {
