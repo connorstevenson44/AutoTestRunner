@@ -1,0 +1,40 @@
+{
+  "$schema": "../../schema/suite.schema.json",
+  "name": "Order Desk showcase",
+  "app": { "exe": "${exe}", "window": "Order Desk", "startWindow": "Sign in to Order Desk", "status": "statusText" },
+  "variables": {
+    "exe": { "firstExisting": [
+      "../OrderDesk/OrderDesk.exe",
+      "../OrderDesk/bin/Release/net10.0-windows/OrderDesk.exe",
+      "../OrderDesk/bin/Debug/net10.0-windows/OrderDesk.exe"
+    ] },
+    "appConfig": "${folderOf(exe)}\\OrderDesk.dll.config",
+    "dataDir": "${env:LOCALAPPDATA}\\OrderDesk",
+    "database": "${dataDir}\\orderdesk.db",
+    "activityLog": "${dataDir}\\activity.log",
+    "exportDir": "${env:LOCALAPPDATA}\\OrderDesk exports",
+    "broker": "amqp://guest:guest@localhost:5672/",
+    "shopBroker": "amqp://orderdesk:orderdesk@warehouse.contoso.local:5672/",
+    "user": "clerk",
+    "password": "clerk-demo"
+  },
+  "helpers": {
+    "folderOf": { "regex": "^(.*)\\\\[^\\\\]+$" },
+    "shopName": { "xPath": "//appSettings/add[@key='ShopName']/@value" },
+    "ordersQueue": { "xPath": "//appSettings/add[@key='WarehouseOrdersQueue']/@value" },
+    "picksQueue": { "xPath": "//appSettings/add[@key='WarehousePicksQueue']/@value" }
+  },
+  "databases": {
+    "orders": { "kind": "sqlite", "connection": "Data Source=${database};Mode=ReadWrite;Pooling=False" }
+  },
+  "queues": {
+    "warehouseOrders": { "kind": "rabbitMq", "connection": "${broker}", "queue": "${ordersQueue(readFile(appConfig))}" },
+    "picks": { "kind": "rabbitMq", "connection": "${broker}", "queue": "${picksQueue(readFile(appConfig))}" }
+  },
+  "software": {
+    "erlang": { "title": "Erlang/OTP, which RabbitMQ runs on", "winget": "Erlang.ErlangOTP" },
+    "rabbitMq": { "title": "RabbitMQ, for the warehouse chapter", "winget": "RabbitMQ.RabbitMQServer", "present": { "service": "RabbitMQ", "state": "Running" } }
+  },
+  "requires": ["${exe}"],
+  "reset": { "script": "tools/Reset-Showcase.ps1", "leftovers": "tools/Find-Leftovers.ps1" }
+}

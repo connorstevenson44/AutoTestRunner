@@ -1,0 +1,224 @@
+{
+  "$schema": "../../../schema/case.schema.json",
+  "name": "A day at the coffee shop",
+  "needsNote": "Order Desk closed. RabbitMQ running on this computer for part 7, the warehouse; without it, part 7 ships the order without one.",
+  "covers": "A whole day in Order Desk in eight parts, each ending in a checkpoint: sign in, take an order, a rush of orders from a sheet, change and delete orders, the catalogue, the database, the warehouse over RabbitMQ, and the end-of-day export, leaving the computer as it was",
+  "tags": ["showcase"],
+  "steps": [
+    { "say": "AutoTestRunner is about to test Order Desk, a coffee shop's ordering app, all by itself. It moves the mouse and types as a person would, and checks every result." },
+    { "if": { "output": "powershell.exe",
+              "args": ["-NoProfile", "-Command", "$c = New-Object Net.Sockets.TcpClient; try { if ($c.ConnectAsync('localhost', 5672).Wait(3000)) { 'answering' } } catch { } finally { $c.Close() }"],
+              "contains": "answering", "label": "RabbitMQ answers on this computer" },
+      "note": "Order Desk reads its broker when it starts, so this is decided before it does. Part 7 uses the warehouse only when RabbitMQ answers.",
+      "steps": [
+        { "setAppSetting": "${appConfig}", "key": "WarehouseBroker", "to": "${broker}", "say": "Point Order Desk at this computer's RabbitMQ, which plays the warehouse" },
+        { "set": { "warehouse": "here" } }
+      ],
+      "else": [
+        { "setAppSetting": "${appConfig}", "key": "WarehouseBroker", "to": "${shopBroker}", "say": "RabbitMQ isn't running here, so Order Desk keeps the shop's own warehouse" },
+        { "set": { "warehouse": "missing" } }
+      ] },
+
+    { "say": "Part 1 of 8: Sign in. First with a wrong password, which Order Desk must turn away." },
+    { "startApp": {} },
+    { "type": "userName", "text": "${user}" },
+    { "type": "password", "text": "not-the-password", "secret": true, "say": "A wrong password. Passwords are never shown or written to the log." },
+    { "waitEnabled": "signIn" },
+    { "click": "signIn" },
+    { "waitText": "signInProblem", "equals": "The user name or password is wrong.", "within": 10, "what": "sign-in message" },
+    { "say": "Turned away, as it should be. Now the right password." },
+    { "type": "password", "text": "${password}", "secret": true },
+    { "waitEnabled": "signIn" },
+    { "click": "signIn" },
+    { "useWindow": "Order Desk" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Ready. Signed in as" }, "as": "ready" },
+    { "find": "signedInAs", "as": "topBar", "what": "top bar" },
+    { "checkpoint": "Part 1: only the right password gets in",
+      "checks": [
+        { "logged": "${activityLog}", "text": "Sign-in failed for ${user}", "label": "The wrong password was noted" },
+        { "equals": "${ready}", "to": "Ready. Signed in as Jo Bloggs. 0 orders in ${dataDir}.", "label": "Order Desk says who signed in" },
+        { "contains": "${topBar}", "text": "${shopName(readFile(appConfig))}", "label": "The shop's name, as Order Desk's own settings file has it" },
+        { "dbValue": "orders", "sql": "select FullName from Staff where UserName = @user", "params": { "user": "${user}" }, "equals": "Jo Bloggs",
+          "label": "Jo Bloggs is the clerk, in the database" },
+        { "registry": "HKCU\\Software\\OrderDesk", "value": "LastUser", "equals": "${user}", "label": "Remembered for next time" }
+      ],
+      "look": [ "The top bar says Contoso Coffee and Tea · Jo Bloggs." ] },
+
+    { "say": "Part 2 of 8: Take an order over the phone. Watch each box being filled in." },
+    { "type": "customer", "text": "Ada Lovelace" },
+    { "choose": "product", "option": "Coffee beans" },
+    { "type": "quantity", "text": "2" },
+    { "tick": "giftWrap" },
+    { "click": { "element": "delivery", "with": { "option": "Next day" } }, "what": "Next day" },
+    { "type": "notes", "text": "Ring the bell twice" },
+    { "find": "formTotal", "as": "total", "what": "total" },
+    { "click": "addOrder" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Added order 1001" }, "as": "added" },
+    { "hover": { "element": "orderRow", "with": { "number": "1001" } }, "what": "Order 1001" },
+    { "checkpoint": "Part 2: Ada's order is on the list, and saved",
+      "checks": [
+        { "equals": "${total}", "to": "Total: £35.00", "label": "Total: 2 × £12.00, gift wrap £2.00, next day £9.00" },
+        { "equals": "${added}", "to": "Added order 1001 for Ada Lovelace: £35.00.", "label": "Order Desk says it was added" },
+        { "shows": { "element": "orderRow", "with": { "number": "1001" } }, "label": "Order 1001 on the list" },
+        { "dbValue": "orders", "sql": "select Customer || ', ' || Quantity || ' x ' || Product from Orders where Number = 1001", "equals": "Ada Lovelace, 2 x Coffee beans",
+          "label": "Saved in the database" },
+        { "dbValue": "orders", "sql": "select Delivery from Orders where Number = 1001", "equals": "Next day", "label": "Saved delivery" },
+        { "dbValue": "orders", "sql": "select Total from Orders where Number = 1001", "equals": "35.00", "label": "Saved total" },
+        { "dbValue": "orders", "sql": "select Notes from Orders where Number = 1001", "equals": "Ring the bell twice", "label": "Saved note" },
+        { "lastLine": "${activityLog}", "contains": "Added order 1001: Ada Lovelace, 2 x Coffee beans, 35.00", "label": "Written in the activity log" }
+      ],
+      "look": [ "Order 1001 on the list: Ada Lovelace, 2 × Coffee beans, gift wrapped, next day, £35.00." ] },
+
+    { "say": "Part 3 of 8: The lunchtime rush. Three more orders, one after another, read from a sheet." },
+    { "repeat": { "rows": "data/lunchtime-rush.json" }, "item": "order",
+      "steps": [
+        { "call": "addOrder", "with": { "customer": "${order.customer}", "product": "${order.product}", "quantity": "${order.quantity}",
+                                         "giftWrap": "${order.giftWrap}", "notes": "${order.notes}" },
+          "as": "status" }
+      ] },
+    { "checkpoint": "Part 3: the rush is taken, each order with its own number",
+      "checks": [
+        { "equals": "${status}", "to": "Added order 1004 for Katherine Johnson: £24.00.", "label": "The last of the rush" },
+        { "dbValue": "orders", "sql": "select count(*) from Orders", "equals": "4", "label": "Orders in the database" },
+        { "dbValue": "orders", "sql": "select Total from Orders where Number = 1003", "equals": "8.00", "label": "Alan's mug, gift wrapped" },
+        { "shows": { "element": "orderRow", "with": { "number": "1002" } }, "label": "Order 1002 on the list" },
+        { "shows": { "element": "orderRow", "with": { "number": "1004" } }, "label": "Order 1004 on the list" }
+      ],
+      "tools": [ { "openFile": "${suiteDir}\\data\\lunchtime-rush.json", "label": "The sheet" } ] },
+
+    { "say": "Part 4 of 8: Customers change their minds. Alan wants two mugs and the full name on his gift note, and Grace cancels her order." },
+    { "click": { "element": "orderRow", "with": { "number": "1003" } }, "how": "double", "what": "Order 1003" },
+    { "type": { "element": "orderQuantity", "with": { "number": "1003" } }, "text": "2" },
+    { "find": { "element": "orderTotal", "with": { "number": "1003" } }, "as": "newTotal", "what": "total" },
+    { "replaceText": { "element": "orderNote", "with": { "number": "1003" } }, "regex": "Joan$", "replacement": "Joan Clarke",
+      "say": "Put the full name in the gift note" },
+    { "click": { "element": "saveOrder", "with": { "number": "1003" } } },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Saved order 1003" }, "as": "saved" },
+    { "hover": { "element": "orderRow", "with": { "number": "1002" } }, "what": "Order 1002", "say": "Delete only shows while the mouse is over the order" },
+    { "click": { "element": "orderRowButton", "with": { "number": "1002", "tip": "Delete this order" } }, "what": "Delete 1002" },
+    { "answerDialog": "Delete order", "button": "Yes", "expect": "Delete order 1002 for Grace Hopper?", "say": "Order Desk asks first; the test checks the question before answering Yes" },
+    { "waitGone": { "element": "orderRow", "with": { "number": "1002" } }, "what": "Order 1002" },
+    { "checkpoint": "Part 4: Alan's order is changed, and Grace's is gone",
+      "checks": [
+        { "equals": "${newTotal}", "to": "Total: £14.00", "label": "New total: 2 × £6.00, gift wrap £2.00" },
+        { "equals": "${saved}", "to": "Saved order 1003: 2 × Mug, gift wrapped, £14.00.", "label": "Order Desk says it was saved" },
+        { "dbValue": "orders", "sql": "select Quantity from Orders where Number = 1003", "equals": "2", "label": "Saved quantity" },
+        { "dbValue": "orders", "sql": "select Notes from Orders where Number = 1003", "equals": "Gift note: Happy birthday, Joan Clarke", "label": "Saved gift note" },
+        { "dbValue": "orders", "sql": "select Number from Orders where Number = 1002", "rows": 0, "label": "Grace's order in the database" },
+        { "logged": "${activityLog}", "text": "Deleted order 1002", "label": "Written in the activity log" }
+      ] },
+
+    { "say": "Part 5 of 8: The catalogue. Drag a tea onto the order form, then find one spare part among 420, in a list that only builds the rows on screen." },
+    { "tab": "Catalogue" },
+    { "expand": ["Tea", "Green"], "in": "categories" },
+    { "drag": { "element": "catalogueProduct", "with": { "name": "Sencha 100g" } }, "to": "product", "what": "Sencha 100g",
+      "say": "Drag it onto the Product box of the order form" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Picked Sencha 100g" }, "as": "picked" },
+    { "expand": ["Spare parts", "Espresso machines"], "in": "categories" },
+    { "hover": { "element": "catalogueProduct", "with": { "name": "SP-0388 Pump seal" } }, "what": "SP-0388 Pump seal",
+      "say": "It scrolls until the part is built, far down the list" },
+    { "find": { "type": "Text", "name": "£", "match": "startsWith", "sameRowAs": { "element": "catalogueProduct", "with": { "name": "SP-0388 Pump seal" } } },
+      "as": "partPrice", "what": "SP-0388's price" },
+    { "tab": "Orders" },
+    { "checkpoint": "Part 5: the tea is on the order form, and the part was found",
+      "checks": [
+        { "equals": "${picked}", "to": "Picked Sencha 100g from the catalogue.", "label": "Order Desk says it was picked" },
+        { "says": "price", "equals": "TG-002 · £6.40 each", "label": "Price under the product" },
+        { "equals": "${partPrice}", "to": "£21.88", "label": "The pump seal's price" }
+      ] },
+
+    { "say": "Part 6 of 8: Behind the scenes. The test adds a customer straight into the database, as the shop's customer system does overnight, and Order Desk must show her." },
+    { "query": "orders", "sql": "insert into Customers (Account, Name, Email) values (@account, @name, @email)",
+      "params": { "account": "C-2001", "name": "Hedy Lamarr", "email": "hedy.lamarr@example.com" }, "as": "inserted",
+      "say": "As the overnight customer sync would add her" },
+    { "tab": "Customers" },
+    { "key": "F5", "say": "F5 has Order Desk read everything again" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Refreshed:" }, "as": "refreshed" },
+    { "find": { "element": "customerCell", "with": { "account": "C-2001", "column": "Name" } }, "as": "newName", "what": "C-2001's name" },
+    { "checkpoint": "Part 6: Hedy Lamarr shows up, straight from the database",
+      "checks": [
+        { "equals": "${inserted.rows}", "to": "1", "label": "Customers added to the database" },
+        { "equals": "${refreshed}", "to": "Refreshed: 3 orders, 8 customers.", "label": "Order Desk says what it read" },
+        { "equals": "${newName}", "to": "Hedy Lamarr", "label": "The new customer, on the Customers tab" },
+        { "rows": "customersGrid", "equals": 8, "label": "Customers on the tab" },
+        { "says": { "element": "customerCell", "with": { "account": "C-1003", "column": "Orders" } }, "equals": "1", "label": "Alan Turing's orders" },
+        { "dbValue": "orders", "sql": "select printf('%.2f', sum(Total)) from Orders", "equals": "73.00", "label": "Takings so far, added up by the database: £35 + £14 + £24" }
+      ] },
+
+    { "tab": "Orders" },
+    { "if": { "equals": "${warehouse}", "to": "here", "label": "RabbitMQ answered at the start" },
+      "steps": [
+        { "say": "Part 7 of 8: Ship Ada's order. Order Desk tells the warehouse through RabbitMQ, a message queue. The test plays the warehouse: it reads the message, then answers that the order is picked." },
+        { "click": "connectToWarehouse" },
+        { "call": "waitForStatusBar", "with": { "startsWith": "Connected to the warehouse", "within": "30" }, "as": "connected" },
+        { "purge": "warehouseOrders", "say": "Start with no messages waiting" },
+        { "purge": "picks" },
+        { "hover": { "element": "orderRow", "with": { "number": "1001" } }, "what": "Order 1001" },
+        { "click": { "element": "orderRowButton", "with": { "number": "1001", "tip": "Mark as shipped" } }, "what": "Ship 1001" },
+        { "call": "waitForStatusBar", "with": { "startsWith": "Order 1001 shipped" }, "as": "shipped" },
+        { "checkpoint": "Part 7: Ada's order is waiting for the warehouse",
+          "checks": [
+            { "equals": "${connected}", "to": "Connected to the warehouse at localhost.", "label": "Order Desk is connected" },
+            { "equals": "${shipped}", "to": "Order 1001 shipped, and sent to the warehouse.", "label": "Order Desk says it was sent" },
+            { "queue": "warehouseOrders", "count": 1, "within": 5, "label": "Messages waiting for the warehouse" },
+            { "queue": "warehouseOrders", "has": "\"customer\":\"Ada Lovelace\"", "label": "The message is Ada's order" },
+            { "dbValue": "orders", "sql": "select Status from Orders where Number = 1001", "equals": "Shipped", "label": "Saved as shipped" }
+          ] },
+        { "receive": "warehouseOrders", "contains": "\"number\":1001", "as": "message", "say": "Take the message off the queue, as the warehouse would" },
+        { "send": "picks", "file": "data/picked-1001.json", "say": "Answer as the warehouse does once it has picked the order" },
+        { "call": "waitForStatusBar", "with": { "startsWith": "The warehouse picked order 1001" }, "as": "picked" },
+        { "checkpoint": "Part 7: the warehouse has picked Ada's order",
+          "checks": [
+            { "contains": "${message}", "text": "{\"sku\":\"CB-001\",\"product\":\"Coffee beans\",\"quantity\":2}", "label": "The message asked for 2 × Coffee beans" },
+            { "equals": "${picked}", "to": "The warehouse picked order 1001.", "label": "Order Desk heard back" },
+            { "shows": { "element": "orderLabel", "with": { "number": "1001", "status": "picked" } }, "label": "Picked label on order 1001" },
+            { "dbValue": "orders", "sql": "select Status from Orders where Number = 1001", "equals": "Picked", "label": "Saved as picked" },
+            { "queue": "picks", "count": 0, "within": 5, "label": "Answers left on the queue" },
+            { "queue": "warehouseOrders", "count": 0, "label": "Messages left for the warehouse" }
+          ],
+          "look": [ "Order 1001 has a blue Picked label." ] }
+      ],
+      "else": [
+        { "say": "Part 7 of 8: Ship Ada's order. RabbitMQ, the message queue the warehouse uses, isn't running on this computer, so Order Desk just marks it shipped. The launcher offers to install RabbitMQ." },
+        { "hover": { "element": "orderRow", "with": { "number": "1001" } }, "what": "Order 1001" },
+        { "click": { "element": "orderRowButton", "with": { "number": "1001", "tip": "Mark as shipped" } }, "what": "Ship 1001" },
+        { "call": "waitForStatusBar", "with": { "startsWith": "Order 1001 shipped" }, "as": "shipped" },
+        { "checkpoint": "Part 7: Ada's order is shipped",
+          "checks": [
+            { "equals": "${shipped}", "to": "Order 1001 shipped.", "label": "Order Desk says it was shipped" },
+            { "shows": { "element": "orderLabel", "with": { "number": "1001", "status": "shipped" } }, "label": "Shipped label on order 1001" },
+            { "dbValue": "orders", "sql": "select Status from Orders where Number = 1001", "equals": "Shipped", "label": "Saved as shipped" }
+          ],
+          "look": [ "Order 1001 has a green Shipped label." ] }
+      ] },
+
+    { "say": "Part 8 of 8: End of the day. Export the orders to a file, check the file adds up, then put the computer back as it was." },
+    { "writeFile": "${exportDir}\\README.txt", "text": "Exports from the Order Desk showcase. It deletes this folder when it ends." },
+    { "tick": "checkedTheOrders", "say": "Export only works once the orders are checked" },
+    { "menu": ["File", "Export to folder"] },
+    { "pickFolder": "Export orders to", "path": "${exportDir}" },
+    { "call": "waitForStatusBar", "with": { "startsWith": "Exported 3 orders." }, "as": "exported" },
+    { "script": "tools/Summarize-Export.ps1", "args": ["${exportDir}\\orders.csv"], "as": "summary", "say": "A script reads the file back, as a person checking it would" },
+    { "checkpoint": "Part 8: the export adds up",
+      "checks": [
+        { "contains": "${summary.output}", "text": "3 orders, 73.00 in all", "label": "What the script added up" },
+        { "fileContains": "${exportDir}\\orders.csv", "text": "1003,Alan Turing,Mug,2,yes,Standard,,14.00,New", "label": "Alan's order in the file" },
+        { "registry": "HKCU\\Software\\OrderDesk", "value": "ExportFolder", "equals": "${exportDir}", "label": "Export folder remembered" }
+      ],
+      "tools": [ { "openFile": "${exportDir}\\orders.csv", "label": "orders.csv" } ] },
+    { "closeApp": {} },
+    { "setAppSetting": "${appConfig}", "key": "WarehouseBroker", "to": "${shopBroker}", "say": "Point Order Desk back at the shop's own warehouse" },
+    { "delete": "${dataDir}" },
+    { "delete": "${exportDir}" },
+    { "powershell": "Remove-Item -LiteralPath 'HKCU:\\Software\\OrderDesk' -Recurse -ErrorAction SilentlyContinue", "say": "Forget what Order Desk remembered" },
+    { "checkpoint": "The end: nothing is left behind",
+      "checks": [
+        { "process": "OrderDesk", "running": false, "within": 10, "label": "Order Desk is closed" },
+        { "appSetting": "${appConfig}", "key": "WarehouseBroker", "equals": "${shopBroker}", "label": "Order Desk points at the shop's warehouse" },
+        { "fileMissing": "${dataDir}", "label": "Its data, deleted" },
+        { "fileMissing": "${exportDir}", "label": "The exports, deleted" },
+        { "nothingLeft": {}, "label": "Nothing else left on this computer" }
+      ],
+      "look": [ "That was a whole day at the shop, tested in a few minutes. The results folder has a log of every step, and a report CI can read." ] }
+  ]
+}

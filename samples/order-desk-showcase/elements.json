@@ -1,0 +1,37 @@
+{
+  "$schema": "../../schema/elements.schema.json",
+  "userName": { "id": "UserBox" },
+  "password": { "id": "PasswordBox" },
+  "signIn": { "id": "SignInButton" },
+  "signInProblem": { "id": "SignInProblem" },
+
+  "statusText": { "id": "StatusText" },
+  "signedInAs": { "id": "SignedInText" },
+  "customer": [ { "id": "CustomerBox" }, { "type": "Edit", "name": "Customer" } ],
+  "product": { "id": "ProductBox" },
+  "price": { "id": "PriceText" },
+  "quantity": { "id": "QuantityBox" },
+  "giftWrap": { "type": "CheckBox", "name": "Gift wrap" },
+  "delivery": { "radioButton": "${option}" },
+  "notes": { "id": "NotesBox" },
+  "formTotal": { "id": "TotalText" },
+  "addOrder": { "button": "Add order" },
+  "connectToWarehouse": { "id": "ConnectButton" },
+
+  "orderRow": { "type": "Button", "helpText": "Order ${number}" },
+  "orderRowButton": { "type": "Button", "helpText": "${tip}", "within": { "element": "orderRow", "with": { "number": "${number}" } } },
+  "orderLabel": { "type": "Text", "helpText": "Order ${number} ${status}" },
+  "checkedTheOrders": { "type": "CheckBox", "name": "I have checked the orders" },
+
+  "orderWindow": { "window": "Order ${number}" },
+  "orderQuantity": { "id": "DetailQuantityBox", "within": { "element": "orderWindow", "with": { "number": "${number}" } } },
+  "orderNote": { "id": "DetailNotesBox", "within": { "element": "orderWindow", "with": { "number": "${number}" } } },
+  "orderTotal": { "id": "DetailTotal", "within": { "element": "orderWindow", "with": { "number": "${number}" } } },
+  "saveOrder": { "id": "SaveButton", "within": { "element": "orderWindow", "with": { "number": "${number}" } } },
+
+  "customersGrid": { "id": "CustomersGrid" },
+  "customerCell": { "cell": { "row": "${account}", "column": "${column}" }, "within": "customersGrid" },
+
+  "categories": { "id": "CategoryTree" },
+  "catalogueProduct": { "listItem": "${name}", "scrollToFind": true }
+}

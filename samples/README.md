@@ -4,7 +4,8 @@ Order Desk is a small WPF app made for these demos, as a coffee and tea shop's o
 in, orders and customers are in a SQLite database, and shipped orders go to the warehouse over RabbitMQ. Four suites
 test it: the Order Desk tests, which pass; the warehouse tests, which pass against a RabbitMQ on the computer; tests
 that fail or get stuck; and a suite whose scripts have mistakes in them. They are written as a test team would write them,
-so what you watch is a test run, not a tour.
+so what you watch is a test run, not a tour. The showcase is the tour: one case, a day at the shop in eight parts, that
+shows most of what AutoTestRunner does, to show people who don't write tests.
 
 ## Watching them
 
@@ -23,6 +24,8 @@ scheduled task) when they are done.
 | `4 Find the mistakes in a suite.cmd` | Runs `autotest validate` on a suite full of mistakes, and lists every one. |
 | `5 Do the Order Desk tests yourself.cmd` | The Order Desk tests at Manual speed: the panel outlines what to click and says what to type, and each step waits until you have done it. Starting the app, the database queries and the checks are still done for you. |
 | `6 Run the warehouse tests.cmd` | The warehouse tests. They need RabbitMQ running on the computer, with its `guest` user; the launcher offers to install it with winget, as `autotest setup` does. |
+| `7 Watch the showcase.cmd` | Opens the launcher on the showcase. Press Start, and the panel says what each part is about before it starts. Space holds a checkpoint on screen for as long as you need to talk it through. |
+| `8 Do the showcase yourself.cmd` | The showcase at Manual speed: you do the clicks and typing the panel asks for, and it does the rest. |
 
 The Demos workflow runs on every push to main and every pull request, and keeps the bundle for 90 days. To make a
 fresh one, open **Actions > Demos > Run workflow** on GitHub and pick the branch. Untick the check to only build the
@@ -44,6 +47,7 @@ each ends as it should, as CI does.
 | [`order-desk-tests`](order-desk-tests) | Twenty cases that pass, numbered OD-*area*-*n* as a test team's would be (below). |
 | [`order-desk-warehouse-tests`](order-desk-warehouse-tests) | Five cases that pass against a RabbitMQ on the computer: the test plays the warehouse, reading what Order Desk sends and sending it picks. |
 | [`order-desk-failure-examples`](order-desk-failure-examples) | Ten cases that fail on purpose, each in a different way (below). |
+| [`order-desk-showcase`](order-desk-showcase) | One case to show people: a day at the shop, told in eight parts (below). |
 | [`script-mistakes`](script-mistakes) | A suite with a mistake in nearly every step, for `autotest validate` to find before anything runs. |
 | [`demo`](demo) | The smallest suite, used by the runner's own tests. It has no app. |
 
@@ -72,6 +76,26 @@ points Order Desk at the computer's own RabbitMQ with `setAppSetting`, empties b
 Desk sends with `queue` checks and `receive`, sends it picks with `send`, and checks that something that isn't a pick,
 or a pick for an order it doesn't have, is ignored and logged. The last case points Order Desk back at the shop's
 broker.
+
+## The showcase
+
+One case, made to be watched by people who don't write tests: before each part, the panel says in a sentence what is
+about to happen, and each part ends at a checkpoint whose checks are labelled in plain words. It starts Order Desk
+itself and puts the computer back as it was at the end, so it can be run again straight away.
+
+| Part | What happens | What it shows off |
+| --- | --- | --- |
+| 1. Sign in | A wrong password is turned away, then the right one gets in | A secret typed and kept out of the log, a message waited for, the registry, the database, and the shop's name read out of Order Desk's own `.config` with a `${shopName(readFile(appConfig))}` helper |
+| 2. A phone order | Every kind of box on the order form is filled in | A text box, a drop-down, a tick box, radio buttons, and the order checked in the database and the activity log |
+| 3. The lunchtime rush | Three orders from a sheet, one after another | `repeat` over a data file, and a macro with an `if` in it |
+| 4. Changes of mind | An order changed in its own window; another deleted, after a Yes to "are you sure?" | A double-click, a second window, part of a note replaced, a button that only shows on hover, a message box |
+| 5. The catalogue | A tea dragged onto the order form; a spare part found among 420 | A tree, a drag, a list that only builds the rows on screen |
+| 6. Behind the scenes | A customer added straight into the database shows up after F5 | A `query`, a grid's cell, and a sum worked out by the database |
+| 7. The warehouse | Shipping an order sends a message to RabbitMQ; the test reads it, and answers as the warehouse | `queue` checks, `receive`, `send`, and the queues' names read from Order Desk's `.config` |
+| 8. End of the day | Export the orders to a folder, check the file with a script, and clean up | A folder picker, a slow step, a PowerShell script, `nothingLeft` |
+
+Part 7 needs RabbitMQ running on the computer, as the warehouse tests do; the launcher offers to install it. Without
+it, the showcase says so and just ships the order, so it still runs anywhere.
 
 ## The failure examples
 
