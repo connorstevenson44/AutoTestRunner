@@ -11,8 +11,6 @@ namespace AutoTestRunner.FlaUI;
 
 public sealed partial class FlaUiDriver
 {
-    private CacheRequest? _shownFacts;
-
     public IControl Find(Target target, TimeSpan timeout)
     {
         var retried = false;
@@ -114,8 +112,9 @@ public sealed partial class FlaUiDriver
                 root = MainWindow();
             }
 
-            // Each control's name, help text and place come with it, in the one call that finds them all.
-            using var cached = ShownFacts.Activate();
+            // Each control's name, help text and place are read one by one rather than asked for with the find, as a find
+            // that brings them with it kept NetDeploy's window from drawing, and its timers from running, while a wait
+            // looked for its log editor again and again.
             var candidates = root.FindAllDescendants(Condition(selector)).Where(element => Fits(selector, element) && IsShown(element));
             if (middle is { } level)
                 candidates = candidates.Where(element => Math.Abs(Middle(element) - level) <= 14);
@@ -212,18 +211,18 @@ public sealed partial class FlaUiDriver
         return (box.Top + box.Bottom) / 2;
     }
 
-    /// <summary>
-    /// What finding reads of each control it looks at, asked for with the controls rather than one by one: each call is
-    /// answered on the app's UI thread, and a selector that matches names by contains reads every control of its type.
-    /// Only these can be read while it is active. https://learn.microsoft.com/windows/win32/winauto/uiauto-cachingforclients
-    /// </summary>
-    private CacheRequest ShownFacts => _shownFacts ??= Facts(_automation.PropertyLibrary.Element.Name, _automation.PropertyLibrary.Element.HelpText,
-        _automation.PropertyLibrary.Element.BoundingRectangle);
-
     // A request for these properties of each control found, which stays usable once the request is no longer active.
-    private static CacheRequest Facts(params PropertyId[] properties)
+    // A find made while it is active searches the request's view rather than the control view, so it asks for the
+    // control view too: WPF keeps a collapsed control in the raw view with the size it last had, so it would be found
+    // and look shown.
+    private CacheRequest Facts(params PropertyId[] properties)
     {
-        var request = new CacheRequest { AutomationElementMode = AutomationElementMode.Full, TreeScope = TreeScope.Element };
+        var request = new CacheRequest
+        {
+            AutomationElementMode = AutomationElementMode.Full,
+            TreeScope = TreeScope.Element,
+            TreeFilter = new PropertyCondition(_automation.PropertyLibrary.Element.IsControlElement, true),
+        };
         foreach (var property in properties)
             request.Add(property);
         return request;
