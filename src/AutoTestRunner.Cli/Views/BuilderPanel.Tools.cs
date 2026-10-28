@@ -21,7 +21,7 @@ internal sealed partial class BuilderPanel
     private void NewStep(string kind, string title, string glyph, JsonObject? start = null)
     {
         start ??= new JsonObject { [kind] = ScriptVocabulary.Steps[kind].Takes == Takes.List ? new JsonArray() : "" };
-        if (FormWindow.Ask(this, title, glyph, Forms.ForStep(kind, _suite), kind, start, _suite.Folder, ValuesNow, PickFor, add: "Do it") is { } step)
+        if (FormWindow.Ask(this, title, glyph, Forms.ForStep(kind, _suite), kind, start, _suite, ValuesNow, PickFor, add: "Do it") is { } step)
             Play?.Invoke(StepMaker.FromJson(step, DraftStepState.Played), true);
     }
 
@@ -31,7 +31,7 @@ internal sealed partial class BuilderPanel
         var start = Forms.NewCheck(kind.Key);
         if (target is not null)
             start[kind.Key] = target.DeepClone();
-        if (FormWindow.Ask(this, kind.Title, CheckMenu.Glyph(kind.Group), Forms.ForCheck(kind.Key, _suite), kind.Key, start, _suite.Folder, ValuesNow, PickFor, TryCheck) is { } check)
+        if (FormWindow.Ask(this, kind.Title, CheckMenu.Glyph(kind.Group), Forms.ForCheck(kind.Key, _suite), kind.Key, start, _suite, ValuesNow, PickFor, TryCheck) is { } check)
             AddCheck(check, check["label"]?.ToString() ?? Describe(kind, check));
     }
 
@@ -98,7 +98,7 @@ internal sealed partial class BuilderPanel
     // The step's form, folded out under it, with Apply and Cancel.
     private Border Details(DraftStep step)
     {
-        var form = new FormView(Forms.ForStep(step.Verb, _suite), step.Json, step.Verb, _suite.Folder, ValuesNow, PickFor);
+        var form = new FormView(Forms.ForStep(step.Verb, _suite), step.Json, step.Verb, _suite, ValuesNow, PickFor);
         var problem = Ui.Words("", 11.5, Ui.Fail);
         problem.Visibility = Visibility.Collapsed;
         var stack = new StackPanel();
@@ -285,7 +285,7 @@ internal sealed partial class BuilderPanel
             new("rows", "Or each row of a data file, CSV or JSON", FieldType.File),
             new("item", "Call each", FieldType.Text),
         ];
-        if (FormWindow.Ask(this, "Repeat the steps", Icons.Repeat, fields, "item", new JsonObject { ["item"] = "item" }, _suite.Folder, ValuesNow, null, add: "Repeat") is not { } answer)
+        if (FormWindow.Ask(this, "Repeat the steps", Icons.Repeat, fields, "item", new JsonObject { ["item"] = "item" }, _suite, ValuesNow, null, add: "Repeat") is not { } answer)
             return;
         var items = (answer["items"] as JsonArray ?? []).Select(item => item!.ToString()).ToList();
         var rows = answer["rows"]?.ToString();
@@ -301,7 +301,7 @@ internal sealed partial class BuilderPanel
     {
         if (Picked() is not { } steps)
             return;
-        if (FormWindow.Ask(this, $"Only if: {kind.Title}", CheckMenu.Glyph(kind.Group), Forms.ForCheck(kind.Key, _suite), kind.Key, Forms.NewCheck(kind.Key), _suite.Folder,
+        if (FormWindow.Ask(this, $"Only if: {kind.Title}", CheckMenu.Glyph(kind.Group), Forms.ForCheck(kind.Key, _suite), kind.Key, Forms.NewCheck(kind.Key), _suite,
             ValuesNow, PickFor, TryCheck, "Only if") is { } check)
             Replace(steps, StepWrapper.OnlyIf([.. steps.Select(step => step.Json)], check));
     }
