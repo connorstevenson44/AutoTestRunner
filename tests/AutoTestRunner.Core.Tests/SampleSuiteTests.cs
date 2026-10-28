@@ -15,6 +15,7 @@ public class SampleSuiteTests
     [InlineData("order-desk-tests")]
     [InlineData("order-desk-failure-examples")]
     [InlineData("order-desk-warehouse-tests")]
+    [InlineData("order-desk-showcase")]
     public void A_sample_suite_has_no_mistakes(string name)
     {
         var suite = Suite.Load(Sample(name));
